@@ -70,3 +70,6 @@ brain/rust/ui/node_modules/
 # Large / generated local artifacts
 *.onnx
 memories_export.jsonl
+
+# Local migration / DB backups
+.local-backup/

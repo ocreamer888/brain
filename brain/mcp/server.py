@@ -45,6 +45,53 @@ from brain.api_client import (
     update_salience as api_update_salience,
 )
 import os as _os
+import re as _re
+
+# Rust API parse_memory_type allow-list (snake_case only).
+_VALID_MEMORY_TYPES = frozenset(
+    {
+        "solution",
+        "decision",
+        "conversation",
+        "pattern",
+        "project_context",
+        "error_lesson",
+        "fact",
+        "episode",
+    }
+)
+
+# Common agent/LLM synonyms → canonical type.
+_MEMORY_TYPE_ALIASES = {
+    "knowledge": "fact",
+    "note": "conversation",
+    "memory": "conversation",
+    "insight": "pattern",
+    "preference": "decision",
+    "lesson": "error_lesson",
+    "error": "error_lesson",
+    "bugfix": "solution",
+    "fix": "solution",
+    "context": "project_context",
+    "summary": "project_context",
+    "observation": "fact",
+}
+
+
+def _normalize_memory_type(raw: str | None, default: str = "conversation") -> str:
+    """Map free-form labels to an API-accepted memory_type."""
+    if not raw or not str(raw).strip():
+        return default
+    s = str(raw).strip()
+    # CamelCase / PascalCase → snake_case, then lower.
+    s = _re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s)
+    s = s.replace("-", "_").replace(" ", "_").lower()
+    s = _MEMORY_TYPE_ALIASES.get(s, s)
+    if s in _VALID_MEMORY_TYPES:
+        return s
+    return default
+
+
 if _os.environ.get("BRAIN_BACKEND", "api") == "python":
     from brain.core.memory import (
         _trigger_reflection as py_reflect,
@@ -197,7 +244,14 @@ def get_neighbors_tool(memory_id: str) -> str:
     return "\n".join(ids)
 
 
-@mcp.tool(description="Save a new memory to the brain. Called automatically by hooks, but can also be called manually.")
+@mcp.tool(
+    description=(
+        "Save a new memory to the brain. "
+        "memory_type must be one of: solution, decision, conversation, pattern, "
+        "project_context, error_lesson, fact, episode (snake_case). "
+        "Unknown labels are coerced to conversation."
+    )
+)
 def save_memory_tool(
     content: str,
     memory_type: str = "conversation",
@@ -208,6 +262,7 @@ def save_memory_tool(
 ) -> str:
     from brain.ingest.payloads import with_ingest_tag
 
+    memory_type = _normalize_memory_type(memory_type)
     tag_list = with_ingest_tag([t.strip() for t in tags.split(",") if t.strip()])
     tit = title.strip() or None
     memory_id = (
@@ -229,7 +284,7 @@ def save_memory_tool(
             title=tit,
         )
     )
-    return f"Memory saved: {memory_id}"
+    return f"Memory saved: {memory_id} (type={memory_type})"
 
 
 @mcp.tool(description="Get top N most relevant memories for the current topic/project. Use at session start.")

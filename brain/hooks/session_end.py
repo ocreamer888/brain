@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # AI/ dir
 
 from brain.api_client import backend_mode
-from brain.summarizer import summarize_session
+from brain.core.summarizer import summarize_session
 from brain.ingest.payloads import with_ingest_tag
 from brain.hooks.session_start import detect_project, PROJECT_DIR_MAP
 
@@ -22,8 +22,9 @@ from brain.hooks.session_start import detect_project, PROJECT_DIR_MAP
 def save_memory_fn(**kwargs):
     """Thin wrapper so tests can patch it easily."""
     from brain.api_client import save_memory as api_save
-    from brain.memory import save_memory as py_save
+
     if backend_mode() == "python":
+        from brain.core.memory import save_memory as py_save
         return py_save(**kwargs)
     return api_save(**kwargs)
 
@@ -77,7 +78,7 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
 
     # Pass 1: Error-fix pairs → solution memories
     try:
-        from brain.summarizer import extract_error_fix_pairs
+        from brain.core.summarizer import extract_error_fix_pairs
         pairs = extract_error_fix_pairs(messages)
         for pair in pairs:
             if not should_save(ACTION_CONFIDENCE["session_error_fix"]):
@@ -106,7 +107,7 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
 
     # Pass 2: Decisions → pattern memories
     try:
-        from brain.summarizer import extract_decisions
+        from brain.core.summarizer import extract_decisions
         decisions = extract_decisions(messages)
         for dec in decisions:
             if not should_save(ACTION_CONFIDENCE["session_decision"]):

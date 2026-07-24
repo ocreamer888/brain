@@ -149,7 +149,7 @@ def is_test_pass(response: str) -> bool:
 
 
 MAX_EDIT_CHANGES = 10
-EDIT_FLUSH_THRESHOLD = 5  # flush after N consecutive non-edit tool calls
+EDIT_FLUSH_THRESHOLD = 2  # flush after N consecutive non-edit tool calls
 
 
 def record_edit(state: dict, file_path: str, old_str: str, new_str: str) -> None:

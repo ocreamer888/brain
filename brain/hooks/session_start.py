@@ -33,6 +33,7 @@ PROJECT_DIR_MAP = {
     "scheduler": "scheduler",
     "inventario": "inventario",
     "AI": "AI",
+    "brain": "brain",
 }
 
 

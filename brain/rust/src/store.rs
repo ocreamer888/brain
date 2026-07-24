@@ -46,6 +46,18 @@ pub struct QueuedJob {
     pub last_error: Option<String>,
 }
 
+/// One memory that participates in the entity graph (has ≥1 edge).
+#[derive(Debug, Clone)]
+pub struct LinkedMemoryRow {
+    pub id: String,
+    pub snippet: String,
+    pub memory_type: MemoryType,
+    pub project: String,
+    pub timestamp: String,
+    pub entities: Vec<(String, String)>,
+    pub neighbor_ids: Vec<String>,
+}
+
 impl MetadataStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, BrainError> {
         let conn = Connection::open(path).map_err(|e| BrainError::Database(e.to_string()))?;
@@ -941,6 +953,80 @@ impl MetadataStore {
             .map_err(|e| BrainError::Database(e.to_string()))?;
         let rows = stmt
             .query_map([memory_id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| BrainError::Database(e.to_string()))
+    }
+
+    /// All memories that have ≥1 entity edge, with entity names and neighbor IDs.
+    pub fn list_linked_memories(
+        &self,
+    ) -> Result<Vec<LinkedMemoryRow>, BrainError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT m.id, m.content, m.type, m.project, m.timestamp
+                 FROM memories m
+                 WHERE EXISTS (
+                     SELECT 1 FROM edges e WHERE e.src_memory_id = m.id
+                 )
+                 ORDER BY m.timestamp DESC",
+            )
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        let mem_rows = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, String>(4)?,
+                ))
+            })
+            .map_err(|e| BrainError::Database(e.to_string()))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+
+        let mut out = Vec::with_capacity(mem_rows.len());
+        for (id, content, type_str, project, timestamp) in mem_rows {
+            let memory_type: MemoryType = serde_json::from_str(&type_str)
+                .unwrap_or(MemoryType::Conversation);
+            let entities = self.entities_for_memory(&id)?;
+            let neighbor_ids = self.neighbor_memory_ids(&[id.clone()], true)?;
+            let snippet: String = content.chars().take(160).collect();
+            out.push(LinkedMemoryRow {
+                id,
+                snippet,
+                memory_type,
+                project,
+                timestamp,
+                entities,
+                neighbor_ids,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Distinct entities that have at least one edge, with memory counts.
+    pub fn list_entities_with_counts(&self) -> Result<Vec<(String, String, usize)>, BrainError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT e.id, e.name, COUNT(DISTINCT x.src_memory_id) AS n
+                 FROM entities e
+                 JOIN edges x ON x.dst_entity_id = e.id
+                 GROUP BY e.id
+                 ORDER BY n DESC, e.name_normalized",
+            )
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)? as usize,
+                ))
+            })
             .map_err(|e| BrainError::Database(e.to_string()))?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| BrainError::Database(e.to_string()))

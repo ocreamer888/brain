@@ -417,6 +417,7 @@ fn build_router(state: AppState) -> Router {
         .route("/entities", get(entities_handler))
         .route("/link-entities", post(link_entities_handler))
         .route("/neighbors", get(neighbors_handler))
+        .route("/linked", get(linked_handler))
         .route("/list", get(list_memories))
         .route("/delete", post(delete_memories))
         .route("/feedback", post(feedback))
@@ -853,6 +854,72 @@ async fn neighbors_handler(
         .map_err(brain_err)?;
     log_request("GET", "/neighbors", StatusCode::OK, start);
     Ok(Json(NeighborsResponse { ids }))
+}
+
+#[derive(Debug, Serialize)]
+struct LinkedEntityRef {
+    id: String,
+    name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct LinkedEntityStat {
+    id: String,
+    name: String,
+    memory_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct LinkedMemoryItem {
+    id: String,
+    snippet: String,
+    memory_type: String,
+    project: String,
+    timestamp: String,
+    entities: Vec<LinkedEntityRef>,
+    neighbor_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct LinkedResponse {
+    memories: Vec<LinkedMemoryItem>,
+    entities: Vec<LinkedEntityStat>,
+}
+
+async fn linked_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<LinkedResponse>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers)?;
+    let brain = lock_brain(&state);
+    let (rows, entity_counts) = brain.list_linked_graph().map_err(brain_err)?;
+    let memories = rows
+        .into_iter()
+        .map(|r| LinkedMemoryItem {
+            id: r.id,
+            snippet: r.snippet,
+            memory_type: memory_type_snake(&r.memory_type),
+            project: r.project,
+            timestamp: r.timestamp,
+            entities: r
+                .entities
+                .into_iter()
+                .map(|(id, name)| LinkedEntityRef { id, name })
+                .collect(),
+            neighbor_ids: r.neighbor_ids,
+        })
+        .collect();
+    let entities = entity_counts
+        .into_iter()
+        .map(|(id, name, memory_count)| LinkedEntityStat {
+            id,
+            name,
+            memory_count,
+        })
+        .collect();
+    log_request("GET", "/linked", StatusCode::OK, start);
+    Ok(Json(LinkedResponse { memories, entities }))
 }
 
 async fn timeline_handler(

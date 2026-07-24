@@ -3,7 +3,7 @@
 function apiKey() {
   return (typeof window !== 'undefined' && window.__BRAIN_API_KEY__)
     || import.meta.env.VITE_BRAIN_API_KEY
-    || ''
+    || 'local-dev-key'
 }
 
 export function apiFetch(url, opts = {}) {

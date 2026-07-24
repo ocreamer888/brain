@@ -1,172 +1,170 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { getObservations, getTimeline, searchIndex } from '../api'
 import { ExpandedCard } from '../components/MemoryCard'
-import TimelineDrawer from '../components/TimelineDrawer'
-import { apiFetch } from '../lib/apiFetch'
 
 const TYPES = ['all', 'fact', 'conversation', 'solution', 'pattern', 'project_context']
 
 function debounce(fn, ms) {
   let t
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms) }
+  return (...args) => {
+    clearTimeout(t)
+    t = setTimeout(() => fn(...args), ms)
+  }
 }
 
-function SkeletonCard() {
-  return (
-    <div className="py-3 border-b border-zinc-800 animate-pulse">
-      <div className="h-3 w-24 bg-zinc-800 rounded mb-2" />
-      <div className="h-3 w-full bg-zinc-800 rounded mb-1" />
-      <div className="h-3 w-3/4 bg-zinc-800 rounded" />
-    </div>
-  )
-}
-
-export default function Search() {
+export default function Search({ focusId, onFocused }) {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [fullById, setFullById] = useState({})
   const [searchError, setSearchError] = useState(null)
-  const [timelineId, setTimelineId] = useState(null)
-  const [timelineResults, setTimelineResults] = useState(null)
-  const [timelineLoading, setTimelineLoading] = useState(false)
-  const [timelineError, setTimelineError] = useState(null)
-  const observationsCache = useRef(new Map())
+  const [timeline, setTimeline] = useState(null)
+  const [openIds, setOpenIds] = useState(() => new Set())
 
-  const doSearch = useRef(debounce(async (q, tf) => {
-    if (!q.trim()) { setResults([]); setLoading(false); return }
-    setLoading(true)
-    setSearchError(null)
+  const doSearch = useRef(
+    debounce(async (q, tf) => {
+      if (!q.trim()) {
+        setResults([])
+        return
+      }
+      setSearchError(null)
+      try {
+        const data = await searchIndex(
+          q,
+          20,
+          tf === 'all' ? null : tf,
+        )
+        setResults(data.results || [])
+      } catch (e) {
+        setSearchError(e.message)
+      }
+    }, 250),
+  ).current
+
+  useEffect(() => {
+    doSearch(query, typeFilter)
+  }, [query, typeFilter, doSearch])
+
+  useEffect(() => {
+    if (!focusId) return
+    setOpenIds((prev) => new Set(prev).add(focusId))
+    loadFull(focusId)
+    onFocused?.()
+  }, [focusId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadFull(id) {
+    if (fullById[id]) return
     try {
-      const body = { query: q, n: 20 }
-      if (tf !== 'all') body.memory_type = tf
-      const r = await apiFetch('/v1/search_index', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!r.ok) throw new Error(`Search failed: ${r.status}`)
-      const data = await r.json()
-      setResults(data.results ?? [])
+      const data = await getObservations([id])
+      const mem = (data.results || [])[0]
+      setFullById((prev) => ({
+        ...prev,
+        [id]: mem?.content ?? '(empty)',
+      }))
     } catch (e) {
-      setSearchError(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }, 200)).current
-
-  function handleInput(e) {
-    const q = e.target.value
-    setQuery(q)
-    setLoading(true)
-    doSearch(q, typeFilter)
-  }
-
-  function handleTypeFilter(type) {
-    setTypeFilter(type)
-    doSearch(query, type)
-  }
-
-  async function handleExpand(id) {
-    if (observationsCache.current.has(id)) return
-    try {
-      const r = await apiFetch('/v1/get_observations', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ids: [id] }),
-      })
-      const data = await r.json()
-      const mem = (data.results ?? data.memories ?? [])[0]
-      observationsCache.current.set(id, mem?.content ?? '(no content)')
-    } catch {
-      observationsCache.current.set(id, 'Failed to load content.')
+      setFullById((prev) => ({ ...prev, [id]: `Failed: ${e.message}` }))
     }
   }
 
   async function handleTimeline(id) {
-    setTimelineId(id)
-    setTimelineResults(null)
-    setTimelineLoading(true)
-    setTimelineError(null)
     try {
-      const r = await apiFetch('/v1/timeline', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ anchor_id: id, before: 5, after: 5 }),
-      })
-      if (!r.ok) throw new Error(`Timeline failed: ${r.status}`)
-      const data = await r.json()
-      setTimelineResults(data.results ?? [])
+      const data = await getTimeline(id)
+      setTimeline({ anchorId: id, rows: data.results || [] })
     } catch (e) {
-      setTimelineError(e.message)
-    } finally {
-      setTimelineLoading(false)
+      setTimeline({ anchorId: id, error: e.message, rows: [] })
     }
   }
 
-  return (
-    <div className="p-6 max-w-3xl">
-      <h2 className="text-lg font-semibold text-white mb-4">Search</h2>
+  function handleOpenLinked(id) {
+    setOpenIds((prev) => new Set(prev).add(id))
+    loadFull(id)
+    const el = document.getElementById(`mem-${id}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
 
+  return (
+    <div className="p-8 max-w-4xl">
+      <h2 className="text-lg font-semibold text-white mb-4">Search</h2>
       <input
         type="search"
         value={query}
-        onChange={handleInput}
+        onChange={(e) => setQuery(e.target.value)}
         placeholder="Search memories…"
-        autoComplete="off"
-        className="w-full bg-zinc-900 border border-zinc-700 rounded-full px-4 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 mb-3"
+        className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
       />
-
-      {/* Type filter chips */}
-      <div className="flex gap-2 flex-wrap mb-4">
-        {TYPES.map(type => (
+      <div className="mt-3 flex flex-wrap gap-2">
+        {TYPES.map((t) => (
           <button
-            key={type}
-            onClick={() => handleTypeFilter(type)}
-            className={`px-3 py-0.5 rounded-full text-xs border transition-colors ${
-              typeFilter === type
-                ? 'bg-zinc-700 border-zinc-500 text-white'
-                : 'border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+            key={t}
+            type="button"
+            onClick={() => setTypeFilter(t)}
+            className={`rounded px-2.5 py-1 text-xs font-mono ${
+              typeFilter === t
+                ? 'bg-zinc-200 text-black'
+                : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            {type}
+            {t}
           </button>
         ))}
       </div>
 
       {searchError && (
-        <div className="text-xs text-red-400 bg-red-900/20 rounded p-2 mb-3 flex items-center justify-between">
-          {searchError}
-          <button onClick={() => doSearch(query, typeFilter)} className="underline ml-2">Retry</button>
-        </div>
+        <p className="mt-4 text-sm text-red-400">
+          {searchError}{' '}
+          <button
+            type="button"
+            onClick={() => doSearch(query, typeFilter)}
+            className="underline ml-2"
+          >
+            Retry
+          </button>
+        </p>
       )}
 
-      <div>
-        {loading && results.length === 0 && (
-          <>
-            <SkeletonCard /><SkeletonCard /><SkeletonCard />
-          </>
+      <div className="mt-6">
+        {results.length === 0 && query.trim() && !searchError && (
+          <p className="text-sm text-zinc-600">No results.</p>
         )}
-        {!loading && query && results.length === 0 && (
-          <p className="text-sm text-zinc-600 py-4">No results for "{query}"</p>
-        )}
-        {results.map(row => (
-          <ExpandedCard
-            key={row.id}
-            memory={row}
-            onExpand={handleExpand}
-            fullContent={observationsCache.current.get(row.id) ?? null}
-            onTimeline={handleTimeline}
-          />
+        {results.map((m) => (
+          <div key={m.id} id={`mem-${m.id}`}>
+            <ExpandedCard
+              memory={m}
+              fullContent={openIds.has(m.id) ? fullById[m.id] : undefined}
+              onExpand={(id) => {
+                setOpenIds((prev) => new Set(prev).add(id))
+                loadFull(id)
+              }}
+              onTimeline={handleTimeline}
+              onOpenLinked={handleOpenLinked}
+            />
+          </div>
         ))}
       </div>
 
-      <TimelineDrawer
-        memoryId={timelineId}
-        results={timelineResults}
-        loading={timelineLoading}
-        error={timelineError}
-        onClose={() => setTimelineId(null)}
-      />
+      {timeline && (
+        <div className="fixed inset-y-0 right-0 w-full max-w-md border-l border-zinc-800 bg-zinc-950 p-4 shadow-xl overflow-y-auto">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-white">Timeline</h3>
+            <button
+              type="button"
+              className="text-xs text-zinc-500 hover:text-white"
+              onClick={() => setTimeline(null)}
+            >
+              Close
+            </button>
+          </div>
+          {timeline.error && <p className="text-xs text-red-400">{timeline.error}</p>}
+          <ul className="space-y-3">
+            {(timeline.rows || []).map((r) => (
+              <li key={r.id} className="border-b border-zinc-900 pb-2">
+                <p className="text-xs text-zinc-500 font-mono">#{r.id?.slice(0, 8)}</p>
+                <p className="text-sm text-zinc-300 line-clamp-4">{r.content}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

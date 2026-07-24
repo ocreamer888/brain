@@ -167,6 +167,20 @@ impl Brain {
         // never sees Conversation memories or anything older than the last batch,
         // so this is the only guard that stops dups at write time.
         if let Some(existing_id) = self.find_duplicate(&embedding, project, &memory_type)? {
+            // Still notify the live feed so the viewer sees activity on deduped writes.
+            if let Some(ref tx) = self.memory_events {
+                let snippet: String = content.chars().take(200).collect();
+                let mt = serde_json::to_value(&memory_type)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_else(|| "unknown".to_string());
+                let _ = tx.send(MemoryEvent {
+                    id: existing_id.clone(),
+                    content_snippet: snippet,
+                    timestamp: Utc::now().to_rfc3339(),
+                    memory_type: mt,
+                });
+            }
             return Ok(existing_id);
         }
 
@@ -697,6 +711,16 @@ impl Brain {
     ) -> Result<Vec<String>, BrainError> {
         self.store
             .neighbor_memory_ids(memory_ids, exclude_superseded)
+    }
+
+    /// Memories with entity links + entity catalog for the Linked graph UI.
+    pub fn list_linked_graph(
+        &self,
+    ) -> Result<(Vec<crate::store::LinkedMemoryRow>, Vec<(String, String, usize)>), BrainError>
+    {
+        let memories = self.store.list_linked_memories()?;
+        let entities = self.store.list_entities_with_counts()?;
+        Ok((memories, entities))
     }
 }
 

@@ -126,6 +126,13 @@ def classify_action(tool_name, tool_input, tool_response, state):
             old_str = str(tool_input.get("old_string", ""))
             new_str = str(tool_input.get("new_string", ""))
             record_edit(state, file_path, old_str, new_str)
+            # Still return None — grouped flush handles persistence. Log so
+            # sessions show Edit hooks actually fired (matcher regressions).
+            print(
+                f"[BRAIN] action=edit_buffered file={Path(file_path).name} "
+                f"pending={len(state.get('edit_groups', {}).get(file_path, {}).get('changes', []))}",
+                file=sys.stderr,
+            )
             return None  # grouped edits flushed separately
 
     if tool_name == "Agent":
