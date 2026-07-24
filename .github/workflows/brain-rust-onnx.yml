@@ -5,10 +5,12 @@ on:
     paths:
       - "brain/rust/**"
       - ".github/workflows/brain-rust-onnx.yml"
+      - "brain/tools/export_onnx.py"
   pull_request:
     paths:
       - "brain/rust/**"
       - ".github/workflows/brain-rust-onnx.yml"
+      - "brain/tools/export_onnx.py"
   workflow_dispatch:
 
 jobs:
@@ -36,10 +38,35 @@ jobs:
         with:
           workspaces: brain/rust
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # models/ is gitignored (~417MB). CI must restore from cache or export.
+      - name: Cache ONNX model
+        id: cache-onnx
+        uses: actions/cache@v4
+        with:
+          path: brain/rust/models/all-mpnet-base-v2-onnx
+          key: onnx-all-mpnet-base-v2-v1
+
+      - name: Export ONNX model
+        if: steps.cache-onnx.outputs.cache-hit != 'true'
+        working-directory: ${{ github.workspace }}
+        run: |
+          pip install -q 'optimum[exporters]' sentence-transformers
+          python3 brain/tools/export_onnx.py
+
       - name: Verify ONNX model assets
         run: |
-          test -f "$BRAIN_ONNX_PATH/model.onnx"
-          test -f "$BRAIN_ONNX_PATH/tokenizer.json"
+          if [[ ! -f "$BRAIN_ONNX_PATH/model.onnx" || ! -f "$BRAIN_ONNX_PATH/tokenizer.json" ]]; then
+            echo "::error::ONNX assets missing under $BRAIN_ONNX_PATH (gitignored; export/cache step failed)"
+            ls -la models 2>/dev/null || true
+            ls -la "$BRAIN_ONNX_PATH" 2>/dev/null || true
+            exit 1
+          fi
+          ls -lh "$BRAIN_ONNX_PATH/model.onnx" "$BRAIN_ONNX_PATH/tokenizer.json"
 
       - name: Run unit tests (lib + bins)
         run: cargo test --lib --bins
