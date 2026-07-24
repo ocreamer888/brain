@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/user/brain/schemas/backfill_state_v1.json",
+  "title": "Backfill automation state (v1)",
+  "type": "object",
+  "required": ["version", "preview", "run", "stages"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "preview": {
+      "type": "object",
+      "required": ["ready", "batch_id", "inputs"],
+      "properties": {
+        "ready": { "type": "boolean" },
+        "batch_id": { "type": ["string", "null"] },
+        "inputs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "marked_at": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "run": {
+      "type": "object",
+      "required": ["status", "started_at", "ended_at", "last_error"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["idle", "pending", "running", "success", "failed"]
+        },
+        "started_at": { "type": ["string", "null"] },
+        "ended_at": { "type": ["string", "null"] },
+        "last_error": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "stages": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string" },
+          "batch_id": { "type": ["string", "null"] },
+          "detail": {},
+          "updated_at": { "type": ["string", "null"] }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

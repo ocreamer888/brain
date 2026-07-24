@@ -1,0 +1,19 @@
+[Unit]
+Description=Brain API (Rust brain_api)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust to your install path:
+ExecStart=/usr/local/bin/brain_api
+# Secrets and paths — keep this file chmod 600 and outside git:
+EnvironmentFile=-/etc/brain/brain-api.env
+Restart=on-failure
+RestartSec=5
+# Hardening (optional; may need Relax for custom DB paths):
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

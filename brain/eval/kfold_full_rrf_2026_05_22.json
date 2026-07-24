@@ -1,0 +1,191 @@
+{
+  "overall": {
+    "n": 18852,
+    "mrr": 0.8614,
+    "precision@1": 0.8389,
+    "precision@3": 0.8812,
+    "precision@5": 0.887,
+    "precision@10": 0.8918,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 1826,
+      "mrr": 0.0715,
+      "precision@1": 0.0564,
+      "precision@3": 0.0685,
+      "precision@5": 0.0778,
+      "precision@10": 0.0909
+    },
+    "\"decision\"": {
+      "n": 16,
+      "mrr": 0.9382,
+      "precision@1": 0.9375,
+      "precision@3": 0.9375,
+      "precision@5": 0.9375,
+      "precision@10": 0.9375
+    },
+    "\"error_lesson\"": {
+      "n": 61,
+      "mrr": 0.9404,
+      "precision@1": 0.9016,
+      "precision@3": 0.9836,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"fact\"": {
+      "n": 14759,
+      "mrr": 0.9763,
+      "precision@1": 0.9571,
+      "precision@3": 0.996,
+      "precision@5": 0.9991,
+      "precision@10": 0.9997
+    },
+    "\"pattern\"": {
+      "n": 55,
+      "mrr": 0.9758,
+      "precision@1": 0.9636,
+      "precision@3": 0.9818,
+      "precision@5": 0.9818,
+      "precision@10": 1.0
+    },
+    "\"project_context\"": {
+      "n": 933,
+      "mrr": 0.5306,
+      "precision@1": 0.4802,
+      "precision@3": 0.5606,
+      "precision@5": 0.5895,
+      "precision@10": 0.6302
+    },
+    "\"solution\"": {
+      "n": 1202,
+      "mrr": 0.8972,
+      "precision@1": 0.8444,
+      "precision@3": 0.9443,
+      "precision@5": 0.9592,
+      "precision@10": 0.975
+    }
+  },
+  "by_project": {
+    "cursor": {
+      "n": 6356,
+      "mrr": 0.9764,
+      "precision@1": 0.9566,
+      "precision@3": 0.9969,
+      "precision@5": 0.9994,
+      "precision@10": 1.0
+    },
+    "src": {
+      "n": 1670,
+      "mrr": 0.9695,
+      "precision@1": 0.9443,
+      "precision@3": 0.9964,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "perplexity": {
+      "n": 1484,
+      "mrr": 0.985,
+      "precision@1": 0.973,
+      "precision@3": 0.996,
+      "precision@5": 0.9987,
+      "precision@10": 1.0
+    },
+    ".claude": {
+      "n": 1275,
+      "mrr": 0.2776,
+      "precision@1": 0.262,
+      "precision@3": 0.2824,
+      "precision@5": 0.2886,
+      "precision@10": 0.2988
+    },
+    "general": {
+      "n": 1224,
+      "mrr": 0.8477,
+      "precision@1": 0.8031,
+      "precision@3": 0.8905,
+      "precision@5": 0.9003,
+      "precision@10": 0.9077
+    },
+    "AI": {
+      "n": 1105,
+      "mrr": 0.4231,
+      "precision@1": 0.4036,
+      "precision@3": 0.4299,
+      "precision@5": 0.4416,
+      "precision@10": 0.448
+    },
+    "ocreamer": {
+      "n": 1067,
+      "mrr": 0.8965,
+      "precision@1": 0.8519,
+      "precision@3": 0.9335,
+      "precision@5": 0.9494,
+      "precision@10": 0.9653
+    },
+    "landingpage": {
+      "n": 906,
+      "mrr": 0.9672,
+      "precision@1": 0.9415,
+      "precision@3": 0.9945,
+      "precision@5": 0.9989,
+      "precision@10": 1.0
+    },
+    "frontend": {
+      "n": 772,
+      "mrr": 0.9725,
+      "precision@1": 0.9521,
+      "precision@3": 0.9935,
+      "precision@5": 0.9974,
+      "precision@10": 0.9987
+    },
+    "owelign": {
+      "n": 766,
+      "mrr": 0.9447,
+      "precision@1": 0.9269,
+      "precision@3": 0.9569,
+      "precision@5": 0.9621,
+      "precision@10": 0.9752
+    },
+    "sicop": {
+      "n": 635,
+      "mrr": 0.9653,
+      "precision@1": 0.948,
+      "precision@3": 0.9795,
+      "precision@5": 0.9906,
+      "precision@10": 0.9984
+    },
+    "lifehub": {
+      "n": 294,
+      "mrr": 0.1927,
+      "precision@1": 0.1735,
+      "precision@3": 0.1939,
+      "precision@5": 0.2007,
+      "precision@10": 0.2177
+    },
+    "sicop-health": {
+      "n": 287,
+      "mrr": 0.8828,
+      "precision@1": 0.8711,
+      "precision@3": 0.8955,
+      "precision@5": 0.8955,
+      "precision@10": 0.8955
+    },
+    "le_chandelier": {
+      "n": 188,
+      "mrr": 0.9529,
+      "precision@1": 0.9415,
+      "precision@3": 0.9628,
+      "precision@5": 0.9681,
+      "precision@10": 0.9734
+    },
+    "rmt": {
+      "n": 169,
+      "mrr": 0.9601,
+      "precision@1": 0.9349,
+      "precision@3": 0.9882,
+      "precision@5": 0.9941,
+      "precision@10": 1.0
+    }
+  }
+}

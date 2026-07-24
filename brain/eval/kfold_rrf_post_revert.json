@@ -1,0 +1,205 @@
+{
+  "overall": {
+    "n": 2227,
+    "mrr": 0.8589,
+    "precision@1": 0.8065,
+    "precision@3": 0.9012,
+    "precision@5": 0.9196,
+    "precision@10": 0.9448,
+    "precision@20": 0.9668,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 144,
+      "mrr": 0.7631,
+      "precision@1": 0.6875,
+      "precision@3": 0.8264,
+      "precision@5": 0.8611,
+      "precision@10": 0.8889,
+      "precision@20": 0.9444
+    },
+    "\"decision\"": {
+      "n": 10,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "\"error_lesson\"": {
+      "n": 61,
+      "mrr": 0.9678,
+      "precision@1": 0.9508,
+      "precision@3": 0.9836,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "\"pattern\"": {
+      "n": 137,
+      "mrr": 0.9405,
+      "precision@1": 0.927,
+      "precision@3": 0.9489,
+      "precision@5": 0.9562,
+      "precision@10": 0.9708,
+      "precision@20": 0.9708
+    },
+    "\"project_context\"": {
+      "n": 668,
+      "mrr": 0.7557,
+      "precision@1": 0.6856,
+      "precision@3": 0.8039,
+      "precision@5": 0.8338,
+      "precision@10": 0.8877,
+      "precision@20": 0.9356
+    },
+    "\"solution\"": {
+      "n": 1207,
+      "mrr": 0.9115,
+      "precision@1": 0.865,
+      "precision@3": 0.9536,
+      "precision@5": 0.9652,
+      "precision@10": 0.9768,
+      "precision@20": 0.9843
+    }
+  },
+  "by_project": {
+    "general": {
+      "n": 945,
+      "mrr": 0.9033,
+      "precision@1": 0.854,
+      "precision@3": 0.9513,
+      "precision@5": 0.9587,
+      "precision@10": 0.9651,
+      "precision@20": 0.9746
+    },
+    "AI": {
+      "n": 196,
+      "mrr": 0.7662,
+      "precision@1": 0.699,
+      "precision@3": 0.8163,
+      "precision@5": 0.852,
+      "precision@10": 0.898,
+      "precision@20": 0.9388
+    },
+    "perplexity": {
+      "n": 175,
+      "mrr": 0.9929,
+      "precision@1": 0.9886,
+      "precision@3": 0.9943,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "ocreamer": {
+      "n": 156,
+      "mrr": 0.5594,
+      "precision@1": 0.4231,
+      "precision@3": 0.6603,
+      "precision@5": 0.6859,
+      "precision@10": 0.8077,
+      "precision@20": 0.9103
+    },
+    "claw-code": {
+      "n": 149,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "owelign": {
+      "n": 77,
+      "mrr": 0.5833,
+      "precision@1": 0.5065,
+      "precision@3": 0.6104,
+      "precision@5": 0.6494,
+      "precision@10": 0.7532,
+      "precision@20": 0.8571
+    },
+    "sicop": {
+      "n": 71,
+      "mrr": 0.8115,
+      "precision@1": 0.7183,
+      "precision@3": 0.8732,
+      "precision@5": 0.9577,
+      "precision@10": 0.9859,
+      "precision@20": 1.0
+    },
+    "MedDeFi": {
+      "n": 59,
+      "mrr": 0.8021,
+      "precision@1": 0.7288,
+      "precision@3": 0.8136,
+      "precision@5": 0.8983,
+      "precision@10": 0.9831,
+      "precision@20": 1.0
+    },
+    "lifehub": {
+      "n": 38,
+      "mrr": 0.7238,
+      "precision@1": 0.6579,
+      "precision@3": 0.7895,
+      "precision@5": 0.7895,
+      "precision@10": 0.7895,
+      "precision@20": 0.9211
+    },
+    ".claude": {
+      "n": 33,
+      "mrr": 0.4951,
+      "precision@1": 0.303,
+      "precision@3": 0.6061,
+      "precision@5": 0.7879,
+      "precision@10": 0.8788,
+      "precision@20": 0.8788
+    },
+    "claude-code-session-capture": {
+      "n": 30,
+      "mrr": 0.9722,
+      "precision@1": 0.9667,
+      "precision@3": 0.9667,
+      "precision@5": 0.9667,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "landingpage": {
+      "n": 26,
+      "mrr": 0.9744,
+      "precision@1": 0.9615,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "rust": {
+      "n": 20,
+      "mrr": 0.9292,
+      "precision@1": 0.9,
+      "precision@3": 0.95,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "le_chandelier": {
+      "n": 19,
+      "mrr": 0.6151,
+      "precision@1": 0.5263,
+      "precision@3": 0.6316,
+      "precision@5": 0.6842,
+      "precision@10": 0.8421,
+      "precision@20": 0.8421
+    },
+    "rmt": {
+      "n": 18,
+      "mrr": 0.787,
+      "precision@1": 0.6667,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    }
+  }
+}

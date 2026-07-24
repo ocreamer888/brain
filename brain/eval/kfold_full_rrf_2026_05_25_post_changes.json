@@ -1,0 +1,168 @@
+{
+  "overall": {
+    "n": 20832,
+    "mrr": 0.7941,
+    "precision@1": 0.7639,
+    "precision@5": 0.8262,
+    "precision@10": 0.8409,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 3969,
+      "mrr": 0.1889,
+      "precision@1": 0.1298,
+      "precision@5": 0.2383,
+      "precision@10": 0.2938
+    },
+    "\"decision\"": {
+      "n": 16,
+      "mrr": 0.9381,
+      "precision@1": 0.9375,
+      "precision@5": 0.9375,
+      "precision@10": 0.9375
+    },
+    "\"error_lesson\"": {
+      "n": 61,
+      "mrr": 0.9486,
+      "precision@1": 0.918,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"fact\"": {
+      "n": 14759,
+      "mrr": 0.9764,
+      "precision@1": 0.9572,
+      "precision@5": 0.9991,
+      "precision@10": 0.9997
+    },
+    "\"pattern\"": {
+      "n": 64,
+      "mrr": 0.9221,
+      "precision@1": 0.8906,
+      "precision@5": 0.9531,
+      "precision@10": 0.9844
+    },
+    "\"project_context\"": {
+      "n": 721,
+      "mrr": 0.4417,
+      "precision@1": 0.4008,
+      "precision@5": 0.4979,
+      "precision@10": 0.516
+    },
+    "\"solution\"": {
+      "n": 1242,
+      "mrr": 0.7511,
+      "precision@1": 0.6884,
+      "precision@5": 0.8245,
+      "precision@10": 0.8744
+    }
+  },
+  "by_project": {
+    "cursor": {
+      "n": 6356,
+      "mrr": 0.9763,
+      "precision@1": 0.9564,
+      "precision@5": 0.9994,
+      "precision@10": 1.0
+    },
+    ".claude": {
+      "n": 1724,
+      "mrr": 0.2078,
+      "precision@1": 0.1926,
+      "precision@5": 0.2169,
+      "precision@10": 0.2268
+    },
+    "src": {
+      "n": 1670,
+      "mrr": 0.9699,
+      "precision@1": 0.9449,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "AI": {
+      "n": 1534,
+      "mrr": 0.3803,
+      "precision@1": 0.3488,
+      "precision@5": 0.4022,
+      "precision@10": 0.4355
+    },
+    "perplexity": {
+      "n": 1484,
+      "mrr": 0.9854,
+      "precision@1": 0.9737,
+      "precision@5": 0.9987,
+      "precision@10": 1.0
+    },
+    "ppf-contact-solver": {
+      "n": 1277,
+      "mrr": 0.5132,
+      "precision@1": 0.379,
+      "precision@5": 0.6688,
+      "precision@10": 0.7494
+    },
+    "ocreamer": {
+      "n": 949,
+      "mrr": 0.9393,
+      "precision@1": 0.9031,
+      "precision@5": 0.9895,
+      "precision@10": 0.9958
+    },
+    "landingpage": {
+      "n": 906,
+      "mrr": 0.9672,
+      "precision@1": 0.9415,
+      "precision@5": 0.9989,
+      "precision@10": 1.0
+    },
+    "general": {
+      "n": 834,
+      "mrr": 0.8039,
+      "precision@1": 0.7782,
+      "precision@5": 0.8381,
+      "precision@10": 0.8453
+    },
+    "frontend": {
+      "n": 772,
+      "mrr": 0.9725,
+      "precision@1": 0.9521,
+      "precision@5": 0.9974,
+      "precision@10": 0.9987
+    },
+    "owelign": {
+      "n": 708,
+      "mrr": 0.9678,
+      "precision@1": 0.9506,
+      "precision@5": 0.9873,
+      "precision@10": 0.9887
+    },
+    "sicop": {
+      "n": 589,
+      "mrr": 0.9758,
+      "precision@1": 0.9593,
+      "precision@5": 0.9966,
+      "precision@10": 0.9983
+    },
+    "lifehub": {
+      "n": 438,
+      "mrr": 0.1333,
+      "precision@1": 0.0868,
+      "precision@5": 0.1484,
+      "precision@10": 0.2078
+    },
+    "sicop-health": {
+      "n": 341,
+      "mrr": 0.7664,
+      "precision@1": 0.739,
+      "precision@5": 0.7889,
+      "precision@10": 0.8299
+    },
+    "farmaplus": {
+      "n": 214,
+      "mrr": 0.1032,
+      "precision@1": 0.028,
+      "precision@5": 0.1215,
+      "precision@10": 0.2617
+    }
+  }
+}

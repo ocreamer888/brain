@@ -1,0 +1,471 @@
+{
+  "mode": "gold_semantic",
+  "n_queries": 11,
+  "n_missing": 0,
+  "best_alpha": 0.0,
+  "best_precision@1": 1.0,
+  "results": {
+    "0.00": {
+      "alpha": 0.0,
+      "n": 11,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "median_rank": 1,
+      "per_query": [
+        {
+          "query": "what architectural flaws were uncovered when auditing a frontend project for production readiness",
+          "gold_memory_id": "94f91ab1-36f9-5482-90e4-08d347d330a9",
+          "description": "Zustand/TypeScript/SVG code review \u2014 no 'Zustand','TypeScript','any','inline SVG' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "at which stage of a structured web ranking improvement plan were geographic and language adaptations scheduled",
+          "gold_memory_id": "04bb657a-df7c-5503-a694-5ef8e51ecd1b",
+          "description": "Next.js SEO step 4 localization \u2014 no 'Next.js','SEO','metadata','schema','FAQ' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "what configuration setting was preventing the live monitoring dashboard from displaying new entries",
+          "gold_memory_id": "db8d1829-8248-43e5-a4ac-0563fe0799ae",
+          "description": "BRAIN_API_AUTH_REQUIRED blocks brain viewer \u2014 no 'brain viewer','AUTH_REQUIRED','activity','stream' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how was an external knowledge vault reorganized and brought into the main repository to enhance retrieval",
+          "gold_memory_id": "e1e9a398-9089-46b5-9f7a-b1c0ea56a3d0",
+          "description": "obsidian-brain import into project \u2014 no 'obsidian','import','folder','hybrid methodology' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "what automated tooling was attempted to obtain credentials for connecting a pharmacy website to an e-commerce platform",
+          "gold_memory_id": "20e2bc89-b760-41bb-80e9-6fe4fb14e6ab",
+          "description": "FarmaPlus Shopify Storefront API token via Playwright \u2014 no 'FarmaPlus','Shopify','Storefront','token','Playwright' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "which CSS property setting controls how tightly packed the rows appear in a prominent homepage banner title",
+          "gold_memory_id": "611182d5-994d-5d70-a91e-ba978b6cdd09",
+          "description": "leading-tight Tailwind line-height in hero heading \u2014 no 'leading-tight','Tailwind','line-height','hero','1.25' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how do styles without a size qualifier differ from those that only activate on wider viewports in a utility-first framework",
+          "gold_memory_id": "5bcfcddd-8d36-5a84-a250-50881c6e0319",
+          "description": "Tailwind breakpoints unprefixed vs sm: 640px \u2014 no 'Tailwind','breakpoint','sm:','640px','mobile' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "which declarations at the top of the primary style file determine when a framework's normalization rules and atomic helpers are applied",
+          "gold_memory_id": "9f7a559c-8df7-577b-9807-696be3ecf525",
+          "description": "@tailwind base/components/utilities directives \u2014 no '@tailwind','base','components','utilities','inject' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how did the AI evaluate recent changes to the memory system when asked for an honest technical assessment",
+          "gold_memory_id": "b65795b9-ed62-45e1-927a-ca08ceba88a4",
+          "description": "CTO feedback on brain hybrid retrieval (cosine+BM25) \u2014 no 'brain','hybrid','cosine','BM25','recency','CTO' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "what was the starting context document used to continue development of the knowledge extraction module after the first milestone completed",
+          "gold_memory_id": "3967b982-83ea-411c-9089-59dcfa5c4195",
+          "description": "Brain Fact Layer Phase 2+ handoff \u2014 no 'Brain','Fact Layer','Phase 2','handoff','types.rs','shipped' vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "what was the AI's subjective experience of having access to an extensive persistent record of prior work",
+          "gold_memory_id": "d955d07e-7325-406f-a02a-e8f9367a9e4c",
+          "description": "how the assistant feels working with brain/18k memories \u2014 no 'friends','feel','brain','re-solving','18k memories' vocabulary",
+          "rank": 1
+        }
+      ]
+    },
+    "0.30": {
+      "alpha": 0.3,
+      "n": 11,
+      "mrr": 0.1351,
+      "precision@1": 0.0,
+      "precision@5": 0.2727,
+      "precision@10": 0.3636,
+      "median_rank": 38,
+      "per_query": [
+        {
+          "query": "what architectural flaws were uncovered when auditing a frontend project for production readiness",
+          "gold_memory_id": "94f91ab1-36f9-5482-90e4-08d347d330a9",
+          "description": "Zustand/TypeScript/SVG code review \u2014 no 'Zustand','TypeScript','any','inline SVG' vocabulary",
+          "rank": 50
+        },
+        {
+          "query": "at which stage of a structured web ranking improvement plan were geographic and language adaptations scheduled",
+          "gold_memory_id": "04bb657a-df7c-5503-a694-5ef8e51ecd1b",
+          "description": "Next.js SEO step 4 localization \u2014 no 'Next.js','SEO','metadata','schema','FAQ' vocabulary",
+          "rank": 24
+        },
+        {
+          "query": "what configuration setting was preventing the live monitoring dashboard from displaying new entries",
+          "gold_memory_id": "db8d1829-8248-43e5-a4ac-0563fe0799ae",
+          "description": "BRAIN_API_AUTH_REQUIRED blocks brain viewer \u2014 no 'brain viewer','AUTH_REQUIRED','activity','stream' vocabulary",
+          "rank": 38
+        },
+        {
+          "query": "how was an external knowledge vault reorganized and brought into the main repository to enhance retrieval",
+          "gold_memory_id": "e1e9a398-9089-46b5-9f7a-b1c0ea56a3d0",
+          "description": "obsidian-brain import into project \u2014 no 'obsidian','import','folder','hybrid methodology' vocabulary",
+          "rank": 42
+        },
+        {
+          "query": "what automated tooling was attempted to obtain credentials for connecting a pharmacy website to an e-commerce platform",
+          "gold_memory_id": "20e2bc89-b760-41bb-80e9-6fe4fb14e6ab",
+          "description": "FarmaPlus Shopify Storefront API token via Playwright \u2014 no 'FarmaPlus','Shopify','Storefront','token','Playwright' vocabulary",
+          "rank": 122
+        },
+        {
+          "query": "which CSS property setting controls how tightly packed the rows appear in a prominent homepage banner title",
+          "gold_memory_id": "611182d5-994d-5d70-a91e-ba978b6cdd09",
+          "description": "leading-tight Tailwind line-height in hero heading \u2014 no 'leading-tight','Tailwind','line-height','hero','1.25' vocabulary",
+          "rank": 9
+        },
+        {
+          "query": "how do styles without a size qualifier differ from those that only activate on wider viewports in a utility-first framework",
+          "gold_memory_id": "5bcfcddd-8d36-5a84-a250-50881c6e0319",
+          "description": "Tailwind breakpoints unprefixed vs sm: 640px \u2014 no 'Tailwind','breakpoint','sm:','640px','mobile' vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "which declarations at the top of the primary style file determine when a framework's normalization rules and atomic helpers are applied",
+          "gold_memory_id": "9f7a559c-8df7-577b-9807-696be3ecf525",
+          "description": "@tailwind base/components/utilities directives \u2014 no '@tailwind','base','components','utilities','inject' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "how did the AI evaluate recent changes to the memory system when asked for an honest technical assessment",
+          "gold_memory_id": "b65795b9-ed62-45e1-927a-ca08ceba88a4",
+          "description": "CTO feedback on brain hybrid retrieval (cosine+BM25) \u2014 no 'brain','hybrid','cosine','BM25','recency','CTO' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "what was the starting context document used to continue development of the knowledge extraction module after the first milestone completed",
+          "gold_memory_id": "3967b982-83ea-411c-9089-59dcfa5c4195",
+          "description": "Brain Fact Layer Phase 2+ handoff \u2014 no 'Brain','Fact Layer','Phase 2','handoff','types.rs','shipped' vocabulary",
+          "rank": 946
+        },
+        {
+          "query": "what was the AI's subjective experience of having access to an extensive persistent record of prior work",
+          "gold_memory_id": "d955d07e-7325-406f-a02a-e8f9367a9e4c",
+          "description": "how the assistant feels working with brain/18k memories \u2014 no 'friends','feel','brain','re-solving','18k memories' vocabulary",
+          "rank": 293
+        }
+      ]
+    },
+    "0.50": {
+      "alpha": 0.5,
+      "n": 11,
+      "mrr": 0.1351,
+      "precision@1": 0.0,
+      "precision@5": 0.2727,
+      "precision@10": 0.3636,
+      "median_rank": 38,
+      "per_query": [
+        {
+          "query": "what architectural flaws were uncovered when auditing a frontend project for production readiness",
+          "gold_memory_id": "94f91ab1-36f9-5482-90e4-08d347d330a9",
+          "description": "Zustand/TypeScript/SVG code review \u2014 no 'Zustand','TypeScript','any','inline SVG' vocabulary",
+          "rank": 50
+        },
+        {
+          "query": "at which stage of a structured web ranking improvement plan were geographic and language adaptations scheduled",
+          "gold_memory_id": "04bb657a-df7c-5503-a694-5ef8e51ecd1b",
+          "description": "Next.js SEO step 4 localization \u2014 no 'Next.js','SEO','metadata','schema','FAQ' vocabulary",
+          "rank": 24
+        },
+        {
+          "query": "what configuration setting was preventing the live monitoring dashboard from displaying new entries",
+          "gold_memory_id": "db8d1829-8248-43e5-a4ac-0563fe0799ae",
+          "description": "BRAIN_API_AUTH_REQUIRED blocks brain viewer \u2014 no 'brain viewer','AUTH_REQUIRED','activity','stream' vocabulary",
+          "rank": 38
+        },
+        {
+          "query": "how was an external knowledge vault reorganized and brought into the main repository to enhance retrieval",
+          "gold_memory_id": "e1e9a398-9089-46b5-9f7a-b1c0ea56a3d0",
+          "description": "obsidian-brain import into project \u2014 no 'obsidian','import','folder','hybrid methodology' vocabulary",
+          "rank": 42
+        },
+        {
+          "query": "what automated tooling was attempted to obtain credentials for connecting a pharmacy website to an e-commerce platform",
+          "gold_memory_id": "20e2bc89-b760-41bb-80e9-6fe4fb14e6ab",
+          "description": "FarmaPlus Shopify Storefront API token via Playwright \u2014 no 'FarmaPlus','Shopify','Storefront','token','Playwright' vocabulary",
+          "rank": 122
+        },
+        {
+          "query": "which CSS property setting controls how tightly packed the rows appear in a prominent homepage banner title",
+          "gold_memory_id": "611182d5-994d-5d70-a91e-ba978b6cdd09",
+          "description": "leading-tight Tailwind line-height in hero heading \u2014 no 'leading-tight','Tailwind','line-height','hero','1.25' vocabulary",
+          "rank": 9
+        },
+        {
+          "query": "how do styles without a size qualifier differ from those that only activate on wider viewports in a utility-first framework",
+          "gold_memory_id": "5bcfcddd-8d36-5a84-a250-50881c6e0319",
+          "description": "Tailwind breakpoints unprefixed vs sm: 640px \u2014 no 'Tailwind','breakpoint','sm:','640px','mobile' vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "which declarations at the top of the primary style file determine when a framework's normalization rules and atomic helpers are applied",
+          "gold_memory_id": "9f7a559c-8df7-577b-9807-696be3ecf525",
+          "description": "@tailwind base/components/utilities directives \u2014 no '@tailwind','base','components','utilities','inject' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "how did the AI evaluate recent changes to the memory system when asked for an honest technical assessment",
+          "gold_memory_id": "b65795b9-ed62-45e1-927a-ca08ceba88a4",
+          "description": "CTO feedback on brain hybrid retrieval (cosine+BM25) \u2014 no 'brain','hybrid','cosine','BM25','recency','CTO' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "what was the starting context document used to continue development of the knowledge extraction module after the first milestone completed",
+          "gold_memory_id": "3967b982-83ea-411c-9089-59dcfa5c4195",
+          "description": "Brain Fact Layer Phase 2+ handoff \u2014 no 'Brain','Fact Layer','Phase 2','handoff','types.rs','shipped' vocabulary",
+          "rank": 946
+        },
+        {
+          "query": "what was the AI's subjective experience of having access to an extensive persistent record of prior work",
+          "gold_memory_id": "d955d07e-7325-406f-a02a-e8f9367a9e4c",
+          "description": "how the assistant feels working with brain/18k memories \u2014 no 'friends','feel','brain','re-solving','18k memories' vocabulary",
+          "rank": 293
+        }
+      ]
+    },
+    "0.70": {
+      "alpha": 0.7,
+      "n": 11,
+      "mrr": 0.1351,
+      "precision@1": 0.0,
+      "precision@5": 0.2727,
+      "precision@10": 0.3636,
+      "median_rank": 38,
+      "per_query": [
+        {
+          "query": "what architectural flaws were uncovered when auditing a frontend project for production readiness",
+          "gold_memory_id": "94f91ab1-36f9-5482-90e4-08d347d330a9",
+          "description": "Zustand/TypeScript/SVG code review \u2014 no 'Zustand','TypeScript','any','inline SVG' vocabulary",
+          "rank": 50
+        },
+        {
+          "query": "at which stage of a structured web ranking improvement plan were geographic and language adaptations scheduled",
+          "gold_memory_id": "04bb657a-df7c-5503-a694-5ef8e51ecd1b",
+          "description": "Next.js SEO step 4 localization \u2014 no 'Next.js','SEO','metadata','schema','FAQ' vocabulary",
+          "rank": 24
+        },
+        {
+          "query": "what configuration setting was preventing the live monitoring dashboard from displaying new entries",
+          "gold_memory_id": "db8d1829-8248-43e5-a4ac-0563fe0799ae",
+          "description": "BRAIN_API_AUTH_REQUIRED blocks brain viewer \u2014 no 'brain viewer','AUTH_REQUIRED','activity','stream' vocabulary",
+          "rank": 38
+        },
+        {
+          "query": "how was an external knowledge vault reorganized and brought into the main repository to enhance retrieval",
+          "gold_memory_id": "e1e9a398-9089-46b5-9f7a-b1c0ea56a3d0",
+          "description": "obsidian-brain import into project \u2014 no 'obsidian','import','folder','hybrid methodology' vocabulary",
+          "rank": 42
+        },
+        {
+          "query": "what automated tooling was attempted to obtain credentials for connecting a pharmacy website to an e-commerce platform",
+          "gold_memory_id": "20e2bc89-b760-41bb-80e9-6fe4fb14e6ab",
+          "description": "FarmaPlus Shopify Storefront API token via Playwright \u2014 no 'FarmaPlus','Shopify','Storefront','token','Playwright' vocabulary",
+          "rank": 122
+        },
+        {
+          "query": "which CSS property setting controls how tightly packed the rows appear in a prominent homepage banner title",
+          "gold_memory_id": "611182d5-994d-5d70-a91e-ba978b6cdd09",
+          "description": "leading-tight Tailwind line-height in hero heading \u2014 no 'leading-tight','Tailwind','line-height','hero','1.25' vocabulary",
+          "rank": 9
+        },
+        {
+          "query": "how do styles without a size qualifier differ from those that only activate on wider viewports in a utility-first framework",
+          "gold_memory_id": "5bcfcddd-8d36-5a84-a250-50881c6e0319",
+          "description": "Tailwind breakpoints unprefixed vs sm: 640px \u2014 no 'Tailwind','breakpoint','sm:','640px','mobile' vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "which declarations at the top of the primary style file determine when a framework's normalization rules and atomic helpers are applied",
+          "gold_memory_id": "9f7a559c-8df7-577b-9807-696be3ecf525",
+          "description": "@tailwind base/components/utilities directives \u2014 no '@tailwind','base','components','utilities','inject' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "how did the AI evaluate recent changes to the memory system when asked for an honest technical assessment",
+          "gold_memory_id": "b65795b9-ed62-45e1-927a-ca08ceba88a4",
+          "description": "CTO feedback on brain hybrid retrieval (cosine+BM25) \u2014 no 'brain','hybrid','cosine','BM25','recency','CTO' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "what was the starting context document used to continue development of the knowledge extraction module after the first milestone completed",
+          "gold_memory_id": "3967b982-83ea-411c-9089-59dcfa5c4195",
+          "description": "Brain Fact Layer Phase 2+ handoff \u2014 no 'Brain','Fact Layer','Phase 2','handoff','types.rs','shipped' vocabulary",
+          "rank": 946
+        },
+        {
+          "query": "what was the AI's subjective experience of having access to an extensive persistent record of prior work",
+          "gold_memory_id": "d955d07e-7325-406f-a02a-e8f9367a9e4c",
+          "description": "how the assistant feels working with brain/18k memories \u2014 no 'friends','feel','brain','re-solving','18k memories' vocabulary",
+          "rank": 293
+        }
+      ]
+    },
+    "0.90": {
+      "alpha": 0.9,
+      "n": 11,
+      "mrr": 0.1351,
+      "precision@1": 0.0,
+      "precision@5": 0.2727,
+      "precision@10": 0.3636,
+      "median_rank": 38,
+      "per_query": [
+        {
+          "query": "what architectural flaws were uncovered when auditing a frontend project for production readiness",
+          "gold_memory_id": "94f91ab1-36f9-5482-90e4-08d347d330a9",
+          "description": "Zustand/TypeScript/SVG code review \u2014 no 'Zustand','TypeScript','any','inline SVG' vocabulary",
+          "rank": 50
+        },
+        {
+          "query": "at which stage of a structured web ranking improvement plan were geographic and language adaptations scheduled",
+          "gold_memory_id": "04bb657a-df7c-5503-a694-5ef8e51ecd1b",
+          "description": "Next.js SEO step 4 localization \u2014 no 'Next.js','SEO','metadata','schema','FAQ' vocabulary",
+          "rank": 24
+        },
+        {
+          "query": "what configuration setting was preventing the live monitoring dashboard from displaying new entries",
+          "gold_memory_id": "db8d1829-8248-43e5-a4ac-0563fe0799ae",
+          "description": "BRAIN_API_AUTH_REQUIRED blocks brain viewer \u2014 no 'brain viewer','AUTH_REQUIRED','activity','stream' vocabulary",
+          "rank": 38
+        },
+        {
+          "query": "how was an external knowledge vault reorganized and brought into the main repository to enhance retrieval",
+          "gold_memory_id": "e1e9a398-9089-46b5-9f7a-b1c0ea56a3d0",
+          "description": "obsidian-brain import into project \u2014 no 'obsidian','import','folder','hybrid methodology' vocabulary",
+          "rank": 42
+        },
+        {
+          "query": "what automated tooling was attempted to obtain credentials for connecting a pharmacy website to an e-commerce platform",
+          "gold_memory_id": "20e2bc89-b760-41bb-80e9-6fe4fb14e6ab",
+          "description": "FarmaPlus Shopify Storefront API token via Playwright \u2014 no 'FarmaPlus','Shopify','Storefront','token','Playwright' vocabulary",
+          "rank": 122
+        },
+        {
+          "query": "which CSS property setting controls how tightly packed the rows appear in a prominent homepage banner title",
+          "gold_memory_id": "611182d5-994d-5d70-a91e-ba978b6cdd09",
+          "description": "leading-tight Tailwind line-height in hero heading \u2014 no 'leading-tight','Tailwind','line-height','hero','1.25' vocabulary",
+          "rank": 9
+        },
+        {
+          "query": "how do styles without a size qualifier differ from those that only activate on wider viewports in a utility-first framework",
+          "gold_memory_id": "5bcfcddd-8d36-5a84-a250-50881c6e0319",
+          "description": "Tailwind breakpoints unprefixed vs sm: 640px \u2014 no 'Tailwind','breakpoint','sm:','640px','mobile' vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "which declarations at the top of the primary style file determine when a framework's normalization rules and atomic helpers are applied",
+          "gold_memory_id": "9f7a559c-8df7-577b-9807-696be3ecf525",
+          "description": "@tailwind base/components/utilities directives \u2014 no '@tailwind','base','components','utilities','inject' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "how did the AI evaluate recent changes to the memory system when asked for an honest technical assessment",
+          "gold_memory_id": "b65795b9-ed62-45e1-927a-ca08ceba88a4",
+          "description": "CTO feedback on brain hybrid retrieval (cosine+BM25) \u2014 no 'brain','hybrid','cosine','BM25','recency','CTO' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "what was the starting context document used to continue development of the knowledge extraction module after the first milestone completed",
+          "gold_memory_id": "3967b982-83ea-411c-9089-59dcfa5c4195",
+          "description": "Brain Fact Layer Phase 2+ handoff \u2014 no 'Brain','Fact Layer','Phase 2','handoff','types.rs','shipped' vocabulary",
+          "rank": 946
+        },
+        {
+          "query": "what was the AI's subjective experience of having access to an extensive persistent record of prior work",
+          "gold_memory_id": "d955d07e-7325-406f-a02a-e8f9367a9e4c",
+          "description": "how the assistant feels working with brain/18k memories \u2014 no 'friends','feel','brain','re-solving','18k memories' vocabulary",
+          "rank": 293
+        }
+      ]
+    },
+    "1.00": {
+      "alpha": 1.0,
+      "n": 11,
+      "mrr": 0.1351,
+      "precision@1": 0.0,
+      "precision@5": 0.2727,
+      "precision@10": 0.3636,
+      "median_rank": 38,
+      "per_query": [
+        {
+          "query": "what architectural flaws were uncovered when auditing a frontend project for production readiness",
+          "gold_memory_id": "94f91ab1-36f9-5482-90e4-08d347d330a9",
+          "description": "Zustand/TypeScript/SVG code review \u2014 no 'Zustand','TypeScript','any','inline SVG' vocabulary",
+          "rank": 50
+        },
+        {
+          "query": "at which stage of a structured web ranking improvement plan were geographic and language adaptations scheduled",
+          "gold_memory_id": "04bb657a-df7c-5503-a694-5ef8e51ecd1b",
+          "description": "Next.js SEO step 4 localization \u2014 no 'Next.js','SEO','metadata','schema','FAQ' vocabulary",
+          "rank": 24
+        },
+        {
+          "query": "what configuration setting was preventing the live monitoring dashboard from displaying new entries",
+          "gold_memory_id": "db8d1829-8248-43e5-a4ac-0563fe0799ae",
+          "description": "BRAIN_API_AUTH_REQUIRED blocks brain viewer \u2014 no 'brain viewer','AUTH_REQUIRED','activity','stream' vocabulary",
+          "rank": 38
+        },
+        {
+          "query": "how was an external knowledge vault reorganized and brought into the main repository to enhance retrieval",
+          "gold_memory_id": "e1e9a398-9089-46b5-9f7a-b1c0ea56a3d0",
+          "description": "obsidian-brain import into project \u2014 no 'obsidian','import','folder','hybrid methodology' vocabulary",
+          "rank": 42
+        },
+        {
+          "query": "what automated tooling was attempted to obtain credentials for connecting a pharmacy website to an e-commerce platform",
+          "gold_memory_id": "20e2bc89-b760-41bb-80e9-6fe4fb14e6ab",
+          "description": "FarmaPlus Shopify Storefront API token via Playwright \u2014 no 'FarmaPlus','Shopify','Storefront','token','Playwright' vocabulary",
+          "rank": 122
+        },
+        {
+          "query": "which CSS property setting controls how tightly packed the rows appear in a prominent homepage banner title",
+          "gold_memory_id": "611182d5-994d-5d70-a91e-ba978b6cdd09",
+          "description": "leading-tight Tailwind line-height in hero heading \u2014 no 'leading-tight','Tailwind','line-height','hero','1.25' vocabulary",
+          "rank": 9
+        },
+        {
+          "query": "how do styles without a size qualifier differ from those that only activate on wider viewports in a utility-first framework",
+          "gold_memory_id": "5bcfcddd-8d36-5a84-a250-50881c6e0319",
+          "description": "Tailwind breakpoints unprefixed vs sm: 640px \u2014 no 'Tailwind','breakpoint','sm:','640px','mobile' vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "which declarations at the top of the primary style file determine when a framework's normalization rules and atomic helpers are applied",
+          "gold_memory_id": "9f7a559c-8df7-577b-9807-696be3ecf525",
+          "description": "@tailwind base/components/utilities directives \u2014 no '@tailwind','base','components','utilities','inject' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "how did the AI evaluate recent changes to the memory system when asked for an honest technical assessment",
+          "gold_memory_id": "b65795b9-ed62-45e1-927a-ca08ceba88a4",
+          "description": "CTO feedback on brain hybrid retrieval (cosine+BM25) \u2014 no 'brain','hybrid','cosine','BM25','recency','CTO' vocabulary",
+          "rank": 2
+        },
+        {
+          "query": "what was the starting context document used to continue development of the knowledge extraction module after the first milestone completed",
+          "gold_memory_id": "3967b982-83ea-411c-9089-59dcfa5c4195",
+          "description": "Brain Fact Layer Phase 2+ handoff \u2014 no 'Brain','Fact Layer','Phase 2','handoff','types.rs','shipped' vocabulary",
+          "rank": 946
+        },
+        {
+          "query": "what was the AI's subjective experience of having access to an extensive persistent record of prior work",
+          "gold_memory_id": "d955d07e-7325-406f-a02a-e8f9367a9e4c",
+          "description": "how the assistant feels working with brain/18k memories \u2014 no 'friends','feel','brain','re-solving','18k memories' vocabulary",
+          "rank": 293
+        }
+      ]
+    }
+  }
+}

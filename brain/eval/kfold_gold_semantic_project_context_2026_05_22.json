@@ -1,0 +1,507 @@
+{
+  "mode": "gold_semantic",
+  "n_queries": 12,
+  "n_missing": 0,
+  "best_alpha": 0.0,
+  "best_precision@1": 1.0,
+  "results": {
+    "0.00": {
+      "alpha": 0.0,
+      "n": 12,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "median_rank": 1,
+      "per_query": [
+        {
+          "query": "how do you handle changes to a procurement record after it has been submitted without overwriting the original entry",
+          "gold_memory_id": "aa31059d-08a0-459b-83bf-01ba826705c3",
+          "description": "SICOP bid modifications table \u2014 no SQL/INSERT/licitaciones vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "where and when must physical goods be dropped off for the government technology ministry tender",
+          "gold_memory_id": "4e193b1f-c6ff-4fb2-815d-588f4a91d823",
+          "description": "delivery location MICITT Zapote \u2014 no MICITT/Zapote/Casa Presidencial vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "what accessibility and localization services are required in the media production contract",
+          "gold_memory_id": "59f58867-cc62-405e-a690-2c802d3e034a",
+          "description": "LESCO/subtitles/sign language in AV bid \u2014 no LESCO/musicalizaci\u00f3n/subt\u00edtulos vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "what are the annual and one-time fees to publish an app on both major mobile platforms",
+          "gold_memory_id": "7b53f54c-3ac7-4bd6-aadc-a6b6c05d2745",
+          "description": "Apple $99/yr + Google Play $25 \u2014 no Apple/Google Play/Developer Account vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how does the system automatically detect when a production batch has left the facility",
+          "gold_memory_id": "43127a68-67a0-4b2d-87e9-96510112a154",
+          "description": "RFID gate triggers dispatch \u2014 no RFID/planta/ferreter\u00eda/Sakb\u00e9 vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "what technology stack and visual design approach was chosen for the fine dining restaurant website in San Jos\u00e9",
+          "gold_memory_id": "4c620fc3-152e-4f23-a838-316ee1e4f7bf",
+          "description": "Le Chandelier Next.js neumorphic \u2014 no Next.js/neumorphic/Le Chandelier vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "which public research body under the national health authority is responsible for tracking nutrition and disease in Costa Rica",
+          "gold_memory_id": "a2fdd222-7698-4e3e-834c-015bf9031c8d",
+          "description": "INCIENSA under Ministry of Health \u2014 no INCIENSA/SICOP/ministerio vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how does the point-of-sale system continue operating during a network outage without losing transaction data",
+          "gold_memory_id": "b07a750e-0a24-49ed-91c5-82ade14f4587",
+          "description": "local-first cloud-sync Sakb\u00e9 POS \u2014 no local-first/cloud-sync/Sakb\u00e9 vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "what real-time indicators does the logistics operations screen show for monitoring drivers and active routes",
+          "gold_memory_id": "cc3a4faf-4ebc-480c-86e2-2442773da3a2",
+          "description": "Sakb\u00e9 logistics KPIs dashboard \u2014 no KPIs/flota/viajes/Sakb\u00e9 vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how are hospital supply purchases categorized between drugs, capital equipment, and consumable items",
+          "gold_memory_id": "15767f71-fbbd-42f1-9c0b-b804ad9894a9",
+          "description": "SICOP procurement categories \u2014 no MEDICAMENTO/INSUMO/EQUIPAMIENTO vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how does the national AI strategy evaluate risk in automated systems without assigning fixed danger tiers",
+          "gold_memory_id": "9d13921e-589f-49c0-850e-5abf27ec95e5",
+          "description": "Costa Rica ENIA risk management \u2014 no framework/MICITT/riesgo vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "which government office will gain forensic analysis capabilities to investigate artificial intelligence abuses",
+          "gold_memory_id": "29b47fae-98a6-465f-ac2a-4701d586cad1",
+          "description": "MICITT Cybersecurity Directorate \u2014 no MICITT/ciberseguridad/DC/forense vocabulary",
+          "rank": 1
+        }
+      ]
+    },
+    "0.30": {
+      "alpha": 0.3,
+      "n": 12,
+      "mrr": 0.0648,
+      "precision@1": 0.0,
+      "precision@5": 0.1667,
+      "precision@10": 0.25,
+      "median_rank": 157,
+      "per_query": [
+        {
+          "query": "how do you handle changes to a procurement record after it has been submitted without overwriting the original entry",
+          "gold_memory_id": "aa31059d-08a0-459b-83bf-01ba826705c3",
+          "description": "SICOP bid modifications table \u2014 no SQL/INSERT/licitaciones vocabulary",
+          "rank": 67
+        },
+        {
+          "query": "where and when must physical goods be dropped off for the government technology ministry tender",
+          "gold_memory_id": "4e193b1f-c6ff-4fb2-815d-588f4a91d823",
+          "description": "delivery location MICITT Zapote \u2014 no MICITT/Zapote/Casa Presidencial vocabulary",
+          "rank": 937
+        },
+        {
+          "query": "what accessibility and localization services are required in the media production contract",
+          "gold_memory_id": "59f58867-cc62-405e-a690-2c802d3e034a",
+          "description": "LESCO/subtitles/sign language in AV bid \u2014 no LESCO/musicalizaci\u00f3n/subt\u00edtulos vocabulary",
+          "rank": 270
+        },
+        {
+          "query": "what are the annual and one-time fees to publish an app on both major mobile platforms",
+          "gold_memory_id": "7b53f54c-3ac7-4bd6-aadc-a6b6c05d2745",
+          "description": "Apple $99/yr + Google Play $25 \u2014 no Apple/Google Play/Developer Account vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "how does the system automatically detect when a production batch has left the facility",
+          "gold_memory_id": "43127a68-67a0-4b2d-87e9-96510112a154",
+          "description": "RFID gate triggers dispatch \u2014 no RFID/planta/ferreter\u00eda/Sakb\u00e9 vocabulary",
+          "rank": 292
+        },
+        {
+          "query": "what technology stack and visual design approach was chosen for the fine dining restaurant website in San Jos\u00e9",
+          "gold_memory_id": "4c620fc3-152e-4f23-a838-316ee1e4f7bf",
+          "description": "Le Chandelier Next.js neumorphic \u2014 no Next.js/neumorphic/Le Chandelier vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "which public research body under the national health authority is responsible for tracking nutrition and disease in Costa Rica",
+          "gold_memory_id": "a2fdd222-7698-4e3e-834c-015bf9031c8d",
+          "description": "INCIENSA under Ministry of Health \u2014 no INCIENSA/SICOP/ministerio vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "how does the point-of-sale system continue operating during a network outage without losing transaction data",
+          "gold_memory_id": "b07a750e-0a24-49ed-91c5-82ade14f4587",
+          "description": "local-first cloud-sync Sakb\u00e9 POS \u2014 no local-first/cloud-sync/Sakb\u00e9 vocabulary",
+          "rank": 282
+        },
+        {
+          "query": "what real-time indicators does the logistics operations screen show for monitoring drivers and active routes",
+          "gold_memory_id": "cc3a4faf-4ebc-480c-86e2-2442773da3a2",
+          "description": "Sakb\u00e9 logistics KPIs dashboard \u2014 no KPIs/flota/viajes/Sakb\u00e9 vocabulary",
+          "rank": 56
+        },
+        {
+          "query": "how are hospital supply purchases categorized between drugs, capital equipment, and consumable items",
+          "gold_memory_id": "15767f71-fbbd-42f1-9c0b-b804ad9894a9",
+          "description": "SICOP procurement categories \u2014 no MEDICAMENTO/INSUMO/EQUIPAMIENTO vocabulary",
+          "rank": 58
+        },
+        {
+          "query": "how does the national AI strategy evaluate risk in automated systems without assigning fixed danger tiers",
+          "gold_memory_id": "9d13921e-589f-49c0-850e-5abf27ec95e5",
+          "description": "Costa Rica ENIA risk management \u2014 no framework/MICITT/riesgo vocabulary",
+          "rank": 248
+        },
+        {
+          "query": "which government office will gain forensic analysis capabilities to investigate artificial intelligence abuses",
+          "gold_memory_id": "29b47fae-98a6-465f-ac2a-4701d586cad1",
+          "description": "MICITT Cybersecurity Directorate \u2014 no MICITT/ciberseguridad/DC/forense vocabulary",
+          "rank": 288
+        }
+      ]
+    },
+    "0.50": {
+      "alpha": 0.5,
+      "n": 12,
+      "mrr": 0.0648,
+      "precision@1": 0.0,
+      "precision@5": 0.1667,
+      "precision@10": 0.25,
+      "median_rank": 157,
+      "per_query": [
+        {
+          "query": "how do you handle changes to a procurement record after it has been submitted without overwriting the original entry",
+          "gold_memory_id": "aa31059d-08a0-459b-83bf-01ba826705c3",
+          "description": "SICOP bid modifications table \u2014 no SQL/INSERT/licitaciones vocabulary",
+          "rank": 67
+        },
+        {
+          "query": "where and when must physical goods be dropped off for the government technology ministry tender",
+          "gold_memory_id": "4e193b1f-c6ff-4fb2-815d-588f4a91d823",
+          "description": "delivery location MICITT Zapote \u2014 no MICITT/Zapote/Casa Presidencial vocabulary",
+          "rank": 937
+        },
+        {
+          "query": "what accessibility and localization services are required in the media production contract",
+          "gold_memory_id": "59f58867-cc62-405e-a690-2c802d3e034a",
+          "description": "LESCO/subtitles/sign language in AV bid \u2014 no LESCO/musicalizaci\u00f3n/subt\u00edtulos vocabulary",
+          "rank": 270
+        },
+        {
+          "query": "what are the annual and one-time fees to publish an app on both major mobile platforms",
+          "gold_memory_id": "7b53f54c-3ac7-4bd6-aadc-a6b6c05d2745",
+          "description": "Apple $99/yr + Google Play $25 \u2014 no Apple/Google Play/Developer Account vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "how does the system automatically detect when a production batch has left the facility",
+          "gold_memory_id": "43127a68-67a0-4b2d-87e9-96510112a154",
+          "description": "RFID gate triggers dispatch \u2014 no RFID/planta/ferreter\u00eda/Sakb\u00e9 vocabulary",
+          "rank": 292
+        },
+        {
+          "query": "what technology stack and visual design approach was chosen for the fine dining restaurant website in San Jos\u00e9",
+          "gold_memory_id": "4c620fc3-152e-4f23-a838-316ee1e4f7bf",
+          "description": "Le Chandelier Next.js neumorphic \u2014 no Next.js/neumorphic/Le Chandelier vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "which public research body under the national health authority is responsible for tracking nutrition and disease in Costa Rica",
+          "gold_memory_id": "a2fdd222-7698-4e3e-834c-015bf9031c8d",
+          "description": "INCIENSA under Ministry of Health \u2014 no INCIENSA/SICOP/ministerio vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "how does the point-of-sale system continue operating during a network outage without losing transaction data",
+          "gold_memory_id": "b07a750e-0a24-49ed-91c5-82ade14f4587",
+          "description": "local-first cloud-sync Sakb\u00e9 POS \u2014 no local-first/cloud-sync/Sakb\u00e9 vocabulary",
+          "rank": 282
+        },
+        {
+          "query": "what real-time indicators does the logistics operations screen show for monitoring drivers and active routes",
+          "gold_memory_id": "cc3a4faf-4ebc-480c-86e2-2442773da3a2",
+          "description": "Sakb\u00e9 logistics KPIs dashboard \u2014 no KPIs/flota/viajes/Sakb\u00e9 vocabulary",
+          "rank": 56
+        },
+        {
+          "query": "how are hospital supply purchases categorized between drugs, capital equipment, and consumable items",
+          "gold_memory_id": "15767f71-fbbd-42f1-9c0b-b804ad9894a9",
+          "description": "SICOP procurement categories \u2014 no MEDICAMENTO/INSUMO/EQUIPAMIENTO vocabulary",
+          "rank": 58
+        },
+        {
+          "query": "how does the national AI strategy evaluate risk in automated systems without assigning fixed danger tiers",
+          "gold_memory_id": "9d13921e-589f-49c0-850e-5abf27ec95e5",
+          "description": "Costa Rica ENIA risk management \u2014 no framework/MICITT/riesgo vocabulary",
+          "rank": 248
+        },
+        {
+          "query": "which government office will gain forensic analysis capabilities to investigate artificial intelligence abuses",
+          "gold_memory_id": "29b47fae-98a6-465f-ac2a-4701d586cad1",
+          "description": "MICITT Cybersecurity Directorate \u2014 no MICITT/ciberseguridad/DC/forense vocabulary",
+          "rank": 288
+        }
+      ]
+    },
+    "0.70": {
+      "alpha": 0.7,
+      "n": 12,
+      "mrr": 0.0648,
+      "precision@1": 0.0,
+      "precision@5": 0.1667,
+      "precision@10": 0.25,
+      "median_rank": 157,
+      "per_query": [
+        {
+          "query": "how do you handle changes to a procurement record after it has been submitted without overwriting the original entry",
+          "gold_memory_id": "aa31059d-08a0-459b-83bf-01ba826705c3",
+          "description": "SICOP bid modifications table \u2014 no SQL/INSERT/licitaciones vocabulary",
+          "rank": 67
+        },
+        {
+          "query": "where and when must physical goods be dropped off for the government technology ministry tender",
+          "gold_memory_id": "4e193b1f-c6ff-4fb2-815d-588f4a91d823",
+          "description": "delivery location MICITT Zapote \u2014 no MICITT/Zapote/Casa Presidencial vocabulary",
+          "rank": 937
+        },
+        {
+          "query": "what accessibility and localization services are required in the media production contract",
+          "gold_memory_id": "59f58867-cc62-405e-a690-2c802d3e034a",
+          "description": "LESCO/subtitles/sign language in AV bid \u2014 no LESCO/musicalizaci\u00f3n/subt\u00edtulos vocabulary",
+          "rank": 270
+        },
+        {
+          "query": "what are the annual and one-time fees to publish an app on both major mobile platforms",
+          "gold_memory_id": "7b53f54c-3ac7-4bd6-aadc-a6b6c05d2745",
+          "description": "Apple $99/yr + Google Play $25 \u2014 no Apple/Google Play/Developer Account vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "how does the system automatically detect when a production batch has left the facility",
+          "gold_memory_id": "43127a68-67a0-4b2d-87e9-96510112a154",
+          "description": "RFID gate triggers dispatch \u2014 no RFID/planta/ferreter\u00eda/Sakb\u00e9 vocabulary",
+          "rank": 292
+        },
+        {
+          "query": "what technology stack and visual design approach was chosen for the fine dining restaurant website in San Jos\u00e9",
+          "gold_memory_id": "4c620fc3-152e-4f23-a838-316ee1e4f7bf",
+          "description": "Le Chandelier Next.js neumorphic \u2014 no Next.js/neumorphic/Le Chandelier vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "which public research body under the national health authority is responsible for tracking nutrition and disease in Costa Rica",
+          "gold_memory_id": "a2fdd222-7698-4e3e-834c-015bf9031c8d",
+          "description": "INCIENSA under Ministry of Health \u2014 no INCIENSA/SICOP/ministerio vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "how does the point-of-sale system continue operating during a network outage without losing transaction data",
+          "gold_memory_id": "b07a750e-0a24-49ed-91c5-82ade14f4587",
+          "description": "local-first cloud-sync Sakb\u00e9 POS \u2014 no local-first/cloud-sync/Sakb\u00e9 vocabulary",
+          "rank": 282
+        },
+        {
+          "query": "what real-time indicators does the logistics operations screen show for monitoring drivers and active routes",
+          "gold_memory_id": "cc3a4faf-4ebc-480c-86e2-2442773da3a2",
+          "description": "Sakb\u00e9 logistics KPIs dashboard \u2014 no KPIs/flota/viajes/Sakb\u00e9 vocabulary",
+          "rank": 56
+        },
+        {
+          "query": "how are hospital supply purchases categorized between drugs, capital equipment, and consumable items",
+          "gold_memory_id": "15767f71-fbbd-42f1-9c0b-b804ad9894a9",
+          "description": "SICOP procurement categories \u2014 no MEDICAMENTO/INSUMO/EQUIPAMIENTO vocabulary",
+          "rank": 58
+        },
+        {
+          "query": "how does the national AI strategy evaluate risk in automated systems without assigning fixed danger tiers",
+          "gold_memory_id": "9d13921e-589f-49c0-850e-5abf27ec95e5",
+          "description": "Costa Rica ENIA risk management \u2014 no framework/MICITT/riesgo vocabulary",
+          "rank": 248
+        },
+        {
+          "query": "which government office will gain forensic analysis capabilities to investigate artificial intelligence abuses",
+          "gold_memory_id": "29b47fae-98a6-465f-ac2a-4701d586cad1",
+          "description": "MICITT Cybersecurity Directorate \u2014 no MICITT/ciberseguridad/DC/forense vocabulary",
+          "rank": 288
+        }
+      ]
+    },
+    "0.90": {
+      "alpha": 0.9,
+      "n": 12,
+      "mrr": 0.0648,
+      "precision@1": 0.0,
+      "precision@5": 0.1667,
+      "precision@10": 0.25,
+      "median_rank": 157,
+      "per_query": [
+        {
+          "query": "how do you handle changes to a procurement record after it has been submitted without overwriting the original entry",
+          "gold_memory_id": "aa31059d-08a0-459b-83bf-01ba826705c3",
+          "description": "SICOP bid modifications table \u2014 no SQL/INSERT/licitaciones vocabulary",
+          "rank": 67
+        },
+        {
+          "query": "where and when must physical goods be dropped off for the government technology ministry tender",
+          "gold_memory_id": "4e193b1f-c6ff-4fb2-815d-588f4a91d823",
+          "description": "delivery location MICITT Zapote \u2014 no MICITT/Zapote/Casa Presidencial vocabulary",
+          "rank": 937
+        },
+        {
+          "query": "what accessibility and localization services are required in the media production contract",
+          "gold_memory_id": "59f58867-cc62-405e-a690-2c802d3e034a",
+          "description": "LESCO/subtitles/sign language in AV bid \u2014 no LESCO/musicalizaci\u00f3n/subt\u00edtulos vocabulary",
+          "rank": 270
+        },
+        {
+          "query": "what are the annual and one-time fees to publish an app on both major mobile platforms",
+          "gold_memory_id": "7b53f54c-3ac7-4bd6-aadc-a6b6c05d2745",
+          "description": "Apple $99/yr + Google Play $25 \u2014 no Apple/Google Play/Developer Account vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "how does the system automatically detect when a production batch has left the facility",
+          "gold_memory_id": "43127a68-67a0-4b2d-87e9-96510112a154",
+          "description": "RFID gate triggers dispatch \u2014 no RFID/planta/ferreter\u00eda/Sakb\u00e9 vocabulary",
+          "rank": 292
+        },
+        {
+          "query": "what technology stack and visual design approach was chosen for the fine dining restaurant website in San Jos\u00e9",
+          "gold_memory_id": "4c620fc3-152e-4f23-a838-316ee1e4f7bf",
+          "description": "Le Chandelier Next.js neumorphic \u2014 no Next.js/neumorphic/Le Chandelier vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "which public research body under the national health authority is responsible for tracking nutrition and disease in Costa Rica",
+          "gold_memory_id": "a2fdd222-7698-4e3e-834c-015bf9031c8d",
+          "description": "INCIENSA under Ministry of Health \u2014 no INCIENSA/SICOP/ministerio vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "how does the point-of-sale system continue operating during a network outage without losing transaction data",
+          "gold_memory_id": "b07a750e-0a24-49ed-91c5-82ade14f4587",
+          "description": "local-first cloud-sync Sakb\u00e9 POS \u2014 no local-first/cloud-sync/Sakb\u00e9 vocabulary",
+          "rank": 282
+        },
+        {
+          "query": "what real-time indicators does the logistics operations screen show for monitoring drivers and active routes",
+          "gold_memory_id": "cc3a4faf-4ebc-480c-86e2-2442773da3a2",
+          "description": "Sakb\u00e9 logistics KPIs dashboard \u2014 no KPIs/flota/viajes/Sakb\u00e9 vocabulary",
+          "rank": 56
+        },
+        {
+          "query": "how are hospital supply purchases categorized between drugs, capital equipment, and consumable items",
+          "gold_memory_id": "15767f71-fbbd-42f1-9c0b-b804ad9894a9",
+          "description": "SICOP procurement categories \u2014 no MEDICAMENTO/INSUMO/EQUIPAMIENTO vocabulary",
+          "rank": 58
+        },
+        {
+          "query": "how does the national AI strategy evaluate risk in automated systems without assigning fixed danger tiers",
+          "gold_memory_id": "9d13921e-589f-49c0-850e-5abf27ec95e5",
+          "description": "Costa Rica ENIA risk management \u2014 no framework/MICITT/riesgo vocabulary",
+          "rank": 248
+        },
+        {
+          "query": "which government office will gain forensic analysis capabilities to investigate artificial intelligence abuses",
+          "gold_memory_id": "29b47fae-98a6-465f-ac2a-4701d586cad1",
+          "description": "MICITT Cybersecurity Directorate \u2014 no MICITT/ciberseguridad/DC/forense vocabulary",
+          "rank": 288
+        }
+      ]
+    },
+    "1.00": {
+      "alpha": 1.0,
+      "n": 12,
+      "mrr": 0.0648,
+      "precision@1": 0.0,
+      "precision@5": 0.1667,
+      "precision@10": 0.25,
+      "median_rank": 157,
+      "per_query": [
+        {
+          "query": "how do you handle changes to a procurement record after it has been submitted without overwriting the original entry",
+          "gold_memory_id": "aa31059d-08a0-459b-83bf-01ba826705c3",
+          "description": "SICOP bid modifications table \u2014 no SQL/INSERT/licitaciones vocabulary",
+          "rank": 67
+        },
+        {
+          "query": "where and when must physical goods be dropped off for the government technology ministry tender",
+          "gold_memory_id": "4e193b1f-c6ff-4fb2-815d-588f4a91d823",
+          "description": "delivery location MICITT Zapote \u2014 no MICITT/Zapote/Casa Presidencial vocabulary",
+          "rank": 937
+        },
+        {
+          "query": "what accessibility and localization services are required in the media production contract",
+          "gold_memory_id": "59f58867-cc62-405e-a690-2c802d3e034a",
+          "description": "LESCO/subtitles/sign language in AV bid \u2014 no LESCO/musicalizaci\u00f3n/subt\u00edtulos vocabulary",
+          "rank": 270
+        },
+        {
+          "query": "what are the annual and one-time fees to publish an app on both major mobile platforms",
+          "gold_memory_id": "7b53f54c-3ac7-4bd6-aadc-a6b6c05d2745",
+          "description": "Apple $99/yr + Google Play $25 \u2014 no Apple/Google Play/Developer Account vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "how does the system automatically detect when a production batch has left the facility",
+          "gold_memory_id": "43127a68-67a0-4b2d-87e9-96510112a154",
+          "description": "RFID gate triggers dispatch \u2014 no RFID/planta/ferreter\u00eda/Sakb\u00e9 vocabulary",
+          "rank": 292
+        },
+        {
+          "query": "what technology stack and visual design approach was chosen for the fine dining restaurant website in San Jos\u00e9",
+          "gold_memory_id": "4c620fc3-152e-4f23-a838-316ee1e4f7bf",
+          "description": "Le Chandelier Next.js neumorphic \u2014 no Next.js/neumorphic/Le Chandelier vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "which public research body under the national health authority is responsible for tracking nutrition and disease in Costa Rica",
+          "gold_memory_id": "a2fdd222-7698-4e3e-834c-015bf9031c8d",
+          "description": "INCIENSA under Ministry of Health \u2014 no INCIENSA/SICOP/ministerio vocabulary",
+          "rank": 4
+        },
+        {
+          "query": "how does the point-of-sale system continue operating during a network outage without losing transaction data",
+          "gold_memory_id": "b07a750e-0a24-49ed-91c5-82ade14f4587",
+          "description": "local-first cloud-sync Sakb\u00e9 POS \u2014 no local-first/cloud-sync/Sakb\u00e9 vocabulary",
+          "rank": 282
+        },
+        {
+          "query": "what real-time indicators does the logistics operations screen show for monitoring drivers and active routes",
+          "gold_memory_id": "cc3a4faf-4ebc-480c-86e2-2442773da3a2",
+          "description": "Sakb\u00e9 logistics KPIs dashboard \u2014 no KPIs/flota/viajes/Sakb\u00e9 vocabulary",
+          "rank": 56
+        },
+        {
+          "query": "how are hospital supply purchases categorized between drugs, capital equipment, and consumable items",
+          "gold_memory_id": "15767f71-fbbd-42f1-9c0b-b804ad9894a9",
+          "description": "SICOP procurement categories \u2014 no MEDICAMENTO/INSUMO/EQUIPAMIENTO vocabulary",
+          "rank": 58
+        },
+        {
+          "query": "how does the national AI strategy evaluate risk in automated systems without assigning fixed danger tiers",
+          "gold_memory_id": "9d13921e-589f-49c0-850e-5abf27ec95e5",
+          "description": "Costa Rica ENIA risk management \u2014 no framework/MICITT/riesgo vocabulary",
+          "rank": 248
+        },
+        {
+          "query": "which government office will gain forensic analysis capabilities to investigate artificial intelligence abuses",
+          "gold_memory_id": "29b47fae-98a6-465f-ac2a-4701d586cad1",
+          "description": "MICITT Cybersecurity Directorate \u2014 no MICITT/ciberseguridad/DC/forense vocabulary",
+          "rank": 288
+        }
+      ]
+    }
+  }
+}

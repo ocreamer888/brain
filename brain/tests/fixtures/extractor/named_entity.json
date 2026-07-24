@@ -1,0 +1,33 @@
+{
+  "episode_text": "RMT Soluciones is a construction engineering firm based in Costa Rica. They specialize in hotel-grade, hospital-grade, and residential construction projects including factories and commercial buildings. Services cover the full project lifecycle: inspection, design, build, and development of electrical systems, fire suppression systems, plumbing and water systems, structural engineering, CCTV surveillance, and datacenters. RMT also sells construction products directly to contractors and end clients.",
+  "facts": [
+    {
+      "content": "RMT Soluciones is a construction engineering firm based in Costa Rica.",
+      "salience": 0.95,
+      "event_time": null,
+      "entities": ["RMT Soluciones", "Costa Rica"],
+      "fact_type": "named_entity"
+    },
+    {
+      "content": "RMT Soluciones specializes in hotel-grade, hospital-grade, and residential construction projects including factories and commercial buildings.",
+      "salience": 0.85,
+      "event_time": null,
+      "entities": ["RMT Soluciones"],
+      "fact_type": "named_entity"
+    },
+    {
+      "content": "RMT Soluciones provides services covering inspection, design, build, and development of electrical systems, fire suppression systems, plumbing and water systems, structural engineering, CCTV surveillance, and datacenters.",
+      "salience": 0.8,
+      "event_time": null,
+      "entities": ["RMT Soluciones"],
+      "fact_type": "named_entity"
+    },
+    {
+      "content": "RMT Soluciones sells construction products directly to contractors and end clients.",
+      "salience": 0.75,
+      "event_time": null,
+      "entities": ["RMT Soluciones"],
+      "fact_type": "named_entity"
+    }
+  ]
+}

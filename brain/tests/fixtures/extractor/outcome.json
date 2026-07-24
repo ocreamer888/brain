@@ -1,0 +1,40 @@
+{
+  "episode_text": "T2 RRF hybrid search implemented in retrieval_eval_kfold.py (--rrf flag). Full corpus results: P@1 cosine=0.640 -> RRF=0.799 (+0.158), MRR 0.694->0.850. Biggest gains: solution type +0.247, general project +0.320, ocreamer +0.272. In-memory FTS5 index, BM25+cosine fusion k=60. Baselines saved: kfold_report_rrf_full.json. meddefi casing fixed (31 rows -> MedDeFi). Ocreamer diagnosis: 192/206 memories are raw PDF chunks without titles, with overlapping adjacent embeddings -- an ingest problem not a retrieval problem. Next: wire RRF into production brain_api search path.",
+  "facts": [
+    {
+      "content": "RRF hybrid search implementation in retrieval_eval_kfold.py increased P@1 from 0.640 to 0.799 and MRR from 0.694 to 0.850 on full corpus results.",
+      "salience": 0.92,
+      "event_time": null,
+      "entities": ["retrieval_eval_kfold.py", "RRF", "P@1", "MRR"],
+      "fact_type": "outcome"
+    },
+    {
+      "content": "The next planned task is to wire RRF into the production brain_api search path.",
+      "salience": 0.88,
+      "event_time": null,
+      "entities": ["RRF", "brain_api"],
+      "fact_type": "decision"
+    },
+    {
+      "content": "Ocreamer has 192 out of 206 memories stored as raw PDF chunks without titles and with overlapping adjacent embeddings, indicating an ingest problem rather than a retrieval problem.",
+      "salience": 0.85,
+      "event_time": null,
+      "entities": ["Ocreamer"],
+      "fact_type": "error_fix"
+    },
+    {
+      "content": "RRF hybrid search uses in-memory FTS5 index with BM25+cosine fusion at k=60.",
+      "salience": 0.78,
+      "event_time": null,
+      "entities": ["RRF", "FTS5", "BM25", "cosine"],
+      "fact_type": "decision"
+    },
+    {
+      "content": "RRF baseline results were saved to kfold_report_rrf_full.json.",
+      "salience": 0.65,
+      "event_time": null,
+      "entities": ["kfold_report_rrf_full.json", "RRF"],
+      "fact_type": "outcome"
+    }
+  ]
+}

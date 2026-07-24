@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/user/brain/schemas/feedback_event_v1.json",
+  "title": "Brain feedback event (v1)",
+  "description": "Structured feedback on retrieval or saved memories. Stored in SQLite table feedback_events; JSONL export adds schema_version.",
+  "type": "object",
+  "required": ["schema_version", "id", "ts", "event_type", "source", "payload"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "id": { "type": "string", "description": "UUID" },
+    "ts": { "type": "string", "format": "date-time", "description": "RFC3339" },
+    "event_type": {
+      "type": "string",
+      "enum": ["accepted", "rejected", "edited", "ranked", "dismissed"]
+    },
+    "memory_id": { "type": ["string", "null"] },
+    "query": { "type": ["string", "null"] },
+    "session_id": { "type": ["string", "null"] },
+    "project": { "type": ["string", "null"] },
+    "source": {
+      "type": "string",
+      "enum": ["brain_api", "mcp", "hook"]
+    },
+    "payload": { "type": "object" },
+    "idempotency_key": { "type": "string" }
+  },
+  "additionalProperties": false
+}

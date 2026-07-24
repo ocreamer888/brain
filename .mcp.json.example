@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "brain": {
+      "command": "python3",
+      "args": ["-m", "brain.mcp.server"],
+      "cwd": ".",
+      "env": {
+        "BRAIN_API_URL": "http://127.0.0.1:8787",
+        "BRAIN_API_KEY": "local-dev-key",
+        "BRAIN_BACKEND": "api"
+      }
+    }
+  }
+}

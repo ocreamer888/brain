@@ -1,0 +1,191 @@
+{
+  "overall": {
+    "n": 990,
+    "mrr": 0.8683,
+    "precision@1": 0.8455,
+    "precision@3": 0.8869,
+    "precision@5": 0.897,
+    "precision@10": 0.904,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 89,
+      "mrr": 0.1242,
+      "precision@1": 0.0899,
+      "precision@3": 0.1236,
+      "precision@5": 0.1685,
+      "precision@10": 0.191
+    },
+    "\"decision\"": {
+      "n": 3,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"error_lesson\"": {
+      "n": 4,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"fact\"": {
+      "n": 774,
+      "mrr": 0.9771,
+      "precision@1": 0.9587,
+      "precision@3": 0.9974,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"pattern\"": {
+      "n": 4,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"project_context\"": {
+      "n": 45,
+      "mrr": 0.4299,
+      "precision@1": 0.4,
+      "precision@3": 0.4222,
+      "precision@5": 0.4667,
+      "precision@10": 0.5556
+    },
+    "\"solution\"": {
+      "n": 71,
+      "mrr": 0.8727,
+      "precision@1": 0.8169,
+      "precision@3": 0.9155,
+      "precision@5": 0.9437,
+      "precision@10": 0.9577
+    }
+  },
+  "by_project": {
+    "cursor": {
+      "n": 342,
+      "mrr": 0.979,
+      "precision@1": 0.962,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "src": {
+      "n": 86,
+      "mrr": 0.9806,
+      "precision@1": 0.9651,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "perplexity": {
+      "n": 73,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "general": {
+      "n": 66,
+      "mrr": 0.7797,
+      "precision@1": 0.7273,
+      "precision@3": 0.8182,
+      "precision@5": 0.8485,
+      "precision@10": 0.8636
+    },
+    ".claude": {
+      "n": 59,
+      "mrr": 0.3239,
+      "precision@1": 0.3051,
+      "precision@3": 0.322,
+      "precision@5": 0.3559,
+      "precision@10": 0.3559
+    },
+    "ocreamer": {
+      "n": 54,
+      "mrr": 0.8972,
+      "precision@1": 0.8519,
+      "precision@3": 0.9259,
+      "precision@5": 0.963,
+      "precision@10": 0.9815
+    },
+    "AI": {
+      "n": 52,
+      "mrr": 0.4485,
+      "precision@1": 0.4231,
+      "precision@3": 0.4615,
+      "precision@5": 0.4615,
+      "precision@10": 0.4808
+    },
+    "landingpage": {
+      "n": 46,
+      "mrr": 0.9674,
+      "precision@1": 0.9348,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "frontend": {
+      "n": 45,
+      "mrr": 0.9519,
+      "precision@1": 0.9111,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "owelign": {
+      "n": 43,
+      "mrr": 0.945,
+      "precision@1": 0.9302,
+      "precision@3": 0.9535,
+      "precision@5": 0.9535,
+      "precision@10": 0.9767
+    },
+    "sicop": {
+      "n": 33,
+      "mrr": 0.9337,
+      "precision@1": 0.9091,
+      "precision@3": 0.9394,
+      "precision@5": 0.9697,
+      "precision@10": 1.0
+    },
+    "lifehub": {
+      "n": 15,
+      "mrr": 0.1402,
+      "precision@1": 0.0667,
+      "precision@3": 0.2,
+      "precision@5": 0.2667,
+      "precision@10": 0.2667
+    },
+    "sicop-health": {
+      "n": 14,
+      "mrr": 0.8579,
+      "precision@1": 0.8571,
+      "precision@3": 0.8571,
+      "precision@5": 0.8571,
+      "precision@10": 0.8571
+    },
+    "le_chandelier": {
+      "n": 13,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "farmaplus": {
+      "n": 8,
+      "mrr": 0.0532,
+      "precision@1": 0.0,
+      "precision@3": 0.0,
+      "precision@5": 0.125,
+      "precision@10": 0.25
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "episode_text": "Debugged and resolved multiple integration issues in a Next.js frontend application, including TypeScript environment variable access rules, a misconfigured third-party payment SDK URL and initialization pattern, and a ticket reservation race condition. | Property access from index signature error: Switched dot notation to bracket notation process.env['VAR_NAME'] and optionally augmented NodeJS.ProcessEnv types. | Missing env var at runtime error: Added NEXT_PUBLIC_TILOPAY_API_KEY to .env.local, purged the .next directory, and restarted the dev server. | SDK DNS failure & constructor TypeError: Updated to the correct endpoint https://app.tilopay.com/sdk/v2/sdk_tpay.min.js and implemented a shape-detecting loader to handle window.TiloPay safely. | Ticket reservation 400 error: Added graceful UI error surfacing for concurrency conflicts and implemented an automatic ticket list refresh mechanism. | External SDK URLs will be configuration-driven via environment variables to allow rapid swapping during outages. | process.env will be accessed using bracket notation to satisfy strict TypeScript index signature compiler rules. | The payment SDK will be loaded dynamically with a defensive wrapper that auto-detects constructor, factory, or singleton initialization shapes. | Client-side NEXT_PUBLIC_ environment variables require a full .next cache purge and dev server restart to inline correctly. | Defensive third-party script loader with global namespace checking and multi-shape initialization fallback. | Environment-variable-driven external asset configuration for resilience and deploy-time flexibility. | Optimistic resource locking with automatic list invalidation on 4xx concurrency errors.",
+  "facts": [
+    {
+      "content": "Client-side NEXT_PUBLIC_ environment variables in Next.js require a full .next cache purge and dev server restart to inline correctly.",
+      "salience": 0.92,
+      "event_time": null,
+      "entities": ["Next.js", "NEXT_PUBLIC_", ".next"],
+      "fact_type": "error_fix"
+    },
+    {
+      "content": "The correct TiloPay SDK endpoint is https://app.tilopay.com/sdk/v2/sdk_tpay.min.js and requires a shape-detecting loader to handle window.TiloPay safely.",
+      "salience": 0.88,
+      "event_time": null,
+      "entities": ["TiloPay", "SDK", "window.TiloPay"],
+      "fact_type": "error_fix"
+    },
+    {
+      "content": "External SDK URLs will be configuration-driven via environment variables to allow rapid swapping during outages.",
+      "salience": 0.85,
+      "event_time": null,
+      "entities": ["SDK", "environment variables"],
+      "fact_type": "decision"
+    },
+    {
+      "content": "TypeScript strict index signature rules require process.env to be accessed using bracket notation process.env['VAR_NAME'] instead of dot notation.",
+      "salience": 0.8,
+      "event_time": null,
+      "entities": ["TypeScript", "process.env", "NodeJS.ProcessEnv"],
+      "fact_type": "error_fix"
+    },
+    {
+      "content": "Ticket reservation race conditions are handled with graceful UI error surfacing for concurrency conflicts and automatic ticket list refresh on 400 errors.",
+      "salience": 0.78,
+      "event_time": null,
+      "entities": ["ticket reservation", "concurrency"],
+      "fact_type": "error_fix"
+    }
+  ]
+}

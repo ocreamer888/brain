@@ -1,0 +1,163 @@
+{
+  "overall": {
+    "n": 94,
+    "mrr": 0.6833,
+    "precision@1": 0.6383,
+    "precision@5": 0.7021,
+    "precision@10": 0.766,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 4,
+      "mrr": 0.5257,
+      "precision@1": 0.5,
+      "precision@5": 0.5,
+      "precision@10": 0.5
+    },
+    "\"decision\"": {
+      "n": 2,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"error_lesson\"": {
+      "n": 4,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"pattern\"": {
+      "n": 11,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"project_context\"": {
+      "n": 32,
+      "mrr": 0.5479,
+      "precision@1": 0.4688,
+      "precision@5": 0.5625,
+      "precision@10": 0.7188
+    },
+    "\"solution\"": {
+      "n": 41,
+      "mrr": 0.673,
+      "precision@1": 0.6341,
+      "precision@5": 0.7073,
+      "precision@10": 0.7317
+    }
+  },
+  "by_project": {
+    "general": {
+      "n": 33,
+      "mrr": 0.5937,
+      "precision@1": 0.5455,
+      "precision@5": 0.6364,
+      "precision@10": 0.6667
+    },
+    "AI": {
+      "n": 14,
+      "mrr": 0.8645,
+      "precision@1": 0.8571,
+      "precision@5": 0.8571,
+      "precision@10": 0.8571
+    },
+    "ocreamer": {
+      "n": 13,
+      "mrr": 0.1319,
+      "precision@1": 0.0,
+      "precision@5": 0.1538,
+      "precision@10": 0.3846
+    },
+    "perplexity": {
+      "n": 8,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "sicop": {
+      "n": 4,
+      "mrr": 0.5729,
+      "precision@1": 0.5,
+      "precision@5": 0.5,
+      "precision@10": 1.0
+    },
+    "claw-code": {
+      "n": 4,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "rust": {
+      "n": 3,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "lifehub": {
+      "n": 2,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "Bella": {
+      "n": 2,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "landingpage": {
+      "n": 2,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "owelign": {
+      "n": 1,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    ".claude": {
+      "n": 1,
+      "mrr": 0.0256,
+      "precision@1": 0.0,
+      "precision@5": 0.0,
+      "precision@10": 0.0
+    },
+    "rifa-landingpage": {
+      "n": 1,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "rmt": {
+      "n": 1,
+      "mrr": 0.5,
+      "precision@1": 0.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "implantcentercostarica": {
+      "n": 1,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    }
+  },
+  "scoped_project": true,
+  "n_skipped_lonely_project": 3
+}

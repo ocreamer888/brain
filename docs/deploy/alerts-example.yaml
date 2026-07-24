@@ -1,0 +1,31 @@
+groups:
+  - name: brain-realtime
+    rules:
+      - alert: BrainApiSaveLatencyHigh
+        expr: brain_save_latency_p95_seconds > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "brain save->search freshness p95 too high"
+      - alert: BrainSpoolQueueGrowing
+        expr: brain_spool_queue_size > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "brain spool queue size high"
+      - alert: BrainSpoolOldestAgeHigh
+        expr: brain_spool_oldest_age_seconds > 300
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "brain spool oldest event too old"
+      - alert: BrainSpoolDLQIncreased
+        expr: increase(brain_spool_dlq_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "brain DLQ received new events"

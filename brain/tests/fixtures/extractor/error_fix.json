@@ -1,0 +1,40 @@
+{
+  "episode_text": "Diagnosed and resolved a build-time JSX syntax error in a Next.js component caused by hidden characters or file encoding issues. The AI fixed the problem by deleting and recreating the file with clean formatting, the required use client directive, and correct React imports. | Unexpected token div build error: Deleted and recreated ProjectDetails.tsx to eliminate hidden characters, ensuring proper use client directive, React/TypeScript imports, and clean JSX formatting | Recreate corrupted component files instead of incrementally patching them to definitively remove hidden formatting or encoding artifacts | File recreation as a reliable fix for hidden syntax/encoding corruption | Next.js client component boilerplate with TypeScript and Tailwind CSS",
+  "facts": [
+    {
+      "content": "Recreating corrupted component files instead of incrementally patching them definitively removes hidden formatting or encoding artifacts that cause build errors.",
+      "salience": 0.92,
+      "event_time": null,
+      "entities": ["component files"],
+      "fact_type": "decision"
+    },
+    {
+      "content": "A build-time JSX syntax error with 'Unexpected token div' in ProjectDetails.tsx was caused by hidden characters or file encoding issues.",
+      "salience": 0.88,
+      "event_time": null,
+      "entities": ["ProjectDetails.tsx", "JSX"],
+      "fact_type": "error_fix"
+    },
+    {
+      "content": "Deleting and recreating ProjectDetails.tsx with clean formatting, the 'use client' directive, and correct React imports resolved the build error.",
+      "salience": 0.85,
+      "event_time": null,
+      "entities": ["ProjectDetails.tsx", "Next.js"],
+      "fact_type": "outcome"
+    },
+    {
+      "content": "File recreation is a reliable fix for hidden syntax or encoding corruption in Next.js components.",
+      "salience": 0.8,
+      "event_time": null,
+      "entities": ["Next.js"],
+      "fact_type": "preference"
+    },
+    {
+      "content": "Next.js client component boilerplate requires the 'use client' directive, TypeScript imports, and Tailwind CSS configuration.",
+      "salience": 0.65,
+      "event_time": null,
+      "entities": ["Next.js", "TypeScript", "Tailwind CSS"],
+      "fact_type": "named_entity"
+    }
+  ]
+}

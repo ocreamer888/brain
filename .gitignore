@@ -1,0 +1,72 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+*.pem
+
+# OS / editor
+.DS_Store
+.obsidian/
+.cursor/
+.claude/
+.cargo-home/
+.git.bak/
+.worktrees/
+.superpowers/
+
+# Workspace noise (this checkout is wider than the brain remote)
+vault/
+brain-graph/
+reference-claw-code-main/
+Users/
+ALGORITHMS/
+FHIR/
+farmaplus/
+ca_procurement/
+Bridge-for-Billions/
+SaveMyPhind-conversation-exporter/
+cursor-recovery-backup/
+dashboards/
+How-to-Use-Grabovoi-Numbers-Codes/
+Human Architecture/
+
+# Brain runtime data — never push
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.db.bak*
+**/*corrupt*
+brain/rust/brain_index.bin*
+brain/rust/models/
+brain/rust/target/
+brain/rust/corrupt-snapshot-*/
+brain/bootstrap/cursor_brain.db
+brain/bootstrap/sessions_export/
+brain/bootstrap/perplexity_exports/
+brain/bootstrap/**/checkpoint*.json
+brain/bootstrap/**/*.jsonl
+brain/**/*.log
+brain/tmp/
+brain/logs/
+brain/spool/
+brain/db/
+brain/hooks/spool/
+brain/eval/reingest_backups/
+brain/eval/runs/
+
+# UI deps (commit package.json + lock only)
+brain/rust/ui/node_modules/
+
+# Large / generated local artifacts
+*.onnx
+memories_export.jsonl

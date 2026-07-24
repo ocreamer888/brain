@@ -1,0 +1,48 @@
+name: brain-rust-onnx
+
+on:
+  push:
+    paths:
+      - "brain/rust/**"
+      - ".github/workflows/brain-rust-onnx.yml"
+  pull_request:
+    paths:
+      - "brain/rust/**"
+      - ".github/workflows/brain-rust-onnx.yml"
+  workflow_dispatch:
+
+jobs:
+  onnx-integration:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: brain/rust
+    env:
+      BRAIN_RUN_ONNX_TESTS: "1"
+      BRAIN_ONNX_PATH: models/all-mpnet-base-v2-onnx
+      # Explicit writable target dir prevents permission errors in sandboxed
+      # environments and matches what Swatinem/rust-cache@v2 expects for the
+      # brain/rust workspace.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/brain/rust/target
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: brain/rust
+
+      - name: Verify ONNX model assets
+        run: |
+          test -f "$BRAIN_ONNX_PATH/model.onnx"
+          test -f "$BRAIN_ONNX_PATH/tokenizer.json"
+
+      - name: Run unit tests (lib + bins)
+        run: cargo test --lib --bins
+
+      - name: Run ONNX integration test
+        run: cargo test onnx_embedder_loads_and_produces_768_dims -- --nocapture

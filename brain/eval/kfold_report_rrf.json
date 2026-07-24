@@ -1,0 +1,205 @@
+{
+  "overall": {
+    "n": 241,
+    "mrr": 0.8652,
+    "precision@1": 0.8216,
+    "precision@3": 0.8963,
+    "precision@5": 0.9129,
+    "precision@10": 0.9378,
+    "precision@20": 0.9544,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 16,
+      "mrr": 0.7614,
+      "precision@1": 0.6875,
+      "precision@3": 0.875,
+      "precision@5": 0.875,
+      "precision@10": 0.875,
+      "precision@20": 0.875
+    },
+    "\"decision\"": {
+      "n": 1,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "\"error_lesson\"": {
+      "n": 6,
+      "mrr": 0.7556,
+      "precision@1": 0.6667,
+      "precision@3": 0.8333,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "\"pattern\"": {
+      "n": 18,
+      "mrr": 0.8905,
+      "precision@1": 0.8889,
+      "precision@3": 0.8889,
+      "precision@5": 0.8889,
+      "precision@10": 0.8889,
+      "precision@20": 0.8889
+    },
+    "\"project_context\"": {
+      "n": 78,
+      "mrr": 0.7881,
+      "precision@1": 0.7308,
+      "precision@3": 0.8077,
+      "precision@5": 0.8333,
+      "precision@10": 0.9103,
+      "precision@20": 0.9615
+    },
+    "\"solution\"": {
+      "n": 122,
+      "mrr": 0.9287,
+      "precision@1": 0.8934,
+      "precision@3": 0.959,
+      "precision@5": 0.9672,
+      "precision@10": 0.9672,
+      "precision@20": 0.9672
+    }
+  },
+  "by_project": {
+    "general": {
+      "n": 89,
+      "mrr": 0.8914,
+      "precision@1": 0.8427,
+      "precision@3": 0.9326,
+      "precision@5": 0.9551,
+      "precision@10": 0.9551,
+      "precision@20": 0.9551
+    },
+    "AI": {
+      "n": 23,
+      "mrr": 0.8127,
+      "precision@1": 0.7826,
+      "precision@3": 0.8696,
+      "precision@5": 0.8696,
+      "precision@10": 0.8696,
+      "precision@20": 0.8696
+    },
+    "perplexity": {
+      "n": 21,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "ocreamer": {
+      "n": 19,
+      "mrr": 0.719,
+      "precision@1": 0.5789,
+      "precision@3": 0.8421,
+      "precision@5": 0.8421,
+      "precision@10": 0.8421,
+      "precision@20": 0.9474
+    },
+    "sicop": {
+      "n": 14,
+      "mrr": 0.5281,
+      "precision@1": 0.4286,
+      "precision@3": 0.5,
+      "precision@5": 0.6429,
+      "precision@10": 0.9286,
+      "precision@20": 1.0
+    },
+    "claw-code": {
+      "n": 12,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "lifehub": {
+      "n": 9,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "owelign": {
+      "n": 9,
+      "mrr": 0.5918,
+      "precision@1": 0.5556,
+      "precision@3": 0.5556,
+      "precision@5": 0.5556,
+      "precision@10": 0.7778,
+      "precision@20": 0.7778
+    },
+    "landingpage": {
+      "n": 4,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "rust": {
+      "n": 4,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "MedDeFi": {
+      "n": 3,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "Bella": {
+      "n": 2,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "rifa-landingpage": {
+      "n": 2,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "implantcentercostarica": {
+      "n": 2,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "precision@20": 1.0
+    },
+    "sicop-health": {
+      "n": 2,
+      "mrr": 0.51,
+      "precision@1": 0.5,
+      "precision@3": 0.5,
+      "precision@5": 0.5,
+      "precision@10": 0.5,
+      "precision@20": 0.5
+    }
+  }
+}

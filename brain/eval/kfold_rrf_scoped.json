@@ -1,0 +1,163 @@
+{
+  "overall": {
+    "n": 2299,
+    "mrr": 0.8607,
+    "precision@1": 0.8095,
+    "precision@5": 0.9191,
+    "precision@10": 0.9504,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 144,
+      "mrr": 0.7715,
+      "precision@1": 0.6944,
+      "precision@5": 0.8681,
+      "precision@10": 0.9097
+    },
+    "\"decision\"": {
+      "n": 12,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"error_lesson\"": {
+      "n": 61,
+      "mrr": 0.9809,
+      "precision@1": 0.9672,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"pattern\"": {
+      "n": 222,
+      "mrr": 0.941,
+      "precision@1": 0.9234,
+      "precision@5": 0.964,
+      "precision@10": 0.9865
+    },
+    "\"project_context\"": {
+      "n": 668,
+      "mrr": 0.7451,
+      "precision@1": 0.6751,
+      "precision@5": 0.8204,
+      "precision@10": 0.8967
+    },
+    "\"solution\"": {
+      "n": 1192,
+      "mrr": 0.9138,
+      "precision@1": 0.8674,
+      "precision@5": 0.9673,
+      "precision@10": 0.9757
+    }
+  },
+  "by_project": {
+    "general": {
+      "n": 953,
+      "mrr": 0.9007,
+      "precision@1": 0.8531,
+      "precision@5": 0.9517,
+      "precision@10": 0.9601
+    },
+    "AI": {
+      "n": 313,
+      "mrr": 0.8256,
+      "precision@1": 0.7668,
+      "precision@5": 0.901,
+      "precision@10": 0.9425
+    },
+    "perplexity": {
+      "n": 175,
+      "mrr": 0.9962,
+      "precision@1": 0.9943,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "ocreamer": {
+      "n": 156,
+      "mrr": 0.5623,
+      "precision@1": 0.4231,
+      "precision@5": 0.6859,
+      "precision@10": 0.8205
+    },
+    "claw-code": {
+      "n": 149,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "owelign": {
+      "n": 77,
+      "mrr": 0.5876,
+      "precision@1": 0.5065,
+      "precision@5": 0.6623,
+      "precision@10": 0.8052
+    },
+    "sicop": {
+      "n": 71,
+      "mrr": 0.8349,
+      "precision@1": 0.7606,
+      "precision@5": 0.9718,
+      "precision@10": 1.0
+    },
+    "MedDeFi": {
+      "n": 59,
+      "mrr": 0.8089,
+      "precision@1": 0.7288,
+      "precision@5": 0.9153,
+      "precision@10": 0.9831
+    },
+    ".claude": {
+      "n": 43,
+      "mrr": 0.4916,
+      "precision@1": 0.3256,
+      "precision@5": 0.7209,
+      "precision@10": 0.7907
+    },
+    "lifehub": {
+      "n": 38,
+      "mrr": 0.7578,
+      "precision@1": 0.6842,
+      "precision@5": 0.8684,
+      "precision@10": 0.9474
+    },
+    "claude-code-session-capture": {
+      "n": 30,
+      "mrr": 0.9722,
+      "precision@1": 0.9667,
+      "precision@5": 0.9667,
+      "precision@10": 1.0
+    },
+    "landingpage": {
+      "n": 26,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "rust": {
+      "n": 20,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "le_chandelier": {
+      "n": 19,
+      "mrr": 0.6245,
+      "precision@1": 0.5263,
+      "precision@5": 0.6842,
+      "precision@10": 0.8421
+    },
+    "rmt": {
+      "n": 18,
+      "mrr": 0.787,
+      "precision@1": 0.6667,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    }
+  },
+  "scoped_project": true,
+  "n_skipped_lonely_project": 66
+}

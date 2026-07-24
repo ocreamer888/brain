@@ -1,0 +1,168 @@
+{
+  "mode": "alpha_sweep",
+  "best_alpha": 0.7,
+  "best_precision@1": 0.8151,
+  "results": {
+    "0.700": {
+      "overall": {
+        "n": 2369,
+        "mrr": 0.8629,
+        "precision@1": 0.8151,
+        "precision@5": 0.9173,
+        "precision@10": 0.9405,
+        "median_rank": 1
+      },
+      "by_type": {
+        "\"conversation\"": {
+          "n": 151,
+          "mrr": 0.7716,
+          "precision@1": 0.702,
+          "precision@5": 0.8675,
+          "precision@10": 0.8808
+        },
+        "\"decision\"": {
+          "n": 15,
+          "mrr": 1.0,
+          "precision@1": 1.0,
+          "precision@5": 1.0,
+          "precision@10": 1.0
+        },
+        "\"error_lesson\"": {
+          "n": 61,
+          "mrr": 0.9678,
+          "precision@1": 0.9508,
+          "precision@5": 1.0,
+          "precision@10": 1.0
+        },
+        "\"pattern\"": {
+          "n": 227,
+          "mrr": 0.9423,
+          "precision@1": 0.9295,
+          "precision@5": 0.9604,
+          "precision@10": 0.9824
+        },
+        "\"project_context\"": {
+          "n": 682,
+          "mrr": 0.7399,
+          "precision@1": 0.6716,
+          "precision@5": 0.8138,
+          "precision@10": 0.8695
+        },
+        "\"solution\"": {
+          "n": 1233,
+          "mrr": 0.9206,
+          "precision@1": 0.8783,
+          "precision@5": 0.9676,
+          "precision@10": 0.9757
+        }
+      },
+      "by_project": {
+        "general": {
+          "n": 953,
+          "mrr": 0.8957,
+          "precision@1": 0.8458,
+          "precision@5": 0.9528,
+          "precision@10": 0.957
+        },
+        "AI": {
+          "n": 317,
+          "mrr": 0.8268,
+          "precision@1": 0.7792,
+          "precision@5": 0.8896,
+          "precision@10": 0.9243
+        },
+        "perplexity": {
+          "n": 175,
+          "mrr": 0.9929,
+          "precision@1": 0.9886,
+          "precision@5": 1.0,
+          "precision@10": 1.0
+        },
+        "ocreamer": {
+          "n": 156,
+          "mrr": 0.5577,
+          "precision@1": 0.4231,
+          "precision@5": 0.6859,
+          "precision@10": 0.8077
+        },
+        "claw-code": {
+          "n": 149,
+          "mrr": 1.0,
+          "precision@1": 1.0,
+          "precision@5": 1.0,
+          "precision@10": 1.0
+        },
+        "owelign": {
+          "n": 77,
+          "mrr": 0.5833,
+          "precision@1": 0.5065,
+          "precision@5": 0.6494,
+          "precision@10": 0.7532
+        },
+        "sicop": {
+          "n": 71,
+          "mrr": 0.811,
+          "precision@1": 0.7183,
+          "precision@5": 0.9437,
+          "precision@10": 0.9859
+        },
+        "MedDeFi": {
+          "n": 59,
+          "mrr": 0.8021,
+          "precision@1": 0.7288,
+          "precision@5": 0.8983,
+          "precision@10": 0.9831
+        },
+        ".claude": {
+          "n": 43,
+          "mrr": 0.7679,
+          "precision@1": 0.7674,
+          "precision@5": 0.7674,
+          "precision@10": 0.7674
+        },
+        "lifehub": {
+          "n": 38,
+          "mrr": 0.7238,
+          "precision@1": 0.6579,
+          "precision@5": 0.7895,
+          "precision@10": 0.7895
+        },
+        "claude-code-session-capture": {
+          "n": 30,
+          "mrr": 0.9722,
+          "precision@1": 0.9667,
+          "precision@5": 0.9667,
+          "precision@10": 1.0
+        },
+        "landingpage": {
+          "n": 26,
+          "mrr": 0.9744,
+          "precision@1": 0.9615,
+          "precision@5": 1.0,
+          "precision@10": 1.0
+        },
+        "rust": {
+          "n": 20,
+          "mrr": 0.9292,
+          "precision@1": 0.9,
+          "precision@5": 1.0,
+          "precision@10": 1.0
+        },
+        "le_chandelier": {
+          "n": 19,
+          "mrr": 0.6151,
+          "precision@1": 0.5263,
+          "precision@5": 0.6842,
+          "precision@10": 0.8421
+        },
+        "rmt": {
+          "n": 18,
+          "mrr": 0.7778,
+          "precision@1": 0.6667,
+          "precision@5": 0.9444,
+          "precision@10": 1.0
+        }
+      }
+    }
+  }
+}

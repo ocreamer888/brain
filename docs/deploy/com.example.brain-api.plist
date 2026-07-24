@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.example.brain-api</string>
+	<key>ProgramArguments</key>
+	<array>
+		<!-- Adjust to your release binary path -->
+		<string>/path/to/AI/brain/rust/target/release/brain_api</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>BRAIN_DB_PATH</key>
+		<string>/path/to/brain.db</string>
+		<key>BRAIN_INDEX_PATH</key>
+		<string>/path/to/brain_index.bin</string>
+		<key>BRAIN_ONNX_PATH</key>
+		<string>/path/to/all-mpnet-base-v2-onnx</string>
+		<key>BRAIN_API_BIND</key>
+		<string>127.0.0.1:8787</string>
+		<key>BRAIN_API_KEY</key>
+		<string>replace-with-secret</string>
+		<key>BRAIN_API_AUTH_REQUIRED</key>
+		<string>true</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/tmp/brain-api.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/brain-api.err</string>
+</dict>
+</plist>

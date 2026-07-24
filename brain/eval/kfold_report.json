@@ -1,0 +1,161 @@
+{
+  "overall": {
+    "n": 299,
+    "mrr": 0.7811,
+    "precision@1": 0.7492,
+    "precision@5": 0.8161,
+    "precision@10": 0.8261,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 53,
+      "mrr": 0.1186,
+      "precision@1": 0.0566,
+      "precision@5": 0.1698,
+      "precision@10": 0.2075
+    },
+    "\"error_lesson\"": {
+      "n": 1,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"fact\"": {
+      "n": 213,
+      "mrr": 0.9851,
+      "precision@1": 0.9718,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"pattern\"": {
+      "n": 1,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"project_context\"": {
+      "n": 15,
+      "mrr": 0.2671,
+      "precision@1": 0.2,
+      "precision@5": 0.4,
+      "precision@10": 0.4
+    },
+    "\"solution\"": {
+      "n": 16,
+      "mrr": 0.7144,
+      "precision@1": 0.5625,
+      "precision@5": 0.875,
+      "precision@10": 0.9375
+    }
+  },
+  "by_project": {
+    "cursor": {
+      "n": 90,
+      "mrr": 0.9833,
+      "precision@1": 0.9667,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "AI": {
+      "n": 29,
+      "mrr": 0.3892,
+      "precision@1": 0.3448,
+      "precision@5": 0.4483,
+      "precision@10": 0.4483
+    },
+    "src": {
+      "n": 27,
+      "mrr": 0.963,
+      "precision@1": 0.9259,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    ".claude": {
+      "n": 22,
+      "mrr": 0.0556,
+      "precision@1": 0.0455,
+      "precision@5": 0.0455,
+      "precision@10": 0.0909
+    },
+    "ocreamer": {
+      "n": 16,
+      "mrr": 0.95,
+      "precision@1": 0.9375,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "perplexity": {
+      "n": 15,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "frontend": {
+      "n": 15,
+      "mrr": 0.9556,
+      "precision@1": 0.9333,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "general": {
+      "n": 15,
+      "mrr": 0.8334,
+      "precision@1": 0.8,
+      "precision@5": 0.8667,
+      "precision@10": 0.8667
+    },
+    "owelign": {
+      "n": 13,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "landingpage": {
+      "n": 13,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "ppf-contact-solver": {
+      "n": 11,
+      "mrr": 0.4936,
+      "precision@1": 0.1818,
+      "precision@5": 0.8182,
+      "precision@10": 0.9091
+    },
+    "sicop": {
+      "n": 7,
+      "mrr": 0.8214,
+      "precision@1": 0.7143,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "lifehub": {
+      "n": 7,
+      "mrr": 0.0151,
+      "precision@1": 0.0,
+      "precision@5": 0.0,
+      "precision@10": 0.0
+    },
+    "sicop-health": {
+      "n": 4,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "qol-clinics": {
+      "n": 4,
+      "mrr": 0.0362,
+      "precision@1": 0.0,
+      "precision@5": 0.0,
+      "precision@10": 0.25
+    }
+  }
+}

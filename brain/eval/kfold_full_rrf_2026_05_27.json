@@ -1,0 +1,168 @@
+{
+  "overall": {
+    "n": 17702,
+    "mrr": 0.9448,
+    "precision@1": 0.9232,
+    "precision@5": 0.9707,
+    "precision@10": 0.974,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 883,
+      "mrr": 0.7939,
+      "precision@1": 0.7293,
+      "precision@5": 0.8732,
+      "precision@10": 0.9015
+    },
+    "\"decision\"": {
+      "n": 18,
+      "mrr": 0.9259,
+      "precision@1": 0.8889,
+      "precision@5": 0.9444,
+      "precision@10": 1.0
+    },
+    "\"error_lesson\"": {
+      "n": 61,
+      "mrr": 0.9486,
+      "precision@1": 0.918,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"fact\"": {
+      "n": 14720,
+      "mrr": 0.9779,
+      "precision@1": 0.9598,
+      "precision@5": 0.9993,
+      "precision@10": 0.9997
+    },
+    "\"pattern\"": {
+      "n": 68,
+      "mrr": 0.9042,
+      "precision@1": 0.8676,
+      "precision@5": 0.9412,
+      "precision@10": 0.9853
+    },
+    "\"project_context\"": {
+      "n": 733,
+      "mrr": 0.4373,
+      "precision@1": 0.3956,
+      "precision@5": 0.4925,
+      "precision@10": 0.5102
+    },
+    "\"solution\"": {
+      "n": 1219,
+      "mrr": 0.9616,
+      "precision@1": 0.9434,
+      "precision@5": 0.9852,
+      "precision@10": 0.9926
+    }
+  },
+  "by_project": {
+    "cursor": {
+      "n": 6349,
+      "mrr": 0.977,
+      "precision@1": 0.9576,
+      "precision@5": 0.9994,
+      "precision@10": 1.0
+    },
+    "src": {
+      "n": 1666,
+      "mrr": 0.9709,
+      "precision@1": 0.9466,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "perplexity": {
+      "n": 1482,
+      "mrr": 0.9867,
+      "precision@1": 0.9757,
+      "precision@5": 0.9993,
+      "precision@10": 1.0
+    },
+    "ppf-contact-solver": {
+      "n": 1070,
+      "mrr": 0.9054,
+      "precision@1": 0.8636,
+      "precision@5": 0.9589,
+      "precision@10": 0.9701
+    },
+    "ocreamer": {
+      "n": 940,
+      "mrr": 0.9453,
+      "precision@1": 0.9117,
+      "precision@5": 0.9904,
+      "precision@10": 0.9957
+    },
+    "landingpage": {
+      "n": 903,
+      "mrr": 0.9698,
+      "precision@1": 0.9457,
+      "precision@5": 0.9989,
+      "precision@10": 1.0
+    },
+    "general": {
+      "n": 844,
+      "mrr": 0.7969,
+      "precision@1": 0.7713,
+      "precision@5": 0.8318,
+      "precision@10": 0.84
+    },
+    "frontend": {
+      "n": 769,
+      "mrr": 0.9734,
+      "precision@1": 0.9532,
+      "precision@5": 0.9974,
+      "precision@10": 0.9987
+    },
+    "owelign": {
+      "n": 704,
+      "mrr": 0.9704,
+      "precision@1": 0.956,
+      "precision@5": 0.9872,
+      "precision@10": 0.9886
+    },
+    "AI": {
+      "n": 645,
+      "mrr": 0.8805,
+      "precision@1": 0.8512,
+      "precision@5": 0.9163,
+      "precision@10": 0.9302
+    },
+    "sicop": {
+      "n": 587,
+      "mrr": 0.9778,
+      "precision@1": 0.9625,
+      "precision@5": 0.9966,
+      "precision@10": 1.0
+    },
+    ".claude": {
+      "n": 461,
+      "mrr": 0.7211,
+      "precision@1": 0.7093,
+      "precision@5": 0.7267,
+      "precision@10": 0.7397
+    },
+    "sicop-health": {
+      "n": 277,
+      "mrr": 0.9151,
+      "precision@1": 0.9025,
+      "precision@5": 0.9278,
+      "precision@10": 0.9314
+    },
+    "le_chandelier": {
+      "n": 178,
+      "mrr": 0.9733,
+      "precision@1": 0.9607,
+      "precision@5": 0.9888,
+      "precision@10": 1.0
+    },
+    "rmt": {
+      "n": 158,
+      "mrr": 0.9715,
+      "precision@1": 0.9494,
+      "precision@5": 0.9937,
+      "precision@10": 1.0
+    }
+  }
+}

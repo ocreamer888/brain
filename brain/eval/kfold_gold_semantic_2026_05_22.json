@@ -1,0 +1,723 @@
+{
+  "mode": "gold_semantic",
+  "n_queries": 18,
+  "n_missing": 1,
+  "best_alpha": 0.0,
+  "best_precision@1": 1.0,
+  "results": {
+    "0.00": {
+      "alpha": 0.0,
+      "n": 18,
+      "mrr": 1.0,
+      "precision@1": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0,
+      "median_rank": 1,
+      "per_query": [
+        {
+          "query": "why do my fonts and color scheme disappear inside a grouped route folder?",
+          "gold_memory_id": "e4ac5231-2525-5a0b-88e9-5cf55751503e",
+          "description": "no App Router / CSS / layout vocabulary \u2014 pure semantic rephrase",
+          "rank": 1
+        },
+        {
+          "query": "deployment fails because the bundler cannot locate a stylesheet that is clearly in the source directory",
+          "gold_memory_id": "d935f056-b12a-5417-8774-7fca708a78b9",
+          "description": "no Next.js / relative import vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "a third-party checkout widget breaks when the UI re-renders because it manipulates the DOM directly",
+          "gold_memory_id": "da299642-a257-50f9-87b7-a72ba5a74a11",
+          "description": "no TiloPay / React / SDK vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "the AI service keeps rejecting requests during heavy usage and the app crashes instead of waiting to retry",
+          "gold_memory_id": "5d54367d-8b3b-52c7-bf57-cd3477d5d989",
+          "description": "no OpenRouter / 429 / backoff vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "I lost my work after a sync failed and I cannot find the commits in history anymore",
+          "gold_memory_id": "8aed4030-fc92-525c-8b6c-f8a511482045",
+          "description": "no git / hard reset / branch-case vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "voice input immediately fails with a security error even though the user clicked the button to allow it",
+          "gold_memory_id": "4ccd80e2-14cc-536f-9dc7-dee2397e13b0",
+          "description": "no speech recognition / SpeechRecognition API / HTTPS vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "a shared utility function throws an error about calling a stateful function in the wrong place",
+          "gold_memory_id": "b3bc47ee-9eac-5d0a-8179-0c06cb972df8",
+          "description": "no hooks / useState / Rules of Hooks vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "upgrading the CSS framework broke the build because a platform-specific compiled file is missing",
+          "gold_memory_id": "921888f9-feba-569c-bf4c-a6c812ffff55",
+          "description": "no lightningcss / Tailwind / macOS / binary vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "a component renders as undefined even though the file exists and is exported",
+          "gold_memory_id": "efae1d9e-e9f3-592d-8362-aa0eb9434a43",
+          "description": "no element type invalid / curly brace / import syntax vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "an import compiles without errors but the component silently renders nothing at runtime",
+          "gold_memory_id": "73c51c3b-cc41-5b41-983e-6a4d6b040bbe",
+          "description": "no TypeScript error / export name vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "the page builder crashes with an unexpected character after an asynchronous data-loading block",
+          "gold_memory_id": "43872e76-d282-5eb6-8d40-82c6d08116be",
+          "description": "no JSX / closing brace / TypeScript vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "the package manager says a command is unavailable even though I can see the configuration file",
+          "gold_memory_id": "9df15699-0440-5145-a3d8-e8419e7639a4",
+          "description": "no npm / dev script / directory vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "authorization keeps failing across the whole app because credentials were embedded in the source code and have since expired",
+          "gold_memory_id": "41535a7f-a1a5-54c3-a8f7-4a8a8c056f76",
+          "description": "no API key / hardcoded / OpenRouter vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "a book about the inner enemy that stops people from making art and how professionals push through it",
+          "gold_memory_id": "044681f9-14b6-40b9-8100-0ab343f09ab7",
+          "description": "no War of Art / Resistance / Pressfield vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "plotting pinpoints for multiple cities across two continents on a three-dimensional sphere",
+          "gold_memory_id": "458e4c45-9dde-5e6b-9021-8ced057ffab9",
+          "description": "no globe / latitude / longitude / Americas vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how was the persistent memory service configured to survive machine restarts without manual intervention",
+          "gold_memory_id": "67a79781-05be-4d7e-84f0-00763559f560",
+          "description": "no brain_api / launchd / plist / zshrc vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "the memory system started removing entries on its own without being asked to",
+          "gold_memory_id": "9a9d56f9-2e48-494b-a619-92e9b04261d7",
+          "description": "no reflection / to_delete_indices / LLM pruning vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "which government health institutions submit bids through Costa Rica's centralized procurement platform",
+          "gold_memory_id": "7062fe23-9b7f-4492-9556-722365b1dbfe",
+          "description": "no SICOP / Ministerio Salud / sector salud vocabulary",
+          "rank": 1
+        }
+      ]
+    },
+    "0.30": {
+      "alpha": 0.3,
+      "n": 18,
+      "mrr": 0.1842,
+      "precision@1": 0.1111,
+      "precision@5": 0.2778,
+      "precision@10": 0.3889,
+      "median_rank": 33,
+      "per_query": [
+        {
+          "query": "why do my fonts and color scheme disappear inside a grouped route folder?",
+          "gold_memory_id": "e4ac5231-2525-5a0b-88e9-5cf55751503e",
+          "description": "no App Router / CSS / layout vocabulary \u2014 pure semantic rephrase",
+          "rank": 6
+        },
+        {
+          "query": "deployment fails because the bundler cannot locate a stylesheet that is clearly in the source directory",
+          "gold_memory_id": "d935f056-b12a-5417-8774-7fca708a78b9",
+          "description": "no Next.js / relative import vocabulary",
+          "rank": 294
+        },
+        {
+          "query": "a third-party checkout widget breaks when the UI re-renders because it manipulates the DOM directly",
+          "gold_memory_id": "da299642-a257-50f9-87b7-a72ba5a74a11",
+          "description": "no TiloPay / React / SDK vocabulary",
+          "rank": 357
+        },
+        {
+          "query": "the AI service keeps rejecting requests during heavy usage and the app crashes instead of waiting to retry",
+          "gold_memory_id": "5d54367d-8b3b-52c7-bf57-cd3477d5d989",
+          "description": "no OpenRouter / 429 / backoff vocabulary",
+          "rank": 350
+        },
+        {
+          "query": "I lost my work after a sync failed and I cannot find the commits in history anymore",
+          "gold_memory_id": "8aed4030-fc92-525c-8b6c-f8a511482045",
+          "description": "no git / hard reset / branch-case vocabulary",
+          "rank": 5
+        },
+        {
+          "query": "voice input immediately fails with a security error even though the user clicked the button to allow it",
+          "gold_memory_id": "4ccd80e2-14cc-536f-9dc7-dee2397e13b0",
+          "description": "no speech recognition / SpeechRecognition API / HTTPS vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a shared utility function throws an error about calling a stateful function in the wrong place",
+          "gold_memory_id": "b3bc47ee-9eac-5d0a-8179-0c06cb972df8",
+          "description": "no hooks / useState / Rules of Hooks vocabulary",
+          "rank": 16
+        },
+        {
+          "query": "upgrading the CSS framework broke the build because a platform-specific compiled file is missing",
+          "gold_memory_id": "921888f9-feba-569c-bf4c-a6c812ffff55",
+          "description": "no lightningcss / Tailwind / macOS / binary vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a component renders as undefined even though the file exists and is exported",
+          "gold_memory_id": "efae1d9e-e9f3-592d-8362-aa0eb9434a43",
+          "description": "no element type invalid / curly brace / import syntax vocabulary",
+          "rank": 181
+        },
+        {
+          "query": "an import compiles without errors but the component silently renders nothing at runtime",
+          "gold_memory_id": "73c51c3b-cc41-5b41-983e-6a4d6b040bbe",
+          "description": "no TypeScript error / export name vocabulary",
+          "rank": 125
+        },
+        {
+          "query": "the page builder crashes with an unexpected character after an asynchronous data-loading block",
+          "gold_memory_id": "43872e76-d282-5eb6-8d40-82c6d08116be",
+          "description": "no JSX / closing brace / TypeScript vocabulary",
+          "rank": 1953
+        },
+        {
+          "query": "the package manager says a command is unavailable even though I can see the configuration file",
+          "gold_memory_id": "9df15699-0440-5145-a3d8-e8419e7639a4",
+          "description": "no npm / dev script / directory vocabulary",
+          "rank": 13920
+        },
+        {
+          "query": "authorization keeps failing across the whole app because credentials were embedded in the source code and have since expired",
+          "gold_memory_id": "41535a7f-a1a5-54c3-a8f7-4a8a8c056f76",
+          "description": "no API key / hardcoded / OpenRouter vocabulary",
+          "rank": 20
+        },
+        {
+          "query": "a book about the inner enemy that stops people from making art and how professionals push through it",
+          "gold_memory_id": "044681f9-14b6-40b9-8100-0ab343f09ab7",
+          "description": "no War of Art / Resistance / Pressfield vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "plotting pinpoints for multiple cities across two continents on a three-dimensional sphere",
+          "gold_memory_id": "458e4c45-9dde-5e6b-9021-8ced057ffab9",
+          "description": "no globe / latitude / longitude / Americas vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how was the persistent memory service configured to survive machine restarts without manual intervention",
+          "gold_memory_id": "67a79781-05be-4d7e-84f0-00763559f560",
+          "description": "no brain_api / launchd / plist / zshrc vocabulary",
+          "rank": 5834
+        },
+        {
+          "query": "the memory system started removing entries on its own without being asked to",
+          "gold_memory_id": "9a9d56f9-2e48-494b-a619-92e9b04261d7",
+          "description": "no reflection / to_delete_indices / LLM pruning vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "which government health institutions submit bids through Costa Rica's centralized procurement platform",
+          "gold_memory_id": "7062fe23-9b7f-4492-9556-722365b1dbfe",
+          "description": "no SICOP / Ministerio Salud / sector salud vocabulary",
+          "rank": 46
+        }
+      ]
+    },
+    "0.50": {
+      "alpha": 0.5,
+      "n": 18,
+      "mrr": 0.1842,
+      "precision@1": 0.1111,
+      "precision@5": 0.2778,
+      "precision@10": 0.3889,
+      "median_rank": 33,
+      "per_query": [
+        {
+          "query": "why do my fonts and color scheme disappear inside a grouped route folder?",
+          "gold_memory_id": "e4ac5231-2525-5a0b-88e9-5cf55751503e",
+          "description": "no App Router / CSS / layout vocabulary \u2014 pure semantic rephrase",
+          "rank": 6
+        },
+        {
+          "query": "deployment fails because the bundler cannot locate a stylesheet that is clearly in the source directory",
+          "gold_memory_id": "d935f056-b12a-5417-8774-7fca708a78b9",
+          "description": "no Next.js / relative import vocabulary",
+          "rank": 294
+        },
+        {
+          "query": "a third-party checkout widget breaks when the UI re-renders because it manipulates the DOM directly",
+          "gold_memory_id": "da299642-a257-50f9-87b7-a72ba5a74a11",
+          "description": "no TiloPay / React / SDK vocabulary",
+          "rank": 357
+        },
+        {
+          "query": "the AI service keeps rejecting requests during heavy usage and the app crashes instead of waiting to retry",
+          "gold_memory_id": "5d54367d-8b3b-52c7-bf57-cd3477d5d989",
+          "description": "no OpenRouter / 429 / backoff vocabulary",
+          "rank": 350
+        },
+        {
+          "query": "I lost my work after a sync failed and I cannot find the commits in history anymore",
+          "gold_memory_id": "8aed4030-fc92-525c-8b6c-f8a511482045",
+          "description": "no git / hard reset / branch-case vocabulary",
+          "rank": 5
+        },
+        {
+          "query": "voice input immediately fails with a security error even though the user clicked the button to allow it",
+          "gold_memory_id": "4ccd80e2-14cc-536f-9dc7-dee2397e13b0",
+          "description": "no speech recognition / SpeechRecognition API / HTTPS vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a shared utility function throws an error about calling a stateful function in the wrong place",
+          "gold_memory_id": "b3bc47ee-9eac-5d0a-8179-0c06cb972df8",
+          "description": "no hooks / useState / Rules of Hooks vocabulary",
+          "rank": 16
+        },
+        {
+          "query": "upgrading the CSS framework broke the build because a platform-specific compiled file is missing",
+          "gold_memory_id": "921888f9-feba-569c-bf4c-a6c812ffff55",
+          "description": "no lightningcss / Tailwind / macOS / binary vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a component renders as undefined even though the file exists and is exported",
+          "gold_memory_id": "efae1d9e-e9f3-592d-8362-aa0eb9434a43",
+          "description": "no element type invalid / curly brace / import syntax vocabulary",
+          "rank": 181
+        },
+        {
+          "query": "an import compiles without errors but the component silently renders nothing at runtime",
+          "gold_memory_id": "73c51c3b-cc41-5b41-983e-6a4d6b040bbe",
+          "description": "no TypeScript error / export name vocabulary",
+          "rank": 125
+        },
+        {
+          "query": "the page builder crashes with an unexpected character after an asynchronous data-loading block",
+          "gold_memory_id": "43872e76-d282-5eb6-8d40-82c6d08116be",
+          "description": "no JSX / closing brace / TypeScript vocabulary",
+          "rank": 1953
+        },
+        {
+          "query": "the package manager says a command is unavailable even though I can see the configuration file",
+          "gold_memory_id": "9df15699-0440-5145-a3d8-e8419e7639a4",
+          "description": "no npm / dev script / directory vocabulary",
+          "rank": 13920
+        },
+        {
+          "query": "authorization keeps failing across the whole app because credentials were embedded in the source code and have since expired",
+          "gold_memory_id": "41535a7f-a1a5-54c3-a8f7-4a8a8c056f76",
+          "description": "no API key / hardcoded / OpenRouter vocabulary",
+          "rank": 20
+        },
+        {
+          "query": "a book about the inner enemy that stops people from making art and how professionals push through it",
+          "gold_memory_id": "044681f9-14b6-40b9-8100-0ab343f09ab7",
+          "description": "no War of Art / Resistance / Pressfield vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "plotting pinpoints for multiple cities across two continents on a three-dimensional sphere",
+          "gold_memory_id": "458e4c45-9dde-5e6b-9021-8ced057ffab9",
+          "description": "no globe / latitude / longitude / Americas vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how was the persistent memory service configured to survive machine restarts without manual intervention",
+          "gold_memory_id": "67a79781-05be-4d7e-84f0-00763559f560",
+          "description": "no brain_api / launchd / plist / zshrc vocabulary",
+          "rank": 5834
+        },
+        {
+          "query": "the memory system started removing entries on its own without being asked to",
+          "gold_memory_id": "9a9d56f9-2e48-494b-a619-92e9b04261d7",
+          "description": "no reflection / to_delete_indices / LLM pruning vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "which government health institutions submit bids through Costa Rica's centralized procurement platform",
+          "gold_memory_id": "7062fe23-9b7f-4492-9556-722365b1dbfe",
+          "description": "no SICOP / Ministerio Salud / sector salud vocabulary",
+          "rank": 46
+        }
+      ]
+    },
+    "0.70": {
+      "alpha": 0.7,
+      "n": 18,
+      "mrr": 0.1842,
+      "precision@1": 0.1111,
+      "precision@5": 0.2778,
+      "precision@10": 0.3889,
+      "median_rank": 33,
+      "per_query": [
+        {
+          "query": "why do my fonts and color scheme disappear inside a grouped route folder?",
+          "gold_memory_id": "e4ac5231-2525-5a0b-88e9-5cf55751503e",
+          "description": "no App Router / CSS / layout vocabulary \u2014 pure semantic rephrase",
+          "rank": 6
+        },
+        {
+          "query": "deployment fails because the bundler cannot locate a stylesheet that is clearly in the source directory",
+          "gold_memory_id": "d935f056-b12a-5417-8774-7fca708a78b9",
+          "description": "no Next.js / relative import vocabulary",
+          "rank": 294
+        },
+        {
+          "query": "a third-party checkout widget breaks when the UI re-renders because it manipulates the DOM directly",
+          "gold_memory_id": "da299642-a257-50f9-87b7-a72ba5a74a11",
+          "description": "no TiloPay / React / SDK vocabulary",
+          "rank": 357
+        },
+        {
+          "query": "the AI service keeps rejecting requests during heavy usage and the app crashes instead of waiting to retry",
+          "gold_memory_id": "5d54367d-8b3b-52c7-bf57-cd3477d5d989",
+          "description": "no OpenRouter / 429 / backoff vocabulary",
+          "rank": 350
+        },
+        {
+          "query": "I lost my work after a sync failed and I cannot find the commits in history anymore",
+          "gold_memory_id": "8aed4030-fc92-525c-8b6c-f8a511482045",
+          "description": "no git / hard reset / branch-case vocabulary",
+          "rank": 5
+        },
+        {
+          "query": "voice input immediately fails with a security error even though the user clicked the button to allow it",
+          "gold_memory_id": "4ccd80e2-14cc-536f-9dc7-dee2397e13b0",
+          "description": "no speech recognition / SpeechRecognition API / HTTPS vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a shared utility function throws an error about calling a stateful function in the wrong place",
+          "gold_memory_id": "b3bc47ee-9eac-5d0a-8179-0c06cb972df8",
+          "description": "no hooks / useState / Rules of Hooks vocabulary",
+          "rank": 16
+        },
+        {
+          "query": "upgrading the CSS framework broke the build because a platform-specific compiled file is missing",
+          "gold_memory_id": "921888f9-feba-569c-bf4c-a6c812ffff55",
+          "description": "no lightningcss / Tailwind / macOS / binary vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a component renders as undefined even though the file exists and is exported",
+          "gold_memory_id": "efae1d9e-e9f3-592d-8362-aa0eb9434a43",
+          "description": "no element type invalid / curly brace / import syntax vocabulary",
+          "rank": 181
+        },
+        {
+          "query": "an import compiles without errors but the component silently renders nothing at runtime",
+          "gold_memory_id": "73c51c3b-cc41-5b41-983e-6a4d6b040bbe",
+          "description": "no TypeScript error / export name vocabulary",
+          "rank": 125
+        },
+        {
+          "query": "the page builder crashes with an unexpected character after an asynchronous data-loading block",
+          "gold_memory_id": "43872e76-d282-5eb6-8d40-82c6d08116be",
+          "description": "no JSX / closing brace / TypeScript vocabulary",
+          "rank": 1953
+        },
+        {
+          "query": "the package manager says a command is unavailable even though I can see the configuration file",
+          "gold_memory_id": "9df15699-0440-5145-a3d8-e8419e7639a4",
+          "description": "no npm / dev script / directory vocabulary",
+          "rank": 13920
+        },
+        {
+          "query": "authorization keeps failing across the whole app because credentials were embedded in the source code and have since expired",
+          "gold_memory_id": "41535a7f-a1a5-54c3-a8f7-4a8a8c056f76",
+          "description": "no API key / hardcoded / OpenRouter vocabulary",
+          "rank": 20
+        },
+        {
+          "query": "a book about the inner enemy that stops people from making art and how professionals push through it",
+          "gold_memory_id": "044681f9-14b6-40b9-8100-0ab343f09ab7",
+          "description": "no War of Art / Resistance / Pressfield vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "plotting pinpoints for multiple cities across two continents on a three-dimensional sphere",
+          "gold_memory_id": "458e4c45-9dde-5e6b-9021-8ced057ffab9",
+          "description": "no globe / latitude / longitude / Americas vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how was the persistent memory service configured to survive machine restarts without manual intervention",
+          "gold_memory_id": "67a79781-05be-4d7e-84f0-00763559f560",
+          "description": "no brain_api / launchd / plist / zshrc vocabulary",
+          "rank": 5834
+        },
+        {
+          "query": "the memory system started removing entries on its own without being asked to",
+          "gold_memory_id": "9a9d56f9-2e48-494b-a619-92e9b04261d7",
+          "description": "no reflection / to_delete_indices / LLM pruning vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "which government health institutions submit bids through Costa Rica's centralized procurement platform",
+          "gold_memory_id": "7062fe23-9b7f-4492-9556-722365b1dbfe",
+          "description": "no SICOP / Ministerio Salud / sector salud vocabulary",
+          "rank": 46
+        }
+      ]
+    },
+    "0.90": {
+      "alpha": 0.9,
+      "n": 18,
+      "mrr": 0.1842,
+      "precision@1": 0.1111,
+      "precision@5": 0.2778,
+      "precision@10": 0.3889,
+      "median_rank": 33,
+      "per_query": [
+        {
+          "query": "why do my fonts and color scheme disappear inside a grouped route folder?",
+          "gold_memory_id": "e4ac5231-2525-5a0b-88e9-5cf55751503e",
+          "description": "no App Router / CSS / layout vocabulary \u2014 pure semantic rephrase",
+          "rank": 6
+        },
+        {
+          "query": "deployment fails because the bundler cannot locate a stylesheet that is clearly in the source directory",
+          "gold_memory_id": "d935f056-b12a-5417-8774-7fca708a78b9",
+          "description": "no Next.js / relative import vocabulary",
+          "rank": 294
+        },
+        {
+          "query": "a third-party checkout widget breaks when the UI re-renders because it manipulates the DOM directly",
+          "gold_memory_id": "da299642-a257-50f9-87b7-a72ba5a74a11",
+          "description": "no TiloPay / React / SDK vocabulary",
+          "rank": 357
+        },
+        {
+          "query": "the AI service keeps rejecting requests during heavy usage and the app crashes instead of waiting to retry",
+          "gold_memory_id": "5d54367d-8b3b-52c7-bf57-cd3477d5d989",
+          "description": "no OpenRouter / 429 / backoff vocabulary",
+          "rank": 350
+        },
+        {
+          "query": "I lost my work after a sync failed and I cannot find the commits in history anymore",
+          "gold_memory_id": "8aed4030-fc92-525c-8b6c-f8a511482045",
+          "description": "no git / hard reset / branch-case vocabulary",
+          "rank": 5
+        },
+        {
+          "query": "voice input immediately fails with a security error even though the user clicked the button to allow it",
+          "gold_memory_id": "4ccd80e2-14cc-536f-9dc7-dee2397e13b0",
+          "description": "no speech recognition / SpeechRecognition API / HTTPS vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a shared utility function throws an error about calling a stateful function in the wrong place",
+          "gold_memory_id": "b3bc47ee-9eac-5d0a-8179-0c06cb972df8",
+          "description": "no hooks / useState / Rules of Hooks vocabulary",
+          "rank": 16
+        },
+        {
+          "query": "upgrading the CSS framework broke the build because a platform-specific compiled file is missing",
+          "gold_memory_id": "921888f9-feba-569c-bf4c-a6c812ffff55",
+          "description": "no lightningcss / Tailwind / macOS / binary vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a component renders as undefined even though the file exists and is exported",
+          "gold_memory_id": "efae1d9e-e9f3-592d-8362-aa0eb9434a43",
+          "description": "no element type invalid / curly brace / import syntax vocabulary",
+          "rank": 181
+        },
+        {
+          "query": "an import compiles without errors but the component silently renders nothing at runtime",
+          "gold_memory_id": "73c51c3b-cc41-5b41-983e-6a4d6b040bbe",
+          "description": "no TypeScript error / export name vocabulary",
+          "rank": 125
+        },
+        {
+          "query": "the page builder crashes with an unexpected character after an asynchronous data-loading block",
+          "gold_memory_id": "43872e76-d282-5eb6-8d40-82c6d08116be",
+          "description": "no JSX / closing brace / TypeScript vocabulary",
+          "rank": 1953
+        },
+        {
+          "query": "the package manager says a command is unavailable even though I can see the configuration file",
+          "gold_memory_id": "9df15699-0440-5145-a3d8-e8419e7639a4",
+          "description": "no npm / dev script / directory vocabulary",
+          "rank": 13920
+        },
+        {
+          "query": "authorization keeps failing across the whole app because credentials were embedded in the source code and have since expired",
+          "gold_memory_id": "41535a7f-a1a5-54c3-a8f7-4a8a8c056f76",
+          "description": "no API key / hardcoded / OpenRouter vocabulary",
+          "rank": 20
+        },
+        {
+          "query": "a book about the inner enemy that stops people from making art and how professionals push through it",
+          "gold_memory_id": "044681f9-14b6-40b9-8100-0ab343f09ab7",
+          "description": "no War of Art / Resistance / Pressfield vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "plotting pinpoints for multiple cities across two continents on a three-dimensional sphere",
+          "gold_memory_id": "458e4c45-9dde-5e6b-9021-8ced057ffab9",
+          "description": "no globe / latitude / longitude / Americas vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how was the persistent memory service configured to survive machine restarts without manual intervention",
+          "gold_memory_id": "67a79781-05be-4d7e-84f0-00763559f560",
+          "description": "no brain_api / launchd / plist / zshrc vocabulary",
+          "rank": 5834
+        },
+        {
+          "query": "the memory system started removing entries on its own without being asked to",
+          "gold_memory_id": "9a9d56f9-2e48-494b-a619-92e9b04261d7",
+          "description": "no reflection / to_delete_indices / LLM pruning vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "which government health institutions submit bids through Costa Rica's centralized procurement platform",
+          "gold_memory_id": "7062fe23-9b7f-4492-9556-722365b1dbfe",
+          "description": "no SICOP / Ministerio Salud / sector salud vocabulary",
+          "rank": 46
+        }
+      ]
+    },
+    "1.00": {
+      "alpha": 1.0,
+      "n": 18,
+      "mrr": 0.1842,
+      "precision@1": 0.1111,
+      "precision@5": 0.2778,
+      "precision@10": 0.3889,
+      "median_rank": 33,
+      "per_query": [
+        {
+          "query": "why do my fonts and color scheme disappear inside a grouped route folder?",
+          "gold_memory_id": "e4ac5231-2525-5a0b-88e9-5cf55751503e",
+          "description": "no App Router / CSS / layout vocabulary \u2014 pure semantic rephrase",
+          "rank": 6
+        },
+        {
+          "query": "deployment fails because the bundler cannot locate a stylesheet that is clearly in the source directory",
+          "gold_memory_id": "d935f056-b12a-5417-8774-7fca708a78b9",
+          "description": "no Next.js / relative import vocabulary",
+          "rank": 294
+        },
+        {
+          "query": "a third-party checkout widget breaks when the UI re-renders because it manipulates the DOM directly",
+          "gold_memory_id": "da299642-a257-50f9-87b7-a72ba5a74a11",
+          "description": "no TiloPay / React / SDK vocabulary",
+          "rank": 357
+        },
+        {
+          "query": "the AI service keeps rejecting requests during heavy usage and the app crashes instead of waiting to retry",
+          "gold_memory_id": "5d54367d-8b3b-52c7-bf57-cd3477d5d989",
+          "description": "no OpenRouter / 429 / backoff vocabulary",
+          "rank": 350
+        },
+        {
+          "query": "I lost my work after a sync failed and I cannot find the commits in history anymore",
+          "gold_memory_id": "8aed4030-fc92-525c-8b6c-f8a511482045",
+          "description": "no git / hard reset / branch-case vocabulary",
+          "rank": 5
+        },
+        {
+          "query": "voice input immediately fails with a security error even though the user clicked the button to allow it",
+          "gold_memory_id": "4ccd80e2-14cc-536f-9dc7-dee2397e13b0",
+          "description": "no speech recognition / SpeechRecognition API / HTTPS vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a shared utility function throws an error about calling a stateful function in the wrong place",
+          "gold_memory_id": "b3bc47ee-9eac-5d0a-8179-0c06cb972df8",
+          "description": "no hooks / useState / Rules of Hooks vocabulary",
+          "rank": 16
+        },
+        {
+          "query": "upgrading the CSS framework broke the build because a platform-specific compiled file is missing",
+          "gold_memory_id": "921888f9-feba-569c-bf4c-a6c812ffff55",
+          "description": "no lightningcss / Tailwind / macOS / binary vocabulary",
+          "rank": 3
+        },
+        {
+          "query": "a component renders as undefined even though the file exists and is exported",
+          "gold_memory_id": "efae1d9e-e9f3-592d-8362-aa0eb9434a43",
+          "description": "no element type invalid / curly brace / import syntax vocabulary",
+          "rank": 181
+        },
+        {
+          "query": "an import compiles without errors but the component silently renders nothing at runtime",
+          "gold_memory_id": "73c51c3b-cc41-5b41-983e-6a4d6b040bbe",
+          "description": "no TypeScript error / export name vocabulary",
+          "rank": 125
+        },
+        {
+          "query": "the page builder crashes with an unexpected character after an asynchronous data-loading block",
+          "gold_memory_id": "43872e76-d282-5eb6-8d40-82c6d08116be",
+          "description": "no JSX / closing brace / TypeScript vocabulary",
+          "rank": 1953
+        },
+        {
+          "query": "the package manager says a command is unavailable even though I can see the configuration file",
+          "gold_memory_id": "9df15699-0440-5145-a3d8-e8419e7639a4",
+          "description": "no npm / dev script / directory vocabulary",
+          "rank": 13920
+        },
+        {
+          "query": "authorization keeps failing across the whole app because credentials were embedded in the source code and have since expired",
+          "gold_memory_id": "41535a7f-a1a5-54c3-a8f7-4a8a8c056f76",
+          "description": "no API key / hardcoded / OpenRouter vocabulary",
+          "rank": 20
+        },
+        {
+          "query": "a book about the inner enemy that stops people from making art and how professionals push through it",
+          "gold_memory_id": "044681f9-14b6-40b9-8100-0ab343f09ab7",
+          "description": "no War of Art / Resistance / Pressfield vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "plotting pinpoints for multiple cities across two continents on a three-dimensional sphere",
+          "gold_memory_id": "458e4c45-9dde-5e6b-9021-8ced057ffab9",
+          "description": "no globe / latitude / longitude / Americas vocabulary",
+          "rank": 1
+        },
+        {
+          "query": "how was the persistent memory service configured to survive machine restarts without manual intervention",
+          "gold_memory_id": "67a79781-05be-4d7e-84f0-00763559f560",
+          "description": "no brain_api / launchd / plist / zshrc vocabulary",
+          "rank": 5834
+        },
+        {
+          "query": "the memory system started removing entries on its own without being asked to",
+          "gold_memory_id": "9a9d56f9-2e48-494b-a619-92e9b04261d7",
+          "description": "no reflection / to_delete_indices / LLM pruning vocabulary",
+          "rank": 8
+        },
+        {
+          "query": "which government health institutions submit bids through Costa Rica's centralized procurement platform",
+          "gold_memory_id": "7062fe23-9b7f-4492-9556-722365b1dbfe",
+          "description": "no SICOP / Ministerio Salud / sector salud vocabulary",
+          "rank": 46
+        }
+      ]
+    }
+  }
+}

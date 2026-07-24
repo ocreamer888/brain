@@ -1,0 +1,40 @@
+{
+  "episode_text": "The AI evaluated several custom UI and optimization components for a Next.js project to determine their necessity. It concluded that custom image loaders and empty utilities were redundant or overly complex compared to Next.js built-in features, and decided to remove them while retaining valuable UX components like the loading skeleton. The codebase was refactored to use native framework capabilities instead of custom wrappers. | Custom intersection observer image loader: Replaced with Next.js Image component using built-in lazy loading and priority props | Empty middleware file: Temporarily removed to eliminate confusion and maintenance overhead | Manual preloading via React refs: Migrated to Next.js priority attributes and native browser optimizations | Poor loading UX: Solved by retaining LoadingSkeleton with Tailwind animate-pulse for structured, accessible placeholders | Remove SmartImageLoader and OptimizedImage due to redundancy with Next.js native features | Keep LoadingSkeleton for improved perceived performance and user feedback | Delete the empty middleware.ts file until specific security or caching requirements emerge | Replace all custom image loading logic with the standard Next.js Image component | Avoid manual DOM manipulation for image preloading in favor of framework-optimized approaches | Framework-native optimization over custom abstraction layers | Skeleton screens over spinners for content-aware loading states | Usage-driven component lifecycle management",
+  "facts": [
+    {
+      "content": "The AI decided to remove SmartImageLoader and OptimizedImage components because they were redundant with Next.js native Image component features like built-in lazy loading and priority props.",
+      "salience": 0.92,
+      "event_time": null,
+      "entities": ["SmartImageLoader", "OptimizedImage", "Next.js Image component"],
+      "fact_type": "decision"
+    },
+    {
+      "content": "The AI decided to retain LoadingSkeleton component with Tailwind animate-pulse for structured, accessible placeholders to improve perceived performance and user feedback.",
+      "salience": 0.88,
+      "event_time": null,
+      "entities": ["LoadingSkeleton", "Tailwind"],
+      "fact_type": "decision"
+    },
+    {
+      "content": "The AI decided to delete the empty middleware.ts file to eliminate confusion and maintenance overhead until specific security or caching requirements emerge.",
+      "salience": 0.85,
+      "event_time": null,
+      "entities": ["middleware.ts"],
+      "fact_type": "decision"
+    },
+    {
+      "content": "The AI prefers framework-native optimization over custom abstraction layers when refactoring Next.js projects.",
+      "salience": 0.8,
+      "event_time": null,
+      "entities": ["Next.js"],
+      "fact_type": "preference"
+    },
+    {
+      "content": "The AI prefers skeleton screens over spinners for content-aware loading states to provide better user experience.",
+      "salience": 0.75,
+      "event_time": null,
+      "entities": [],
+      "fact_type": "preference"
+    }
+  ]
+}
