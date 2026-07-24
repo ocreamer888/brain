@@ -24,7 +24,7 @@ export default function Dashboard() {
   }, [feed?.[0]?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 space-y-6">
       <h2 className="text-lg font-semibold text-white">Dashboard</h2>
       {error && <p className="text-sm text-red-400">Stats error: {error}</p>}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -34,14 +34,6 @@ export default function Dashboard() {
         <StatCard label="Conversations" value={by.conversation ?? 0} />
         <StatCard label="Solutions" value={by.solution ?? 0} />
         <StatCard label="Patterns" value={by.pattern ?? 0} />
-      </div>
-
-      <div className="rounded border border-zinc-800 bg-zinc-950 p-4">
-        <h3 className="text-sm font-semibold text-zinc-300 mb-2">Linked graph</h3>
-        <p className="text-sm text-zinc-500">
-          Open the <span className="text-zinc-300">Linked</span> tab for the full entity
-          graph, or expand a result in Search.
-        </p>
       </div>
 
       <div>
