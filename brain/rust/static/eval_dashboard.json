@@ -1,6 +1,22 @@
 {
   "runs": [
     {
+      "run_id": "2026-07-24-1348",
+      "pass": true,
+      "quick_p1_avg": 1.0,
+      "non_fact_p1": 1.0,
+      "mcp_p1": null,
+      "mcp_gap": null
+    },
+    {
+      "run_id": "2026-07-24-1237",
+      "pass": true,
+      "quick_p1_avg": 1.0,
+      "non_fact_p1": 1.0,
+      "mcp_p1": null,
+      "mcp_gap": null
+    },
+    {
       "run_id": "2026-07-21-2334",
       "pass": true,
       "quick_p1_avg": 1.0,
