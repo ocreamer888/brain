@@ -6,6 +6,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUST_DIR="$SCRIPT_DIR/.."
 
+# Cursor agent shells may inject CARGO_TARGET_DIR into a sandbox cache.
+# Launchd runs brain/rust/target/release/brain_api — force that path.
+unset CARGO_TARGET_DIR
+export CARGO_TARGET_DIR="$RUST_DIR/target"
+
 echo "==> Clearing stale build assets (preserving runtime data)..."
 # vite emptyOutDir is off so eval_dashboard.json survives; clear old hashed
 # assets ourselves so they don't accumulate across builds.
