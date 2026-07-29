@@ -146,6 +146,33 @@ def get_context(topic: str, project: str | None = None, n: int = 5) -> list[dict
     return search(query=topic, n=n, project=project)
 
 
+def _auto_entities_env_enabled() -> bool:
+    """Global kill switch — OFF-only. Default enabled."""
+    return os.environ.get("BRAIN_AUTO_ENTITIES", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def _maybe_extract_entities(*, memory_type, content, entities, auto_entities):
+    if entities:
+        return entities
+    if not auto_entities or not _auto_entities_env_enabled():
+        return entities
+    try:
+        # D6: lazy import keeps api_client stdlib-only at import time.
+        # MUST be inside the try — in an environment without `requests` this
+        # raises ImportError, and an unguarded import would fail the save.
+        from brain.ingest.entity_extractor import extract_entities, DURABLE_MEMORY_TYPES
+        if memory_type not in DURABLE_MEMORY_TYPES:
+            return entities
+        return extract_entities(content) or None
+    except Exception:
+        return entities
+
+
 def save_memory(
     content: str,
     memory_type: str = "conversation",
@@ -162,6 +189,7 @@ def save_memory(
     salience: float | None = None,
     derived_from: str | None = None,
     entities: list[str] | None = None,
+    auto_entities: bool = True,
 ) -> str:
     payload: dict = {
         "content": content,
@@ -187,6 +215,12 @@ def save_memory(
         payload["salience"] = salience
     if derived_from is not None:
         payload["derived_from"] = derived_from
+    entities = _maybe_extract_entities(
+        memory_type=memory_type,
+        content=content,
+        entities=entities,
+        auto_entities=auto_entities,
+    )
     if entities:
         payload["entities"] = entities
     return _request("POST", "/save", payload).get("id", "")
@@ -204,6 +238,7 @@ def save_memory_with_status(
     title: str | None = None,
     timestamp: str | None = None,
     entities: list[str] | None = None,
+    auto_entities: bool = True,
 ) -> dict[str, Any]:
     """Save memory and return explicit status payload for hooks."""
     payload: dict = {
@@ -222,6 +257,12 @@ def save_memory_with_status(
         payload["title"] = title
     if timestamp is not None:
         payload["timestamp"] = timestamp
+    entities = _maybe_extract_entities(
+        memory_type=memory_type,
+        content=content,
+        entities=entities,
+        auto_entities=auto_entities,
+    )
     if entities:
         payload["entities"] = entities
 
@@ -229,8 +270,19 @@ def save_memory_with_status(
     return {"status": "success", "id": mem_id, "payload": payload}
 
 
-def save_memory_batch(items: list[dict]) -> dict:
-    """Save many memories in one API call."""
+def save_memory_batch(items: list[dict], default_auto_entities: bool = False) -> dict:
+    """Save many memories in one API call.
+
+    Entity handling is **pass-through only, by design** (A4): a caller may supply
+    ``entities`` per item, but this path never invokes the extractor. Every batch
+    caller is a bulk/migration script with no per-item resume, so synchronous
+    per-item LLM calls here would be unbounded and non-resumable — the
+    checkpointed entity backfill picks these rows up instead.
+
+    ``default_auto_entities`` exists for signature symmetry with ``save_memory``
+    and is deliberately unused; it only lets bulk callers state the opt-out
+    explicitly. Do not wire it to the extractor.
+    """
     payload_items: list[dict] = []
     for item in items:
         body = {
@@ -249,6 +301,8 @@ def save_memory_batch(items: list[dict]) -> dict:
             body["title"] = item["title"]
         if item.get("timestamp") is not None:
             body["timestamp"] = item["timestamp"]
+        if item.get("entities"):
+            body["entities"] = item["entities"]
         payload_items.append(body)
     return _request("POST", "/save-batch", {"items": payload_items}, timeout=120)
 

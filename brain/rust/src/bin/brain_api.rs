@@ -877,7 +877,6 @@ struct LinkedMemoryItem {
     project: String,
     timestamp: String,
     entities: Vec<LinkedEntityRef>,
-    neighbor_ids: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -907,7 +906,6 @@ async fn linked_handler(
                 .into_iter()
                 .map(|(id, name)| LinkedEntityRef { id, name })
                 .collect(),
-            neighbor_ids: r.neighbor_ids,
         })
         .collect();
     let entities = entity_counts

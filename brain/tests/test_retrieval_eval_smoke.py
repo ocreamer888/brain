@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from brain.tools.retrieval_eval import extract_path_from_hit, load_gold, run_eval
+
+_REPO_GOLD = Path(__file__).resolve().parents[1] / "eval" / "gold.jsonl"
+_DB = Path(__file__).resolve().parents[1] / "rust" / "brain.db"
 
 
 def test_extract_path_prefers_metadata_file_path():
@@ -50,12 +54,39 @@ def test_run_eval_with_mock_search(tmp_path):
 
 
 def test_load_gold_repo_file():
-    path = Path(__file__).resolve().parents[1] / "eval" / "gold.jsonl"
-    rows = load_gold(path)
+    rows = load_gold(_REPO_GOLD)
     assert len(rows) >= 1
     # gold entries match by stable memory id (gold_ids) or legacy vault path (gold_files)
     assert "query" in rows[0]
     assert "gold_ids" in rows[0] or "gold_files" in rows[0]
+
+
+@pytest.mark.skipif(not _DB.exists(), reason="brain.db not present")
+def test_repo_gold_ids_resolve_and_are_retrievable():
+    """Dangling/superseded gold ids score 0 recall silently — fail loudly instead.
+
+    Search excludes superseded rows (rust/src/store.rs), so a superseded target is
+    unreachable and would report a confident 0% rather than an honest error.
+    """
+    wanted = {gid for row in load_gold(_REPO_GOLD) for gid in row.get("gold_ids", [])}
+    if not wanted:
+        pytest.skip("repo gold set uses legacy gold_files only")
+
+    conn = sqlite3.connect(f"file:{_DB}?mode=ro", uri=True)
+    try:
+        placeholders = ",".join("?" * len(wanted))
+        live = {
+            row[0]
+            for row in conn.execute(
+                f"SELECT id FROM memories WHERE id IN ({placeholders}) "
+                "AND (superseded_by IS NULL OR superseded_by = '')",
+                sorted(wanted),
+            )
+        }
+    finally:
+        conn.close()
+
+    assert not (wanted - live), f"unresolvable gold ids: {sorted(wanted - live)}"
 
 
 def test_run_eval_matches_by_gold_ids(tmp_path):

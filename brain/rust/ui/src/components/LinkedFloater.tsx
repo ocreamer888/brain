@@ -25,6 +25,7 @@ export type LinkedFloaterProps = {
   listMemories: MemoryGraphNode[]
   selected: GraphNode | null
   fullContent: string | null
+  neighborCount: number | null
   onClose: () => void
   onSelectMemory: (id: string) => void
   onFocus: () => void
@@ -37,6 +38,7 @@ export default function LinkedFloater({
   listMemories,
   selected,
   fullContent,
+  neighborCount,
   onClose,
   onSelectMemory,
   onFocus,
@@ -100,8 +102,7 @@ export default function LinkedFloater({
               {fullContent || selected.snippet}
             </p>
             <p className="text-xs text-zinc-600">
-              {selected.entityIds.length} entities · {selected.neighbor_ids.length} neighbor
-              memories
+              {selected.entityIds.length} entities · {neighborCount ?? '…'} neighbor memories
             </p>
             <button
               type="button"

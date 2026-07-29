@@ -11,13 +11,11 @@ export BRAIN_API_KEY="${BRAIN_API_KEY:-local-dev-key}"
 export BRAIN_API_URL="${BRAIN_API_URL:-http://127.0.0.1:8787}"
 export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:$PYTHONPATH}"
 
-# Prefer active venv, then common local venvs, then python3 on PATH.
+# Prefer active venv, then this repo's .venv, then python3 on PATH.
 if [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/bin/python" ]]; then
   PYTHON="${VIRTUAL_ENV}/bin/python"
 elif [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
   PYTHON="${REPO_ROOT}/.venv/bin/python"
-elif [[ -x "${HOME}/Documents/AI/.venv/bin/python" ]]; then
-  PYTHON="${HOME}/Documents/AI/.venv/bin/python"
 else
   PYTHON="$(command -v python3)"
 fi

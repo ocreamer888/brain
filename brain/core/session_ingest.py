@@ -100,6 +100,7 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
                     source="session_recycling",
                     title=f"Fix: {str(pair.get('error', ''))[:60]}",
                     timestamp=ended_at,
+                    auto_entities=False,  # session-end batch: backfill links these
                 )
             except Exception as e:
                 print(f"[session_ingest] pass1 save failed: {e}", file=sys.stderr)
@@ -132,6 +133,7 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
                     source="session_recycling",
                     title=f"Decision: {str(dec.get('decision', ''))[:60]}",
                     timestamp=ended_at,
+                    auto_entities=False,  # session-end batch: backfill links these
                 )
             except Exception as e:
                 print(f"[session_ingest] pass2 save failed: {e}", file=sys.stderr)
@@ -191,6 +193,7 @@ def save_session_summary(*, messages: list, project: str, session_id: str, ended
             source="claude_code_session",
             title=f"Session {date_str} — {project}",
             timestamp=ended_at if ended_at else None,
+            auto_entities=False,  # session-end batch: backfill links these
         )
         print(
             f"[session_ingest] saved session_summary project={project} ended_at={ended_at}"
@@ -244,6 +247,7 @@ def ingest_session(*, messages: list, project: str, session_id: str, ended_at: s
                     source="claude_code_hook",
                     title=group_title,
                     timestamp=ended_at,
+                    auto_entities=False,  # session-end batch: backfill links these
                 )
             except Exception as e:
                 print(f"[session_ingest] edit_group flush failed: {e}", file=sys.stderr)

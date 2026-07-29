@@ -1,7 +1,8 @@
 """Tests for brain/tools/backfill_entities.py.
 
-No live Ollama or API calls — _call_llm and api_client.link_entities are
-monkeypatched everywhere.
+Extraction itself is covered by test_entity_extractor.py. No live Ollama or
+API calls — entity_extractor.extract_entities and api_client.link_entities
+are monkeypatched everywhere.
 """
 from __future__ import annotations
 
@@ -20,78 +21,7 @@ from brain.tools import backfill_entities  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
-# extract_entities
-# ---------------------------------------------------------------------------
-
-def test_extract_entities_parses_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        backfill_entities,
-        "_call_llm",
-        lambda *a, **kw: json.dumps({"entities": ["Next.js", "Supabase"]}),
-    )
-    result = backfill_entities.extract_entities("We migrated from Next.js to Supabase.")
-    assert result == ["Next.js", "Supabase"]
-
-
-def test_extract_entities_handles_garbage(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(backfill_entities, "_call_llm", lambda *a, **kw: "this is not json at all")
-    result = backfill_entities.extract_entities("Some fact text")
-    assert result == []
-
-
-def test_extract_entities_handles_llm_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _raise(*a, **kw):
-        raise RuntimeError("connection refused")
-
-    monkeypatch.setattr(backfill_entities, "_call_llm", _raise)
-    result = backfill_entities.extract_entities("Some fact text")
-    assert result == []
-
-
-def test_extract_entities_strips_markdown_fence(monkeypatch: pytest.MonkeyPatch) -> None:
-    raw = '```json\n{"entities": ["Rust", "SQLite"]}\n```'
-    monkeypatch.setattr(backfill_entities, "_call_llm", lambda *a, **kw: raw)
-    result = backfill_entities.extract_entities("Rust talks to SQLite directly.")
-    assert result == ["Rust", "SQLite"]
-
-
-def test_clean_entities_drops_stoplist() -> None:
-    result = backfill_entities._clean_entities(["git", "React", "commit", "Supabase"])
-    assert result == ["React", "Supabase"]
-
-
-def test_clean_entities_drops_short_and_punct() -> None:
-    result = backfill_entities._clean_entities([".", "a", "Go", "--", "AI"])
-    assert result == ["Go", "AI"]
-
-
-def test_clean_entities_dedupes_case_insensitive_preserving_first() -> None:
-    result = backfill_entities._clean_entities(["React", "react", "REACT"])
-    assert result == ["React"]
-
-
-def test_extract_entities_applies_cleaning(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        backfill_entities,
-        "_call_llm",
-        lambda *a, **kw: json.dumps({"entities": ["git", "Next.js", "commit_message", "Next.js"]}),
-    )
-    result = backfill_entities.extract_entities("Some fact text")
-    assert result == ["Next.js"]
-
-
-def test_extract_entities_dedups_case_insensitive_and_caps(monkeypatch: pytest.MonkeyPatch) -> None:
-    names = [f"Entity{i}" for i in range(20)] + ["entity0"]  # dup of Entity0, case-insensitive
-    monkeypatch.setattr(
-        backfill_entities, "_call_llm", lambda *a, **kw: json.dumps({"entities": names})
-    )
-    result = backfill_entities.extract_entities("text")
-    assert len(result) == backfill_entities.MAX_ENTITIES_PER_FACT
-    assert result[0] == "Entity0"
-
-
-# ---------------------------------------------------------------------------
-# select_edgeless_facts
+# select_edgeless_durable
 # ---------------------------------------------------------------------------
 
 def _make_test_db(path: Path) -> None:
@@ -123,47 +53,102 @@ def _make_test_db(path: Path) -> None:
             ("f2", "Fact two content", '"fact"', "brain", "2026-01-02T00:00:00Z", None),
             # Superseded — must NOT be selected even though edge-less
             ("f3", "Fact three content", '"fact"', "brain", "2026-01-03T00:00:00Z", "f9"),
-            # Non-fact type — must NOT be selected
+            # episode is the one non-durable type — must NOT be selected
             ("e1", "Episode content", '"episode"', "brain", "2026-01-04T00:00:00Z", None),
             # Edge-less active fact, different project
             ("f4", "Fact four content", '"fact"', "other", "2026-01-05T00:00:00Z", None),
+            # Edge-less active rows for the other six durable types — all selected
+            ("d-sol", "Solution content", '"solution"', "brain", "2026-01-06T00:00:00Z", None),
+            ("d-dec", "Decision content", '"decision"', "brain", "2026-01-07T00:00:00Z", None),
+            ("d-pat", "Pattern content", '"pattern"', "brain", "2026-01-08T00:00:00Z", None),
+            ("d-ctx", "Project context content", '"project_context"', "brain", "2026-01-09T00:00:00Z", None),
+            ("d-err", "Error lesson content", '"error_lesson"', "brain", "2026-01-10T00:00:00Z", None),
+            ("d-con", "Conversation content", '"conversation"', "brain", "2026-01-11T00:00:00Z", None),
+            # Superseded non-fact — must NOT be selected
+            ("d-sup", "Superseded solution", '"solution"', "brain", "2026-01-12T00:00:00Z", "d-sol"),
+            # Non-fact that already has an edge — must NOT be selected
+            ("d-edg", "Linked conversation", '"conversation"', "brain", "2026-01-13T00:00:00Z", None),
         ],
     )
-    conn.execute(
+    conn.executemany(
         "INSERT INTO edges (id, src_memory_id, dst_entity_id, relation_type) VALUES (?, ?, ?, ?)",
-        ("e-1", "f2", "ent-1", "mentions"),
+        [
+            ("e-1", "f2", "ent-1", "mentions"),
+            ("e-2", "d-edg", "ent-1", "mentions"),
+        ],
     )
     conn.commit()
     conn.close()
 
 
-def test_select_edgeless_facts(tmp_path: Path) -> None:
+# Every edge-less, active, durable row in _make_test_db.
+_EXPECTED_IDS = {"f1", "f4", "d-sol", "d-dec", "d-pat", "d-ctx", "d-err", "d-con"}
+
+
+def test_select_edgeless_durable_includes_all_seven_types(tmp_path: Path) -> None:
     db_path = tmp_path / "test_brain.db"
     _make_test_db(db_path)
 
-    results = backfill_entities.select_edgeless_facts(db_path)
+    results = backfill_entities.select_edgeless_durable(db_path)
     ids = {r["id"] for r in results}
 
-    assert ids == {"f1", "f4"}
+    assert ids == _EXPECTED_IDS
 
 
-def test_select_edgeless_facts_respects_project_filter(tmp_path: Path) -> None:
+def test_select_edgeless_durable_excludes_episode(tmp_path: Path) -> None:
     db_path = tmp_path / "test_brain.db"
     _make_test_db(db_path)
 
-    results = backfill_entities.select_edgeless_facts(db_path, project="other")
+    ids = {r["id"] for r in backfill_entities.select_edgeless_durable(db_path)}
+
+    assert "e1" not in ids
+
+
+def test_select_edgeless_durable_excludes_superseded(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_test_db(db_path)
+
+    ids = {r["id"] for r in backfill_entities.select_edgeless_durable(db_path)}
+
+    assert "f3" not in ids  # superseded fact
+    assert "d-sup" not in ids  # superseded non-fact
+
+
+def test_select_edgeless_durable_excludes_rows_with_edges(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_test_db(db_path)
+
+    ids = {r["id"] for r in backfill_entities.select_edgeless_durable(db_path)}
+
+    assert "f2" not in ids  # edged fact
+    assert "d-edg" not in ids  # edged non-fact
+
+
+def test_select_edgeless_durable_respects_project_filter(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_test_db(db_path)
+
+    results = backfill_entities.select_edgeless_durable(db_path, project="other")
     ids = {r["id"] for r in results}
 
     assert ids == {"f4"}
 
 
-def test_select_edgeless_facts_respects_limit(tmp_path: Path) -> None:
+def test_select_edgeless_durable_respects_limit(tmp_path: Path) -> None:
     db_path = tmp_path / "test_brain.db"
     _make_test_db(db_path)
 
-    results = backfill_entities.select_edgeless_facts(db_path, limit=1)
+    results = backfill_entities.select_edgeless_durable(db_path, limit=1)
 
     assert len(results) == 1
+
+
+def test_durable_types_are_json_quoted(tmp_path: Path) -> None:
+    """SQL tuple must stay JSON-quoted and separate from the extractor's bare set."""
+    assert all(t.startswith('"') and t.endswith('"') for t in backfill_entities._DURABLE_TYPES)
+    assert {t.strip('"') for t in backfill_entities._DURABLE_TYPES} == set(
+        backfill_entities.entity_extractor.DURABLE_MEMORY_TYPES
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +163,7 @@ def test_run_dry_run_does_not_write_checkpoint_or_call_api(
     checkpoint_path = tmp_path / "checkpoint.json"
 
     monkeypatch.setattr(
-        backfill_entities, "_call_llm", lambda *a, **kw: json.dumps({"entities": ["Rust"]})
+        backfill_entities.entity_extractor, "extract_entities", lambda *a, **kw: ["Rust"]
     )
     calls: list[tuple[str, list[str]]] = []
     monkeypatch.setattr(
@@ -193,7 +178,7 @@ def test_run_dry_run_does_not_write_checkpoint_or_call_api(
     assert not checkpoint_path.exists()
 
 
-def test_run_links_edgeless_facts_and_writes_checkpoint(
+def test_run_links_edgeless_durable_and_writes_checkpoint(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     db_path = tmp_path / "test_brain.db"
@@ -201,7 +186,7 @@ def test_run_links_edgeless_facts_and_writes_checkpoint(
     checkpoint_path = tmp_path / "checkpoint.json"
 
     monkeypatch.setattr(
-        backfill_entities, "_call_llm", lambda *a, **kw: json.dumps({"entities": ["Rust", "SQLite"]})
+        backfill_entities.entity_extractor, "extract_entities", lambda *a, **kw: ["Rust", "SQLite"]
     )
     calls: list[tuple[str, list[str]]] = []
 
@@ -214,11 +199,38 @@ def test_run_links_edgeless_facts_and_writes_checkpoint(
     result = backfill_entities.run(db_path=db_path, checkpoint_path=checkpoint_path)
 
     linked_ids = {mid for mid, _ in calls}
-    assert linked_ids == {"f1", "f4"}
-    assert result["linked_total"] == 4  # 2 facts * 2 entities each
+    assert linked_ids == _EXPECTED_IDS
+    assert result["linked_total"] == 2 * len(_EXPECTED_IDS)
     assert checkpoint_path.exists()
     saved = json.loads(checkpoint_path.read_text())
-    assert set(saved["processed_ids"]) == {"f1", "f4"}
+    assert set(saved["processed_ids"]) == _EXPECTED_IDS
+
+
+def test_run_marks_processed_on_empty_extract(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An empty extraction is progress: no link call, but the id must be checkpointed."""
+    db_path = tmp_path / "test_brain.db"
+    _make_test_db(db_path)
+    checkpoint_path = tmp_path / "checkpoint.json"
+
+    monkeypatch.setattr(
+        backfill_entities.entity_extractor, "extract_entities", lambda *a, **kw: []
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        backfill_entities.api_client,
+        "link_entities",
+        lambda mid, ents: calls.append(mid) or len(ents),
+    )
+
+    result = backfill_entities.run(db_path=db_path, checkpoint_path=checkpoint_path)
+
+    assert calls == []
+    assert result["linked_total"] == 0
+    assert result["facts_seen"] == len(_EXPECTED_IDS)
+    saved = json.loads(checkpoint_path.read_text())
+    assert set(saved["processed_ids"]) == _EXPECTED_IDS
 
 
 def test_run_skips_already_processed_ids_on_resume(
@@ -232,7 +244,7 @@ def test_run_skips_already_processed_ids_on_resume(
     )
 
     monkeypatch.setattr(
-        backfill_entities, "_call_llm", lambda *a, **kw: json.dumps({"entities": ["Rust"]})
+        backfill_entities.entity_extractor, "extract_entities", lambda *a, **kw: ["Rust"]
     )
     calls: list[str] = []
     monkeypatch.setattr(
@@ -255,7 +267,7 @@ def test_api_failure_skips_and_does_not_checkpoint(
     checkpoint_path = tmp_path / "checkpoint.json"
 
     monkeypatch.setattr(
-        backfill_entities, "_call_llm", lambda *a, **kw: json.dumps({"entities": ["Rust"]})
+        backfill_entities.entity_extractor, "extract_entities", lambda *a, **kw: ["Rust"]
     )
     calls: list[str] = []
 
@@ -269,8 +281,9 @@ def test_api_failure_skips_and_does_not_checkpoint(
 
     result = backfill_entities.run(db_path=db_path, checkpoint_path=checkpoint_path)
 
-    assert "f4" in calls
-    assert result["linked_total"] == 1
+    assert "f1" not in calls
+    assert set(calls) == _EXPECTED_IDS - {"f1"}
+    assert result["linked_total"] == len(_EXPECTED_IDS) - 1
     saved = json.loads(checkpoint_path.read_text())
     assert "f1" not in saved["processed_ids"]
-    assert "f4" in saved["processed_ids"]
+    assert set(saved["processed_ids"]) == _EXPECTED_IDS - {"f1"}

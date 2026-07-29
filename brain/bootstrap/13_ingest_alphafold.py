@@ -185,7 +185,8 @@ This category covers critical components of AlphaFold's structure prediction pip
                 memory_type="solution",
                 project="algorithms",
                 tags=["alphafold", "biomolecular", category, "architecture"],
-                title=f"AlphaFold: {category.replace('_', ' ').title()}"
+                title=f"AlphaFold: {category.replace('_', ' ').title()}",
+                auto_entities=False,  # bulk ingest: backfill_entities.py links these
             )
             state["memories_saved"] += 1
             print(f"Saved memory for {category}")
@@ -218,7 +219,8 @@ Source: AlphaFold repository documentation
                 memory_type="conversation",
                 project="algorithms",
                 tags=["alphafold", "documentation", "biomolecular"],
-                title=f"AlphaFold Docs: {title}"
+                title=f"AlphaFold Docs: {title}",
+                auto_entities=False,  # bulk ingest: backfill_entities.py links these
             )
             state["memories_saved"] += 1
             state["files_processed"] += 1
@@ -297,7 +299,8 @@ Next steps:
             memory_type="project_context",
             project="algorithms",
             tags=["alphafold", "ingestion-complete", "biomolecular", "research"],
-            title="AlphaFold Ingestion Summary"
+            title="AlphaFold Ingestion Summary",
+            auto_entities=False,  # bulk ingest: backfill_entities.py links these
         )
         state["memories_saved"] += 1
     except Exception as e:

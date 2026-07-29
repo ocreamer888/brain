@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getLinked, getObservations } from '../api'
+import { getLinked, getNeighbors, getObservations } from '../api'
 import LinkedFloater from '../components/LinkedFloater'
 import LinkedGraph from '../components/LinkedGraph'
 import {
@@ -23,6 +23,7 @@ export default function Linked() {
   const [listPin, setListPin] = useState(false)
   const [floaterMode, setFloaterMode] = useState<'list' | 'detail'>('detail')
   const [fullContent, setFullContent] = useState<string | null>(null)
+  const [neighborCount, setNeighborCount] = useState<number | null>(null)
   const [entitiesOpen, setEntitiesOpen] = useState(true)
 
   const load = useCallback(async () => {
@@ -76,13 +77,20 @@ export default function Linked() {
     let cancelled = false
     async function hydrate() {
       setFullContent(null)
+      setNeighborCount(null)
       if (!selected || selected.kind !== 'memory') return
-      try {
-        const obs = await getObservations([selected.id])
-        const row = obs?.results?.[0]
-        if (!cancelled && row?.content) setFullContent(String(row.content))
-      } catch {
-        /* keep snippet */
+      // Settled, not all: a failed neighbor lookup must not drop the content.
+      const [obsRes, neighRes] = await Promise.allSettled([
+        getObservations([selected.id]),
+        getNeighbors(selected.id),
+      ])
+      if (cancelled) return
+      if (obsRes.status === 'fulfilled') {
+        const row = obsRes.value?.results?.[0]
+        if (row?.content) setFullContent(String(row.content))
+      }
+      if (neighRes.status === 'fulfilled') {
+        setNeighborCount((neighRes.value?.ids ?? []).length)
       }
     }
     void hydrate()
@@ -274,6 +282,7 @@ export default function Linked() {
             listMemories={listMemories}
             selected={selected}
             fullContent={fullContent}
+            neighborCount={neighborCount}
             onClose={() => {
               setFloaterOpen(false)
               setListPin(false)

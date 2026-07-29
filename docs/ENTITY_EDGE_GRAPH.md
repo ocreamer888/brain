@@ -1,10 +1,12 @@
 # Entity + Edge Graph Layer
 
-Lightweight knowledge-graph layer bolted onto the existing hybrid (vector + FTS5) memory store. Stops dropping LLM-extracted entity names; persists them as first-class SQLite **nodes** plus fact→entity **edges**, and adds optional 1-hop graph expansion to retrieval.
+Lightweight knowledge-graph layer bolted onto the existing hybrid (vector + FTS5) memory store. Stops dropping LLM-extracted entity names; persists them as first-class SQLite **nodes** plus memory→entity **edges**, and adds optional 1-hop graph expansion to retrieval.
 
 - **Branch:** `feature/entity-edge-graph`
 - **Plan:** `docs/superpowers/plans/2026-07-22-entity-edge-graph.md`
 - **Status:** Phases A–D shipped. `graph_expand` is **OFF by default** (opt-in) — see [Evaluation](#evaluation--recommendation).
+- **Scope (locked):** entity linking covers the **seven durable memory types** — `fact`, `solution`, `decision`, `pattern`, `project_context`, `error_lesson`, `conversation`. **`episode` is excluded** (audit-body type; 0 rows in the DB). Single source of truth in code: `DURABLE_MEMORY_TYPES` in `brain/ingest/entity_extractor.py` (bare strings) and `_DURABLE_TYPES` in `brain/tools/backfill_entities.py` (JSON-quoted, for SQL).
+- **Current data state:** the durable-7 code path is in place, but the widened backfill **has not been run yet** — today only `fact` memories carry edges (~9,096 linked). Non-fact durable types are edgeless until the backfill runs.
 
 ## Why (design decision)
 
@@ -49,7 +51,7 @@ name_normalized = " ".join(name.strip().split()).lower()   # empty → dropped
 entity_id       = uuid5(NAMESPACE_OID, "entity:" + name_normalized)
 ```
 
-The Rust normalize rule (`store.rs::normalize_entity_name` / `entity_id_for`) and any Python caller must match. Relation type is the fixed string `"mentions"` in v1 (fact → entity).
+The Rust normalize rule (`store.rs::normalize_entity_name` / `entity_id_for`) and any Python caller must match. Relation type is the fixed string `"mentions"` in v1 (durable memory → entity).
 
 ## Write path (how edges get created)
 
@@ -63,7 +65,10 @@ FactDraft.entities
   → store.link_memory_entities  (upsert each entity + "mentions" edge)
 ```
 
-- Wired in `brain/ingest/fact_curator.py::_save_fact` (forwards `draft.entities`).
+- Wired in `brain/ingest/fact_curator.py::_save_fact` (forwards `draft.entities`, and passes `auto_entities=False` — the fact path never falls back to the cheap extractor; the backfill covers the residual).
+- **Live auto-extraction** (`api_client._maybe_extract_entities`): `save_memory` / `save_memory_with_status` call the cheap extractor when *all* of — `entities` empty, `memory_type` in the durable-7, `auto_entities=True` (the default), and `BRAIN_AUTO_ENTITIES` not set to an off value. `BRAIN_AUTO_ENTITIES` is an **off-only kill switch**; it never forces extraction on for a caller that passed `auto_entities=False`. Bulk/migration ingest scripts pass `auto_entities=False` so they do not pay one LLM round-trip per row.
+- **`save_memory_batch` is pass-through only, by design** — it forwards caller-supplied `entities` but never auto-extracts. Its callers are all bulk paths; memories saved through it land edgeless and are picked up by the backfill. Do not "fix" this back.
+- Spool replay (`brain/hooks/spool.py`) forces `auto_entities=False`, so a retried save is not re-extracted on each of its up-to-8 attempts.
 - **Linking never fails the save.** If edge creation errors, the fact is still persisted and `/save` returns 200 (fact > edges). Applies to `/save` and per-item on `/save-batch`.
 - Writes go **only** through the HTTP API (launchd `brain_api` owns the DB). Never write entities via a direct SQLite path.
 
@@ -74,9 +79,14 @@ FactDraft.entities
 1. Take the top `min(n, 5)` ranked hits as **seeds**.
 2. Look up 1-hop entity-sharing neighbors (`neighbor_memory_ids`, skips superseded).
 3. Score each neighbor as `seed_score * GRAPH_HOP_DECAY` (**0.85**, `brain/rust/src/brain.rs`). When a neighbor is reachable from multiple seeds, the highest seed score wins.
-4. Merge (neighbors already in the list are skipped), re-sort, truncate to `n`.
+4. Merge (neighbors already in the list are skipped), re-sort, truncate to `n`. **Ordering is `(score desc, id asc)` — deterministic.** Every neighbor of a seed gets the bit-identical score `seed_score × 0.85`, so ties are the norm, not the exception; the secondary key is the memory id (a unique primary key), which makes the sort total and the `truncate(n)` cut reproducible across calls and across process restarts. The same key is applied both when truncating the neighbor set and when re-sorting the merged result.
 
-**Key property:** neighbors are scored *below* their seed (×0.85), so expansion can lift **recall** (pull a missing memory into top-k) but can **never change P@1** (a neighbor cannot outrank the seed that surfaced it). Default search behavior is unchanged unless the flag is set.
+**Key property:** neighbors are scored *below* their seed (×0.85), so expansion can lift **recall** (pull a missing memory into top-k) while the top hit is preserved — pinned by the `graph_expand_preserves_top1` test in `brain/rust/src/brain.rs`. It is **not** free at ranks 2+: a live probe on 2026-07-28 injected 3 neighbors at ranks 2/3/4 and displaced 3 legitimate results. Default search behavior is unchanged unless the flag is set.
+
+Two further properties, both previously wrong or unstated, now explicit:
+
+- **Injected neighbors carry a real cosine distance.** `distance` is computed as `1 - cosine_similarity(query_embedding, neighbor_embedding)`, the same meaning it has everywhere else in the system. It is *not* the old hardcoded `1.0` — that value meant "orthogonal to the query" and silently cancelled expansion downstream (`hooks/post_tool_use.py` drops hits with `distance >= 0.5`; `tools/retrieval_rerank.py` sorts ascending). The corrected distance is reported only; it does **not** feed back into `score`.
+- **`memory_type` / `project` / `exclude_superseded` filters apply to injected neighbors.** Neighbors are subject to the same predicates as base candidates, so a type- or project-filtered search can no longer have a neighbor of the wrong type or project injected into its results. (This was latent rather than visible while only `fact` had edges.)
 
 ## API
 
@@ -165,34 +175,37 @@ link_entities(memory_id, entities) -> int      # count linked
 
 ## Backfill — `brain/tools/backfill_entities.py`
 
-Adds entities to historical facts that have zero edges. Resumable and safe to re-run.
+Adds entities to historical **durable** memories that have zero edges — all seven durable types, not just facts. Resumable and safe to re-run.
 
 ```bash
 # dry run (prints planned entities, no writes)
-python3 brain/tools/backfill_entities.py --dry-run --limit 20
+.venv/bin/python brain/tools/backfill_entities.py --dry-run --limit 20
 
-# real run (all edge-less active facts)
-python3 brain/tools/backfill_entities.py
+# real run (all edge-less active durable memories)
+.venv/bin/python brain/tools/backfill_entities.py
 
 # scoped / capped / fresh
-python3 brain/tools/backfill_entities.py --project brain --limit 500
-python3 brain/tools/backfill_entities.py --reset-checkpoint
+.venv/bin/python brain/tools/backfill_entities.py --project brain --limit 500
+.venv/bin/python brain/tools/backfill_entities.py --reset-checkpoint
 ```
 
-> Use the repo venv interpreter — `requests` is not on system `python3`:
-> `/Users/abundancia888/Documents/AI/.venv/bin/python brain/tools/backfill_entities.py ...`
+> Use **this repo's** venv interpreter — `.venv/bin/python` from the repo root
+> (`/Users/abundancia888/Documents/Code/brain`). Verified: the system `python3`
+> has neither `requests` nor `pytest`. The `Documents/AI/.venv` path previously
+> documented here is **stale for this checkout** — do not use it.
 
 Behavior:
 
-- Selects active facts (`type=fact`, not superseded) with **no** edges.
-- Cheap dedicated Ollama prompt (`OLLAMA_SUMMARIZE_MODEL`, temp 0) — **not** the full `fact_extractor`.
+- Selects active durable memories (`select_edgeless_durable`: the seven durable types, not superseded) with **no** edges. `episode` is never selected. Against the live DB this currently returns **~6,860 rows** (the DB is live and grows, so the count drifts).
+- Cheap dedicated Ollama prompt (`OLLAMA_SUMMARIZE_MODEL`, temp 0) — **not** the full `fact_extractor`. The prompt, stoplist, parse and cap now live in `brain/ingest/entity_extractor.py`, shared with the live save path; `backfill_entities.py` keeps only selection, checkpoint I/O and `run()`.
+- Input is head-truncated at `MAX_INPUT_CHARS = 8000` before prompting (`entity_extractor.py`).
 - Defensive JSON parse (never raises) → `_clean_entities` filter → `POST /link-entities`.
-- **Checkpoint:** `brain/bootstrap/checkpoint_entity_backfill.json` (`processed_ids`, `linked_total`, `facts_seen`).
-- On API error (e.g. HTTP 429), the fact is **not** checkpointed, so it is retried on the next run — just re-run to mop up rate-limited facts.
+- **Checkpoint:** `brain/bootstrap/checkpoint_entity_backfill_durable.json` (`processed_ids`, `linked_total`, `facts_seen`). The old fact-only `checkpoint_entity_backfill.json` is no longer read. Neither file exists in this checkout yet — no durable backfill has been run here. `brain/tools/seed_durable_backfill_checkpoint.py --source PATH` can seed the durable checkpoint from a legacy fact-only checkpoint (fact ids only, validated against the DB); the operator supplies `--source` explicitly, since the legacy file lives outside this repo.
+- On API error (e.g. HTTP 429), the memory is **not** checkpointed, so it is retried on the next run — just re-run to mop up rate-limited rows.
 
 ### Entity noise control
 
-`_clean_entities` prevents junk "hub" nodes from over-connecting unrelated facts:
+`_clean_entities` (in `brain/ingest/entity_extractor.py`, shared by live save and backfill) prevents junk "hub" nodes from over-connecting unrelated memories:
 
 - Drops a `_ENTITY_STOPLIST` of generic VCS/shell verbs (`git`, `commit`, `push`…), placeholder tokens (`file_path`, `url`, `id`…), and ultra-generic nouns (`code`, `file`, `project`, `system`…).
 - Drops names `< 2` chars or with no alphanumeric char.
@@ -200,9 +213,11 @@ Behavior:
 
 ## Evaluation & recommendation
 
-Post-backfill graph state (2026-07-23): **8,668 entities**, **20,789 edges**, **9,103 / 12,933 facts linked (~70%)**. Top hubs are all legitimate domain entities (`Next.js`, `React`, `Supabase`, `Tailwind CSS`, `SICOP`, `TypeScript`) — the stoplist held, zero junk hubs.
+Graph state (measured 2026-07-28, unchanged from the 2026-07-23 fact backfill): **8,668 entities**, **20,789 edges**, **9,103 linked memories**, avg **2.28** edges per linked memory. Top hubs are all legitimate domain entities (`Next.js` deg 343, `React` 215, `Supabase` 199, `Tailwind CSS` 180, `SICOP` 162, `TypeScript` 151) — the stoplist held, zero junk hubs. **Only `fact` has edges** (~9,096 memories); the widened durable backfill has not been run.
 
-Gold eval (`brain/eval/gold_semantic.jsonl`, 14 queries), `graph_expand` on vs off:
+### ⚠️ The 0.0000-delta table below is STRUCTURALLY UNINFORMATIVE — do not cite it as evidence
+
+Gold eval (`brain/eval/gold_semantic.jsonl`), `graph_expand` on vs off:
 
 | metric | off | on | delta |
 |---|---|---|---|
@@ -210,14 +225,19 @@ Gold eval (`brain/eval/gold_semantic.jsonl`, 14 queries), `graph_expand` on vs o
 | MRR | 0.4893 | 0.4893 | +0.0000 |
 | recall@10 | 0.9286 | 0.9286 | +0.0000 |
 
-**Zero measurable delta — for structural reasons, not a bug:**
+**The zeros are an artifact of the experiment's structure, not a measurement of the feature:**
 
-1. Recall is already saturated (92.86%) — almost no headroom for expansion to fill.
-2. Only **2/14** gold targets have edges (backfill linked `fact`-type only; the gold set is dominated by `solution`/`error_lesson`/`pattern`/`conversation`/`project_context`, which have no edges). `graph_expand` reaches memories only through edges, so it literally cannot touch those targets.
+1. **n = 14 scored queries.** One query flipping is worth 7.1 pp; nothing smaller than that is even representable, and no significance test was run.
+2. **0 of the 18 gold rows then in the file were edge-linked** (verified 2026-07-28; the file is now 17 rows after the dangling row was deleted). `graph_expand` reaches memories only through edges, so it could not reach a single gold target. An unreachable target cannot move — the identical numbers in the `on` column were guaranteed before the run started. (This supersedes the earlier "2/14 gold targets have edges" claim: entity/edge counts are unchanged since that run, so the re-verification stands.)
+3. Recall was also already saturated (92.86% = 13/14), leaving **one query** of headroom.
 
-**Recommendation: keep `graph_expand` OFF by default** (as shipped). No measured gain, and it adds latency + noise-hub risk. To measure real value later, build a gold set whose targets are edge-linked `fact` memories, **or** extend entity linking beyond `fact`-type memories.
+A result that is forced by construction is not evidence for or against expansion. **Treat the table as a historical record of a null experiment, not as a finding.**
 
-Eval artifacts: `brain/eval/runs/2026-07-22_phase-c-graph-expand.json`, `brain/eval/runs/2026-07-23_post-backfill-eval.json`.
+> **Eval artifacts: lost.** This table previously cited `brain/eval/runs/2026-07-22_phase-c-graph-expand.json` and `brain/eval/runs/2026-07-23_post-backfill-eval.json`. **Verified 2026-07-28: `brain/eval/runs/` does not exist in this checkout and neither file is present** — they were not carried over from the `Documents/AI` tree. The numbers above are therefore **unreproducible and unauditable**. The citation has been removed rather than left pointing at missing files.
+
+**Replacement harness:** the first reproducible A/B will be the one produced by `brain/tools/graph_expand_ab.py` against an LLM-generated gold set (`brain/tools/gen_gold_graph.py`) whose targets are *edge-linked* durable memories — with interleaved on/off arms in one process, exact McNemar, bootstrap CIs and an explicit `UNDERPOWERED` verdict. Both tools exist in the tree, but the run has **not happened**: `brain/eval/gold_graph_expand.jsonl` has not been generated, no A/B has been executed, and `brain/eval/runs/` still does not exist. The gold set must also be built *after* the durable backfill, since every target has to be edge-linked for expansion to be able to reach it. `eval_suite.py` and `retrieval_eval_kfold.py` are deliberately not used for this: the former measures default production behaviour (where `graph_expand` is `false`), and the latter scores offline in numpy and never calls the API, so it structurally cannot exercise a Rust-side flag.
+
+**Recommendation: keep `graph_expand` OFF by default** (as shipped). There is no measured gain — and, per the above, no valid measurement at all — while it adds latency plus noise-hub and displacement risk (a live probe on 2026-07-28 injected 3 neighbors at ranks 2/3/4, displacing 3 legitimate results). The flag flips to default `true` only when `graph_expand_ab.py` returns PASS.
 
 ## Files touched
 
@@ -230,19 +250,25 @@ Eval artifacts: `brain/eval/runs/2026-07-22_phase-c-graph-expand.json`, `brain/e
 | `brain/api_client.py` | `save_memory(entities=)`, `search(graph_expand=)`, `get_entities`, `get_neighbors`, `link_entities` |
 | `brain/ingest/fact_curator.py` | `_save_fact` forwards `draft.entities` |
 | `brain/mcp/server.py` | `search_brain(graph_expand=)`, `get_neighbors_tool` |
-| `brain/tools/backfill_entities.py` | historical entity backfill (stoplist, checkpoint) |
-| `brain/tests/test_fact_curator.py`, `brain/tests/test_backfill_entities.py` | coverage |
+| `brain/ingest/entity_extractor.py` | shared cheap NER: prompt, stoplist, clean/cap, input cap, `DURABLE_MEMORY_TYPES` |
+| `brain/tools/backfill_entities.py` | historical durable-memory backfill (selection, checkpoint) |
+| `brain/tests/test_fact_curator.py`, `test_backfill_entities.py`, `test_entity_extractor.py`, `test_api_client_auto_entities.py`, `test_save_memory_batch.py`, `test_seed_durable_backfill_checkpoint.py`, `test_spool_replay.py` | coverage |
 
 ## Config / constants
 
 - `GRAPH_HOP_DECAY = 0.85` — neighbor score multiplier (`brain/rust/src/brain.rs`).
 - Seed count for expansion: `min(n, 5)`.
-- `MAX_ENTITIES_PER_FACT = 12`, `PROGRESS_EVERY = 25` (`backfill_entities.py`).
+- `MAX_ENTITIES_PER_FACT = 12`, `MAX_INPUT_CHARS = 8000`, `DURABLE_MEMORY_TYPES` (`brain/ingest/entity_extractor.py` — moved out of `backfill_entities.py`; the name is kept to avoid churn even though it now caps entities for every durable type).
+- `PROGRESS_EVERY = 25`, `_DURABLE_TYPES` (JSON-quoted, for SQL), `CHECKPOINT_PATH` (`brain/tools/backfill_entities.py`).
 - Backfill LLM: `OLLAMA_URL` + `OLLAMA_SUMMARIZE_MODEL` (`brain/config.py`).
-- `exclude_superseded` stays default `true`; hop expansion skips superseded facts.
+- `exclude_superseded` stays default `true`; hop expansion skips superseded memories and also honours the caller's `memory_type` / `project` filters.
 
 ## Follow-ups (not built)
 
-- Extend entity linking beyond `fact`-type memories (needed to actually prove retrieval value).
+- **Run the widened durable backfill** — the code covers all seven durable types, but no run has happened, so only `fact` has edges today. This is the prerequisite for any meaningful `graph_expand` evaluation.
+- Generate `brain/eval/gold_graph_expand.jsonl` and run `graph_expand_ab.py` (after the backfill) to produce the first reproducible A/B.
+- Displacement guard for expansion (pre-registered: skip neighbors reached only through high-degree hub entities) — gated on the A/B showing displacement.
+- Stoplist tuning for non-fact durable content (~15% low-value terms sampled) — needs a labelled set, not guesswork.
 - Typed relations beyond `mentions`; multi-hop (`hops=2`); triplet embeddings; feedback edge reweighting.
-- Flip `graph_expand` on by default — only after a gold set demonstrates a lift.
+- Clean up the 11 orphan edges left behind by deleted memories (`delete_memories` never touches `edges`), which inflate entity counts in the Linked UI.
+- Flip `graph_expand` on by default — **only** after `graph_expand_ab.py` returns PASS.

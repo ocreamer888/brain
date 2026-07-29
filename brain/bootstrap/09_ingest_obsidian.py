@@ -75,6 +75,7 @@ def save_with_retry(
                 session_id=session_id,
                 file_path=file_path,
                 title=title,
+                auto_entities=False,  # bulk ingest: backfill_entities.py links these
             )
             time.sleep(0.4)  # gentle pacing — don't overwhelm the Rust API
             return

@@ -238,6 +238,7 @@ def ingest_file(rel_path: str, meta: dict, state: dict) -> int:
                 source="hapifhir_docs",
                 file_path=str(full_path),
                 title=title,
+                auto_entities=False,  # bulk ingest: backfill_entities.py links these
             )
             saved += 1
             time.sleep(DELAY)

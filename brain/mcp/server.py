@@ -121,6 +121,17 @@ mcp = FastMCP("brain", instructions=(
 
 
 _UNCERTAINTY_GAP = 0.05  # cosine distance gap below which top-2 results are "uncertain"
+_LOW_TRUST = 0.40  # salience below which a hit is flagged "⚠ low-trust"
+
+
+def _salience_of(result: dict) -> float | None:
+    """Trust score from a result's metadata. None when absent or unparseable."""
+    raw = (result.get("metadata") or {}).get("salience")
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
 
 @mcp.tool(description="Semantic search across all memories. Returns most relevant past decisions, solutions, patterns.")
 def search_brain(
@@ -129,6 +140,7 @@ def search_brain(
     memory_type: str = "",
     project: str = "",
     graph_expand: bool = False,
+    min_salience: float = 0.0,
 ) -> str:
     if backend_mode() == "python":
         results = py_search(query=query, n=n, memory_type=memory_type or None, project=project or None)
@@ -148,13 +160,31 @@ def search_brain(
     if not results:
         return "No relevant memories found."
 
+    # Confidence filter: drop hits whose known salience is below the threshold.
+    # Results with no salience are kept — unknown trust is not evidence of low trust.
+    if min_salience > 0.0:
+        filtered = [
+            r for r in results
+            if (_salience_of(r) is None or _salience_of(r) >= min_salience)
+        ]
+        if not filtered:
+            return (
+                f"No memories above trust threshold {min_salience:.2f} "
+                f"({len(results)} result(s) suppressed)."
+            )
+        results = filtered
+
     lines = [f"Found {len(results)} relevant memories:\n"]
     for i, r in enumerate(results, 1):
         meta = r["metadata"]
         lines.append(f"[{i}] ({meta.get('type', '?')} | {meta.get('project', '?')})")
         lines.append(f"    {r['content']}")
         lines.append(f"    Tags: {meta.get('tags', '')} | Source: {meta.get('source', '?')}")
-        lines.append(f"    Distance: {r.get('distance', '?')}")
+        sal = _salience_of(r)
+        trust = "" if sal is None else f" | Trust: {sal:.2f}"
+        if sal is not None and sal < _LOW_TRUST:
+            trust += " ⚠ low-trust"
+        lines.append(f"    Distance: {r.get('distance', '?')}{trust}")
         fp = meta.get("file_path")
         if fp:
             lines.append(f"    Source file: {fp}")

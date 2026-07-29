@@ -26,6 +26,7 @@ def main() -> int:
         tags=["cutover", "verify"],
         project="AI",
         source="claw_code",
+        auto_entities=False,  # one-off probe write: no LLM round-trip needed
     )
 
     after_rust = int(get_stats().get("total_memories", before_rust))

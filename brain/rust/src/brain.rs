@@ -25,6 +25,16 @@ const DEDUP_DISTANCE_THRESHOLD: f32 = 0.03;
 /// neighbor (shared entity) into search results. Task 7 (Phase C).
 pub(crate) const GRAPH_HOP_DECAY: f32 = 0.85;
 
+/// `1 - cosine_similarity`, matching the `distance` semantics used by
+/// `VectorIndex`. Embeddings are L2-normalized on write, so the dot product is
+/// the cosine similarity. Mismatched dimensions yield the neutral 1.0.
+fn cosine_distance(query: &[f32], other: &[f32]) -> f32 {
+    if query.len() != other.len() {
+        return 1.0;
+    }
+    (1.0 - query.iter().zip(other).map(|(a, b)| a * b).sum::<f32>()).clamp(0.0, 2.0)
+}
+
 /// Payload for the real-time memory stream (SSE / web viewer).
 #[derive(Clone, Debug, Serialize)]
 pub struct MemoryEvent {
@@ -394,7 +404,7 @@ impl Brain {
         // seeds, score them with a hop-decay penalty, merge, and re-sort —
         // strictly before the final truncate/diversity cut below.
         if filter.as_ref().map(|f| f.graph_expand).unwrap_or(false) {
-            self.expand_graph_neighbors(&mut scored, n, filter.as_ref())?;
+            self.expand_graph_neighbors(&mut scored, n, filter.as_ref(), &embedding)?;
         }
 
         // Type-diversity reranking: when no type filter is active, cap any single
@@ -429,13 +439,24 @@ impl Brain {
     /// are skipped — an existing candidate's score is never lowered or
     /// overwritten. Injected neighbors are capped at `n` before merging back
     /// in, then the whole list is re-sorted descending by score.
+    ///
+    /// Neighbors are subject to the caller's `memory_type` / `project` /
+    /// `exclude_superseded` filter exactly like base candidates; the predicate
+    /// is pushed into SQL so it applies before the `n` cap.
+    ///
+    /// Every neighbor of a seed shares one bit-identical score, so ties are the
+    /// norm here: ordering is `(score desc, id asc)` to keep the cap and the
+    /// merged ranking deterministic across calls and processes.
     fn expand_graph_neighbors(
         &self,
         scored: &mut Vec<(SearchResult, f32)>,
         n: usize,
         filter: Option<&SearchFilter>,
+        query_embedding: &[f32],
     ) -> Result<(), BrainError> {
         let exclude_superseded = filter.map(|f| f.exclude_superseded).unwrap_or(true);
+        let memory_type = filter.and_then(|f| f.memory_type.as_ref());
+        let project = filter.and_then(|f| f.project.as_deref());
         let seeds: Vec<(String, f32)> = scored
             .iter()
             .take(n.min(5))
@@ -454,7 +475,12 @@ impl Brain {
         for (seed_id, seed_score) in &seeds {
             let neighbor_ids = self
                 .store
-                .neighbor_memory_ids(std::slice::from_ref(seed_id), exclude_superseded)?;
+                .neighbor_memory_ids(
+                    std::slice::from_ref(seed_id),
+                    exclude_superseded,
+                    memory_type,
+                    project,
+                )?;
             let candidate_score = seed_score * GRAPH_HOP_DECAY;
             for nid in neighbor_ids {
                 if existing_ids.contains(nid.as_str()) {
@@ -475,9 +501,18 @@ impl Brain {
             return Ok(());
         }
 
+        // Everything already in `scored` is a BASE candidate. Anything appended
+        // below is INJECTED. The final sort must never let an injected row
+        // outrank a base row it merely ties — see the sort comment.
+        let base_len = scored.len();
+
         // Cap neighbor injection at n extra candidates before the final cut.
         let mut neighbors: Vec<(String, f32)> = best_neighbor_score.into_iter().collect();
-        neighbors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        neighbors.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(&b.0))
+        });
         neighbors.truncate(n);
 
         let score_of: std::collections::HashMap<&str, f32> = neighbors
@@ -489,18 +524,50 @@ impl Brain {
 
         for memory in memories {
             let score = *score_of.get(memory.id.as_str()).unwrap_or(&0.0);
+            // Reported distance only — it never feeds back into `score`, so the
+            // expansion ranking (and P@1) is unchanged.
+            let distance = memory
+                .embedding
+                .as_ref()
+                .map(|e| cosine_distance(query_embedding, e))
+                .unwrap_or(1.0);
             scored.push((
                 SearchResult {
                     id: memory.id,
                     content: memory.content,
                     metadata: memory.metadata,
-                    distance: 1.0,
+                    distance,
                 },
                 score,
             ));
         }
 
-        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        // Tie-break on ORIGIN, not on id.
+        //
+        // An earlier version broke `.then_with(|| a.0.id.cmp(&b.0.id))` here and
+        // silently changed rank 1. `final_score` can be exactly 0.0 — bm25_norm
+        // is 0 for the last-ranked BM25 hit and cos_norm is 0 for anything absent
+        // from the cosine set — and `0.0 * GRAPH_HOP_DECAY == 0.0`, so an injected
+        // neighbour TIES such a seed. An id-ascending tie-break then handed rank 1
+        // to whichever uuid happened to sort lower. Reproduced live at default
+        // alpha on ~1% of type-filtered queries (and >50% at alpha=0), which is
+        // exactly the "Rust ranking bug" the A1 gate's criterion 7 exists to catch.
+        //
+        // Sorting on (score desc, is_injected asc) with a STABLE sort fixes both
+        // halves at once: base candidates keep their pre-expansion relative order
+        // (so `graph_expand=true` cannot reorder tied base rows against the
+        // `false` path), and injected rows keep the deterministic (score desc,
+        // id asc) order they were pushed in. Determinism is preserved without
+        // perturbing the base ranking.
+        let mut tagged: Vec<(usize, (SearchResult, f32))> =
+            scored.drain(..).enumerate().collect();
+        tagged.sort_by(|a, b| {
+            b.1 .1
+                .partial_cmp(&a.1 .1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| (a.0 >= base_len).cmp(&(b.0 >= base_len)))
+        });
+        scored.extend(tagged.into_iter().map(|(_, entry)| entry));
         Ok(())
     }
 
@@ -710,7 +777,7 @@ impl Brain {
         exclude_superseded: bool,
     ) -> Result<Vec<String>, BrainError> {
         self.store
-            .neighbor_memory_ids(memory_ids, exclude_superseded)
+            .neighbor_memory_ids(memory_ids, exclude_superseded, None, None)
     }
 
     /// Memories with entity links + entity catalog for the Linked graph UI.
@@ -1067,6 +1134,218 @@ mod tests {
             vec![seed_id.as_str(), neighbor_id.as_str()],
             "graph_expand should surface the linked neighbor above the decoy"
         );
+    }
+
+    // -- A2: deterministic ranking, real distance, filter enforcement --------
+
+    /// Query for the graph-expansion tie-break fixtures. Shares no vocabulary
+    /// with the filler bodies, so only the seed earns a BM25 contribution.
+    const TIE_QUERY: &str = "widgetalpha graphseed uniquequery ztoken";
+
+    fn result_ids(results: &[SearchResult]) -> Vec<String> {
+        results.iter().map(|r| r.id.clone()).collect()
+    }
+
+    fn tie_filter(graph_expand: bool) -> SearchFilter {
+        SearchFilter {
+            memory_type: Some(MemoryType::Fact),
+            graph_expand,
+            ..SearchFilter::default()
+        }
+    }
+
+    /// One seed matching `TIE_QUERY` exactly, plus 8 neighbors linked to a
+    /// single shared entity. All 8 share the identical injected score
+    /// (`seed_score * GRAPH_HOP_DECAY`), so the `truncate(n)` cap with `n = 4`
+    /// must discard half of them — that discard is what has to be deterministic.
+    ///
+    /// The 8 are the *weakest* of 60 fillers by cosine similarity, so with the
+    /// type filter active (overfetch = `n * 10` = 40) they cannot enter the
+    /// candidate set on similarity alone. Returns `(seed_id, neighbor_ids)`.
+    fn graph_expand_tie_setup(brain: &Brain) -> (String, Vec<String>) {
+        let probe = MockEmbedder::new(16);
+        let q_emb = probe.embed(TIE_QUERY).unwrap();
+
+        let mut ranked: Vec<(String, f32)> = (0..60)
+            .map(|i| {
+                let body = format!("tiefiller{i} unrelated block content");
+                let sim: f32 = q_emb
+                    .iter()
+                    .zip(&probe.embed(&body).unwrap())
+                    .map(|(a, b)| a * b)
+                    .sum();
+                (body, sim)
+            })
+            .collect();
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        let seed_id = save(brain, TIE_QUERY, MemoryType::Fact, "p");
+        brain.link_entities(&seed_id, &["SharedTopic".into()]).unwrap();
+
+        let cutoff = ranked.len() - 8;
+        let mut neighbor_ids = Vec::new();
+        for (i, (body, _)) in ranked.iter().enumerate() {
+            let id = save(brain, body, MemoryType::Fact, "p");
+            if i >= cutoff {
+                brain.link_entities(&id, &["SharedTopic".into()]).unwrap();
+                neighbor_ids.push(id);
+            }
+        }
+        (seed_id, neighbor_ids)
+    }
+
+    /// A2.2: `HashMap` iteration order decided which tied neighbors survived
+    /// `truncate`. `RandomState` is seeded per instance, so this shuffled
+    /// between two calls in one process — pre-fix this fails with p ≈ 1.
+    #[test]
+    fn graph_expand_neighbor_tie_break_is_stable_across_calls() {
+        let brain = test_brain();
+        graph_expand_tie_setup(&brain);
+
+        let first = result_ids(&brain.search(TIE_QUERY, 4, Some(tie_filter(true))).unwrap());
+        assert_eq!(first.len(), 4, "setup invariant: 4 results expected");
+        for run in 1..20 {
+            let ids = result_ids(&brain.search(TIE_QUERY, 4, Some(tie_filter(true))).unwrap());
+            assert_eq!(ids, first, "run {run} diverged from run 0");
+        }
+    }
+
+    /// A2.2: pins the *rule*, not just stability — ties break on lowest id.
+    #[test]
+    fn graph_expand_tie_break_prefers_lowest_id() {
+        let brain = test_brain();
+        let (seed_id, mut neighbor_ids) = graph_expand_tie_setup(&brain);
+        neighbor_ids.sort();
+
+        let ids = result_ids(&brain.search(TIE_QUERY, 4, Some(tie_filter(true))).unwrap());
+        assert_eq!(ids[0], seed_id, "seed must stay at rank 1");
+        assert_eq!(
+            &ids[1..],
+            &neighbor_ids[..3],
+            "tied neighbors must be taken in ascending id order"
+        );
+    }
+
+    #[test]
+    fn graph_expand_preserves_top1_when_seed_scores_zero() {
+        // Regression: a seed can score exactly 0.0 (bm25_norm is 0 for the last
+        // BM25 hit, cos_norm 0 when absent from the cosine set). Then
+        // 0.0 * GRAPH_HOP_DECAY == 0.0 and an injected neighbour TIES the seed.
+        // An id-ascending tie-break handed it rank 1. Origin must win the tie.
+        let brain = test_brain();
+        let seed = save(&brain, "zzz unique seed token", MemoryType::Solution, "p");
+        let neighbor = save(&brain, "aaa neighbour body", MemoryType::Solution, "p");
+        brain.link_entities(&seed, &["SharedHub".to_string()]).unwrap();
+        brain.link_entities(&neighbor, &["SharedHub".to_string()]).unwrap();
+
+        let mut scored: Vec<(SearchResult, f32)> = vec![(
+            SearchResult {
+                id: seed.clone(),
+                content: "zzz unique seed token".into(),
+                metadata: brain.store.get_memory(&seed).unwrap().unwrap().metadata,
+                distance: 1.0,
+            },
+            0.0_f32, // the pathological score
+        )];
+        let embedding = vec![0.0_f32; 16];
+        brain
+            .expand_graph_neighbors(&mut scored, 5, None, &embedding)
+            .unwrap();
+
+        assert_eq!(
+            scored[0].0.id, seed,
+            "a zero-scoring base candidate must keep rank 1 against a tied injected neighbour"
+        );
+    }
+
+    /// A2.3 must not change the ranking: `distance` is reported, never scored.
+    #[test]
+    fn graph_expand_preserves_top1() {
+        let brain = test_brain();
+        let (seed_id, _) = graph_expand_tie_setup(&brain);
+        for n in [4usize, 1] {
+            let baseline = brain.search(TIE_QUERY, n, Some(tie_filter(false))).unwrap();
+            let expanded = brain.search(TIE_QUERY, n, Some(tie_filter(true))).unwrap();
+            assert_eq!(baseline[0].id, seed_id, "baseline P@1 (n={n})");
+            assert_eq!(expanded[0].id, seed_id, "expanded P@1 (n={n})");
+        }
+    }
+
+    /// A2.3: injected neighbors carried a hardcoded `distance: 1.0`, which
+    /// downstream consumers read as "orthogonal to the query" and discard.
+    #[test]
+    fn graph_expand_reports_real_cosine_distance() {
+        let brain = test_brain();
+        let (seed_id, _) = graph_expand_tie_setup(&brain);
+        let probe = MockEmbedder::new(16);
+        let q_emb = probe.embed(TIE_QUERY).unwrap();
+
+        let results = brain.search(TIE_QUERY, 4, Some(tie_filter(true))).unwrap();
+        let injected: Vec<&SearchResult> =
+            results.iter().filter(|r| r.id != seed_id).collect();
+        assert_eq!(injected.len(), 3, "setup invariant: 3 injected neighbors");
+
+        for hit in injected {
+            let v = probe.embed(&hit.content).unwrap();
+            let expected =
+                1.0 - q_emb.iter().zip(&v).map(|(a, b)| a * b).sum::<f32>();
+            assert!(
+                (hit.distance - expected).abs() < 1e-4,
+                "distance {} != real cosine distance {expected}",
+                hit.distance
+            );
+        }
+    }
+
+    /// A2.1: neighbors were pushed into `scored` after the type/project filter
+    /// loop and so bypassed it entirely. Latent today only because `fact` is
+    /// the sole type with edges.
+    #[test]
+    fn graph_expand_respects_memory_type_filter() {
+        let brain = test_brain();
+        let seed_id = save(&brain, TIE_QUERY, MemoryType::Fact, "p");
+        let solution_id = save(&brain, "offtype neighbor body text", MemoryType::Solution, "p");
+        let fact_id = save(&brain, "intype neighbor body text", MemoryType::Fact, "p");
+        for id in [&seed_id, &solution_id, &fact_id] {
+            brain.link_entities(id, &["SharedTopic".into()]).unwrap();
+        }
+
+        let results = brain.search(TIE_QUERY, 4, Some(tie_filter(true))).unwrap();
+        assert_eq!(results[0].id, seed_id);
+        assert!(
+            !results.iter().any(|r| r.id == solution_id),
+            "graph neighbor of the wrong type must not bypass memory_type"
+        );
+        assert!(
+            results
+                .iter()
+                .all(|r| r.metadata.memory_type == MemoryType::Fact),
+            "every returned hit must satisfy the type filter"
+        );
+    }
+
+    /// A2.1, project half — 5,000+ cross-project neighbor pairs exist today.
+    #[test]
+    fn graph_expand_respects_project_filter() {
+        let brain = test_brain();
+        let seed_id = save(&brain, TIE_QUERY, MemoryType::Fact, "p1");
+        let offproject_id = save(&brain, "offproject neighbor body text", MemoryType::Fact, "p2");
+        for id in [&seed_id, &offproject_id] {
+            brain.link_entities(id, &["SharedTopic".into()]).unwrap();
+        }
+
+        let filter = SearchFilter {
+            project: Some("p1".into()),
+            graph_expand: true,
+            ..SearchFilter::default()
+        };
+        let results = brain.search(TIE_QUERY, 4, Some(filter)).unwrap();
+        assert_eq!(results[0].id, seed_id);
+        assert!(
+            !results.iter().any(|r| r.id == offproject_id),
+            "graph neighbor from another project must not bypass the project filter"
+        );
+        assert!(results.iter().all(|r| r.metadata.project == "p1"));
     }
 
     #[test]

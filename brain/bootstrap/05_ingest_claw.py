@@ -139,6 +139,7 @@ def run():
             project=record["metadata"].get("project", "claw-code"),
             source=record["metadata"].get("source", "claw_code"),
             timestamp=record["metadata"].get("timestamp"),
+            auto_entities=False,  # bulk ingest: backfill_entities.py links these
         )
         saved += 1
 

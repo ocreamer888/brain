@@ -26,13 +26,14 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from brain.api_client import search  # noqa: E402
+from brain.config import OBSIDIAN_VAULT  # noqa: E402
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-_VAULT = Path("/Users/macm1air/Documents/AI")
+_VAULT = OBSIDIAN_VAULT
 _UNSAFE = re.compile(r'[\\/:*?"<>|#^\[\]]')
 
 
