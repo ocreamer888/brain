@@ -116,7 +116,13 @@ def save_memory(
     source: str = "claude_code_session",
     title: str | None = None,
     timestamp: str | None = None,
+    auto_entities: bool = True,
 ) -> str:
+    """``auto_entities`` is accepted and ignored: the python backend writes
+    straight to Chroma and never reaches the API-side entity extractor. It
+    exists so ``core/session_ingest.save_memory_fn``'s ``**kwargs`` dispatch
+    works identically under BRAIN_BACKEND=python and =api.
+    """
     global _save_count
 
     # Check for duplicates before saving - if content is already present, skip

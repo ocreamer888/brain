@@ -116,7 +116,7 @@ def test_main_skips_already_processed_session_id(tmp_path, monkeypatch):
     saved = []
     monkeypatch.setattr(
         "brain.tools.ingest_session_chunks.save_memory_batch",
-        lambda chunks: saved.extend(chunks),
+        lambda chunks, **kwargs: saved.extend(chunks),
     )
     monkeypatch.setattr("brain.tools.ingest_session_chunks.SESSIONS_DIR", sessions_dir)
     monkeypatch.setattr("brain.tools.ingest_session_chunks.CHECKPOINT", cp_path)

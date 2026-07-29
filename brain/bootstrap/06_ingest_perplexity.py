@@ -89,6 +89,7 @@ def run(use_llm: bool = True):
             source=record["metadata"].get("source", "perplexity"),
             session_id=record["metadata"].get("thread_id"),
             timestamp=record["metadata"].get("timestamp"),
+            auto_entities=False,  # bulk ingest: backfill_entities.py links these
         )
         saved += 1
 

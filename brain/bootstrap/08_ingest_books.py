@@ -275,6 +275,7 @@ def ingest_book(book_path: Path, use_llm: bool, checkpoint: dict) -> int:
             session_id=f"book_{book_slug}_{i}",
             file_path=vault_fp,
             title=mem_title,
+            auto_entities=False,  # bulk ingest: backfill_entities.py links these
         )
 
         book_checkpoint[chunk_key] = True

@@ -146,6 +146,7 @@ def _save_memory_with_retry(
                 tags=tags,
                 project=project,
                 source=source,
+                auto_entities=False,  # bulk ingest: backfill_entities.py links these
             )
             return True
         except Exception as e:

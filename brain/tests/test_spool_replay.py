@@ -37,6 +37,34 @@ def test_replay_success_clears_queue(tmp_path, monkeypatch):
     assert spool.metrics()["queue_size"] == 0
 
 
+def test_replay_disables_auto_extraction(tmp_path, monkeypatch):
+    """D5 — replays must not re-run entity extraction on every retry."""
+    spool = importlib.import_module("brain.hooks.spool")
+    monkeypatch.setattr(spool, "SPOOL_DIR", tmp_path)
+    monkeypatch.setattr(spool, "SPOOL_FILE", tmp_path / "memory_spool.jsonl")
+    monkeypatch.setattr(spool, "DLQ_FILE", tmp_path / "memory_spool_dlq.jsonl")
+
+    spool.enqueue_memory({"content": "x", "memory_type": "solution"}, "boom")
+
+    import brain.api_client as api_client
+
+    seen: list[dict] = []
+
+    def capture(**kwargs):
+        seen.append(kwargs)
+        return {"status": "success", "id": "1", "payload": kwargs}
+
+    monkeypatch.setattr(api_client, "save_memory_with_status", capture)
+
+    stats = spool.replay_once()
+    assert stats.replayed == 1
+    assert len(seen) == 1
+    assert seen[0]["auto_entities"] is False
+    # the spooled payload itself is untouched — the flag is added per replay
+    assert seen[0]["content"] == "x"
+    assert seen[0]["memory_type"] == "solution"
+
+
 def test_replay_moves_to_dlq_after_max_attempts(tmp_path, monkeypatch):
     spool = importlib.import_module("brain.hooks.spool")
     monkeypatch.setattr(spool, "SPOOL_DIR", tmp_path)

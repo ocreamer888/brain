@@ -349,6 +349,62 @@ def test_save_fact_forwards_entities(monkeypatch):
     assert captured.get("entities") == ["SQLite", "brain"]
 
 
+def test_save_fact_passes_auto_entities_false_with_entities(monkeypatch):
+    from brain.ingest.fact_curator import _save_fact
+    from brain.ingest.fact_extractor import FactDraft
+
+    captured = {}
+    calls = []
+
+    def fake_save(**kwargs):
+        captured.update(kwargs)
+        calls.append(kwargs)
+        return "fact-id-2"
+
+    monkeypatch.setattr("brain.ingest.fact_curator.api_client.save_memory", fake_save)
+
+    draft = FactDraft(
+        content="Chose SQLite for local brain graph",
+        salience=0.9,
+        event_time=None,
+        entities=["SQLite", "brain"],
+        fact_type="decision",
+    )
+    _save_fact(draft, project="brain", parent_id="ep-1", session_id=None)
+
+    assert captured.get("entities") == ["SQLite", "brain"]
+    assert captured.get("auto_entities") is False
+    assert len(calls) == 1
+
+
+def test_save_fact_passes_auto_entities_false_when_empty(monkeypatch):
+    from brain.ingest.fact_curator import _save_fact
+    from brain.ingest.fact_extractor import FactDraft
+
+    captured = {}
+    calls = []
+
+    def fake_save(**kwargs):
+        captured.update(kwargs)
+        calls.append(kwargs)
+        return "fact-id-3"
+
+    monkeypatch.setattr("brain.ingest.fact_curator.api_client.save_memory", fake_save)
+
+    draft = FactDraft(
+        content="Chose SQLite for local brain graph",
+        salience=0.9,
+        event_time=None,
+        entities=[],
+        fact_type="decision",
+    )
+    _save_fact(draft, project="brain", parent_id="ep-1", session_id=None)
+
+    assert captured.get("entities") is None
+    assert captured.get("auto_entities") is False
+    assert len(calls) == 1
+
+
 def test_save_fact_uses_source_event_time_when_llm_null(monkeypatch):
     """source_event_time is used when LLM extracted event_time is None."""
     saved = {}

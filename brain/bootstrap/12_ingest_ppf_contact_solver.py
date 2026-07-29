@@ -196,7 +196,8 @@ def ingest_all():
                 memory_type="conversation",
                 tags=["ppf-contact-solver", "documentation", doc["path"].replace("/", "-")],
                 project="ppf-contact-solver",
-                source="ppf_contact_solver_repo"
+                source="ppf_contact_solver_repo",
+                auto_entities=False,  # bulk ingest: backfill_entities.py links these
             )
             time.sleep(0.1)  # Rate limit
         state["files_processed"] += 1
@@ -211,7 +212,8 @@ def ingest_all():
             memory_type="solution",
             tags=["ppf-contact-solver", "python-api", title.lower()],
             project="ppf-contact-solver",
-            source="ppf_contact_solver_repo"
+            source="ppf_contact_solver_repo",
+            auto_entities=False,  # bulk ingest: backfill_entities.py links these
         )
         state["memories_saved"] += 1
         time.sleep(0.05)  # Rate limit
@@ -225,7 +227,8 @@ def ingest_all():
             memory_type="conversation",
             tags=["ppf-contact-solver", "example", example["name"].lower()],
             project="ppf-contact-solver",
-            source="ppf_contact_solver_repo"
+            source="ppf_contact_solver_repo",
+            auto_entities=False,  # bulk ingest: backfill_entities.py links these
         )
         state["memories_saved"] += 1
         time.sleep(0.05)  # Rate limit
@@ -239,7 +242,8 @@ def ingest_all():
                 memory_type="pattern",
                 tags=["ppf-contact-solver", "concept", concept["topic"].lower().replace(" ", "-")],
                 project="ppf-contact-solver",
-                source="ppf_contact_solver_repo"
+                source="ppf_contact_solver_repo",
+                auto_entities=False,  # bulk ingest: backfill_entities.py links these
             )
             state["memories_saved"] += 1
             time.sleep(0.05)  # Rate limit

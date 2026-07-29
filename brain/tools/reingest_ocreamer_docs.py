@@ -137,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             for i in range(0, len(items), batch_size):
                 batch = items[i : i + batch_size]
-                res = save_memory_batch(batch)
+                res = save_memory_batch(batch, default_auto_entities=False)
                 failed = [r for r in res.get("results", []) if r.get("error")]
                 if failed:
                     print(f"  ERROR save-batch: {failed[:3]}", file=sys.stderr)

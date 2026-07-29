@@ -36,7 +36,7 @@ def test_checkpoint_uses_session_id_not_filename(tmp_path, monkeypatch):
     saved = []
     monkeypatch.setattr(
         "brain.bootstrap.ingest_claude_code_lib.save_memory_batch",
-        lambda items: saved.extend(items) or {"results": [{"index": i} for i in range(len(items))]},
+        lambda items, **kwargs: saved.extend(items) or {"results": [{"index": i} for i in range(len(items))]},
     )
 
     from brain.bootstrap.ingest_claude_code_lib import run_with_dirs
