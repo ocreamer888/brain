@@ -25,6 +25,8 @@ Related design/plan docs (deeper detail):
 | Entity–edge graph (inherited + shipped earlier) | `docs/ENTITY_EDGE_GRAPH.md` | `docs/superpowers/plans/2026-07-22-entity-edge-graph.md` |
 | Multi-instance DBs | `docs/superpowers/specs/2026-07-27-brain-instances-design.md` | `docs/superpowers/plans/2026-07-27-brain-instances.md` |
 | SSE stats push | `docs/superpowers/specs/2026-07-28-sse-stats-push-design.md` | _(plan not written yet)_ |
+| Old (Documents/AI) vs this product | `docs/OLD-VS-NEW-BRAIN-INSPECTION.md` | — |
+| Build + Phase 4 cutover runbook | `docs/BUILD-AND-CUTOVER.md` | — |
 
 Agent operating memory for this workspace lives in `AGENTS.md` (also updated in WIP below).
 

@@ -228,7 +228,7 @@ Problem: search_brain orders by semantic relevance distance, not creation time.
 
 ## Part 4: Complete MCP Tool Reference
 
-### search_brain(query, n=10, memory_type="", project="", min_salience=0.0)
+### search_brain(query, n=10, memory_type="", project="", graph_expand=False, min_salience=0.0)
 
 Semantic search across all memories. When `memory_type` is not set, the query is
 routed through **template_search** (query-intent → type-weighted retrieval).
