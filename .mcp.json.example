@@ -1,13 +1,11 @@
 {
   "mcpServers": {
     "brain": {
-      "command": "python3",
-      "args": ["-m", "brain.mcp.server"],
-      "cwd": ".",
+      "command": "/Users/abundancia888/Documents/Code/brain/brain/mcp/run_server.sh",
       "env": {
+        "BRAIN_BACKEND": "api",
         "BRAIN_API_URL": "http://127.0.0.1:8787",
-        "BRAIN_API_KEY": "local-dev-key",
-        "BRAIN_BACKEND": "api"
+        "BRAIN_API_KEY": "local-dev-key"
       }
     }
   }
