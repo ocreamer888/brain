@@ -465,6 +465,11 @@ impl MetadataStore {
                 .conn
                 .execute("DELETE FROM memories WHERE id = ?1", params![id])
                 .map_err(|e| BrainError::Database(e.to_string()))?;
+            // No FK/ON DELETE CASCADE on edges, so outbound graph edges must be
+            // cleaned here or they orphan on every delete (V-05).
+            self.conn
+                .execute("DELETE FROM edges WHERE src_memory_id = ?1", params![id])
+                .map_err(|e| BrainError::Database(e.to_string()))?;
             removed += n;
         }
         Ok(removed)
@@ -925,6 +930,22 @@ impl MetadataStore {
         memory_id: &str,
         names: &[String],
     ) -> Result<usize, BrainError> {
+        // Never link entities to a memory that doesn't exist, or the edges are
+        // born orphaned (e.g. /link-entities called with a stale id, or a
+        // reflect that deleted the memory between a caller's read and link).
+        // This is the second orphan source behind V-05, alongside the delete
+        // path. Safe against TOCTOU: every API op serializes on one brain lock.
+        let exists: bool = self
+            .conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM memories WHERE id = ?1)",
+                [memory_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        if !exists {
+            return Ok(0);
+        }
         let mut n = 0usize;
         for name in names {
             if normalize_entity_name(name).is_none() {
@@ -1349,6 +1370,50 @@ mod tests {
         let removed = store.delete_memories(&["test-0", "test-2"]).unwrap();
         assert_eq!(removed, 2);
         assert_eq!(store.count_memories().unwrap(), 1);
+    }
+
+    #[test]
+    fn delete_memories_cleans_edges() {
+        // V-05: deleting a memory must clean its edges, or they orphan (no FK).
+        let store = MetadataStore::open_in_memory().unwrap();
+        for id in ["m1", "m2"] {
+            store
+                .upsert_memory(&Memory {
+                    id: id.into(),
+                    content: format!("fact {id}"),
+                    metadata: fact_metadata("ep-1"),
+                    embedding: None,
+                })
+                .unwrap();
+        }
+        store
+            .link_memory_entities("m1", &["Cognee".into(), "SQLite".into()])
+            .unwrap();
+        store.link_memory_entities("m2", &["Cognee".into()]).unwrap();
+        assert_eq!(store.entities_for_memory("m1").unwrap().len(), 2);
+
+        store.delete_memories(&["m1"]).unwrap();
+
+        // m1's edges are gone — entities_for_memory joins on src_memory_id, so a
+        // surviving orphan edge would still return the entity here.
+        assert!(
+            store.entities_for_memory("m1").unwrap().is_empty(),
+            "orphan edges remain after delete (V-05 regression)"
+        );
+        // A sibling memory's edges are untouched.
+        assert_eq!(store.entities_for_memory("m2").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn link_memory_entities_skips_nonexistent_memory() {
+        // V-05 (second source): linking to a never-saved memory must create no
+        // edges, or they orphan immediately.
+        let store = MetadataStore::open_in_memory().unwrap();
+        let n = store
+            .link_memory_entities("ghost-id", &["Alpha".into(), "Beta".into()])
+            .unwrap();
+        assert_eq!(n, 0, "linked to a non-existent memory (orphan edges, V-05)");
+        assert!(store.entities_for_memory("ghost-id").unwrap().is_empty());
     }
 
     #[test]

@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 struct AppState {
     bind_addr: String,
     settings: ApiSettings,
-    limiter: Arc<Mutex<HashMap<String, ClientWindow>>>,
+    limiter: Arc<Mutex<HashMap<(String, RateClass), ClientWindow>>>,
     memory_tx: broadcast::Sender<brain::MemoryEvent>,
     /// Single Brain (index + embedder) built once at boot and shared across
     /// requests. Behind a Mutex because rusqlite's Connection is `!Sync`.
@@ -53,6 +53,15 @@ struct ApiSettings {
 struct ClientWindow {
     count: u32,
     window_started: Instant,
+}
+
+/// Rate-limit bucket class. Reads and writes get independent budgets per
+/// client so a read flood (evals, MCP searches, ad-hoc scripts) can no longer
+/// starve hook saves on the shared "local" key — see V-17.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum RateClass {
+    Read,
+    Write,
 }
 
 #[derive(Debug, Serialize)]
@@ -443,7 +452,7 @@ async fn stream_handler(
             headers.insert("x-api-key", v);
         }
     }
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let rx = state.memory_tx.subscribe();
     let stream = BroadcastStream::new(rx).filter_map(|item| {
         std::future::ready(match item {
@@ -467,7 +476,7 @@ async fn stats(
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let brain = lock_brain(&state);
     let stats = brain.get_stats().map_err(internal_err)?;
     let response = Json(serde_json::json!({
@@ -488,7 +497,7 @@ async fn save(
     Json(req): Json<SaveRequest>,
 ) -> Result<Json<SaveResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
     let brain = lock_brain(&state);
     let memory_type = parse_memory_type(&req.memory_type)
         .ok_or_else(|| bad_request("invalid memory_type"))?;
@@ -539,7 +548,7 @@ async fn save_batch(
     Json(req): Json<SaveBatchRequest>,
 ) -> Result<Json<SaveBatchResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
     let brain = lock_brain(&state);
     let mut accepted = 0usize;
     let mut failed = 0usize;
@@ -644,7 +653,7 @@ async fn search(
     Json(req): Json<SearchRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let brain = lock_brain(&state);
     let filter = SearchFilter {
         project: req.project,
@@ -676,7 +685,7 @@ async fn search_index_handler(
     Json(req): Json<SearchRequest>,
 ) -> Result<Json<SearchIndexResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let brain = lock_brain(&state);
     let filter = SearchFilter {
         project: req.project,
@@ -711,7 +720,7 @@ async fn get_observations_handler(
     Json(req): Json<GetObservationsRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let brain = lock_brain(&state);
     let refs: Vec<&str> = req.ids.iter().map(String::as_str).collect();
     let mems = brain.get_memories_by_ids(&refs).map_err(internal_err)?;
@@ -777,7 +786,7 @@ async fn get_episode_handler(
     Query(q): Query<GetEpisodeQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let brain = lock_brain(&state);
     let mems = brain
         .get_memories_by_ids(&[q.id.as_str()])
@@ -807,7 +816,7 @@ async fn entities_handler(
     Query(q): Query<EntitiesQuery>,
 ) -> Result<Json<EntitiesResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let memory_id = require_memory_id(q.memory_id)?;
     let brain = lock_brain(&state);
     let rows = brain
@@ -827,7 +836,7 @@ async fn link_entities_handler(
     Json(req): Json<LinkEntitiesRequest>,
 ) -> Result<Json<LinkEntitiesResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
     let linked = if req.entities.is_empty() {
         0
     } else {
@@ -846,7 +855,7 @@ async fn neighbors_handler(
     Query(q): Query<NeighborsQuery>,
 ) -> Result<Json<NeighborsResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let memory_id = require_memory_id(q.memory_id)?;
     let brain = lock_brain(&state);
     let ids = brain
@@ -890,7 +899,7 @@ async fn linked_handler(
     headers: HeaderMap,
 ) -> Result<Json<LinkedResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let brain = lock_brain(&state);
     let (rows, entity_counts) = brain.list_linked_graph().map_err(brain_err)?;
     let memories = rows
@@ -926,7 +935,7 @@ async fn timeline_handler(
     Json(req): Json<TimelineRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let brain = lock_brain(&state);
     let rows = brain
         .timeline_around(&req.anchor_id, req.before, req.after)
@@ -971,7 +980,7 @@ async fn feedback(
     Json(req): Json<FeedbackRequest>,
 ) -> Result<Json<FeedbackResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
     let event_type = parse_feedback_event_type(&req.event_type)
         .ok_or_else(|| bad_request("invalid event_type"))?;
     let source = req
@@ -1015,7 +1024,7 @@ async fn list_memories(
     Query(q): Query<ListQuery>,
 ) -> Result<Json<ListResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
 
     let type_filter = q
         .memory_type
@@ -1091,7 +1100,7 @@ async fn delete_memories(
     Json(req): Json<DeleteRequest>,
 ) -> Result<Json<DeleteResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
     if req.ids.is_empty() {
         return Err(bad_request("ids must not be empty"));
     }
@@ -1115,7 +1124,7 @@ async fn reflect(
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
     let brain = state.brain.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
         let brain = brain.lock().unwrap_or_else(|p| p.into_inner());
@@ -1150,7 +1159,7 @@ async fn patch_memory(
     Json(req): Json<PatchMemoryRequest>,
 ) -> Result<Json<PatchMemoryResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
-    authorize_and_rate_limit(&state, &headers)?;
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
     if req.salience.is_none() {
         return Err(bad_request("no patchable fields provided"));
     }
@@ -1328,6 +1337,7 @@ fn parse_memory_source(s: &str) -> Option<MemorySource> {
 fn authorize_and_rate_limit(
     state: &AppState,
     headers: &HeaderMap,
+    class: RateClass,
 ) -> Result<(), (StatusCode, Json<ApiError>)> {
     if state.settings.auth_required {
         let token = extract_token(headers);
@@ -1346,7 +1356,7 @@ fn authorize_and_rate_limit(
         .limiter
         .lock()
         .map_err(|_| internal_err("rate limit state poisoned"))?;
-    let window = limiter.entry(client_key).or_insert(ClientWindow {
+    let window = limiter.entry((client_key, class)).or_insert(ClientWindow {
         count: 0,
         window_started: now,
     });
@@ -1530,6 +1540,47 @@ mod tests {
         assert_eq!(r1.status(), StatusCode::OK);
         assert_eq!(r2.status(), StatusCode::OK);
         assert_eq!(r3.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    // V-17: reads and writes must hold independent buckets, so a read flood
+    // cannot starve a write from the same client (the observed hook failure).
+    #[tokio::test]
+    async fn read_flood_does_not_starve_writes() {
+        let (state, _guard) = test_state(); // rate_limit_max_requests = 2
+        let app = build_router(state);
+        let read_req = || {
+            axum::http::Request::builder()
+                .uri("/stats")
+                .header("x-api-key", "secret")
+                .header("x-forwarded-for", "1.1.1.1")
+                .body(Body::empty())
+                .unwrap()
+        };
+        // Exhaust the read budget for this client.
+        assert_eq!(app.clone().oneshot(read_req()).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(app.clone().oneshot(read_req()).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(
+            app.clone().oneshot(read_req()).await.unwrap().status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "read bucket should be exhausted"
+        );
+
+        // A write from the SAME client still succeeds on its own bucket.
+        let save_req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/save")
+            .header("x-api-key", "secret")
+            .header("x-forwarded-for", "1.1.1.1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"content":"v17 write-bucket probe","memory_type":"fact"}"#,
+            ))
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(save_req).await.unwrap().status(),
+            StatusCode::OK,
+            "write was starved by the read flood — V-17 regression"
+        );
     }
 }
 

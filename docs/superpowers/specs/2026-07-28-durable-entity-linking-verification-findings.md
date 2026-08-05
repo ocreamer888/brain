@@ -1,21 +1,44 @@
 # Verification Findings — Durable Entity Linking
 
-**Date:** 2026-07-28
+**Verification run:** 2026-07-28 · **Last updated:** 2026-08-02
 **Scope:** adversarial verification of amendments A1–A9 (see [`2026-07-28-durable-entity-linking-amendments.md`](./2026-07-28-durable-entity-linking-amendments.md))
 **Method:** five independent read-only agents, each briefed to *find defects* and to report `PASS` only for claims it reproduced itself. Domains: Rust (A2/A8), Python save path (A3–A5/A7), backfill data integrity, live deployment (A9c), eval statistics (A1).
 
-**System state at time of writing**
+**System state (2026-07-29)**
 
 | | |
 |---|---|
-| memories / edges / entities / linked | 17,685 · 44,355 · 16,829 · 13,341 |
-| orphan edges | **192** (was 11 pre-ship) |
-| Python suite | 371 passed, 5 skipped, 0 failed |
+| memories / edges / entities / linked | 17,679 · 44,439 · 16,866 · 13,357 |
+| orphan edges | **0** — was 11 pre-ship, peaked at a true 1190; both sources fixed + swept, see V-05 |
+| Python suite | 390 passed, 5 skipped, 0 failed |
 | Rust lib suite | 121 passed, 0 failed |
-| deployed binary | rebuilt + restarted with the P@1 fix |
-| git | **uncommitted** — see V-06 |
+| deployed binary | rebuilt + restarted with the P@1 fix (V-02) |
+| live hook tree | synced, parity-enforced across 9 files |
+| git | committed + pushed on `feature/durable-entity-linking` |
 
-**37 findings.** 8 fixed during verification, 29 open. Every severity below was independently reproduced before being recorded here; anything an agent could not verify is marked as such rather than asserted.
+**38 findings — 12 closed, 26 open.**
+
+Every severity below was independently reproduced before being recorded; anything an agent could not verify is marked as such rather than asserted.
+
+---
+
+## Working agreement for the open queue
+
+Adopted 2026-07-29 after the ship produced compounding defects. **One issue at a time**, each with the same definition of done:
+
+1. **Reproduce it first.** If it can't be reproduced, it isn't real and gets downgraded or closed.
+2. **Fix it.**
+3. **Prove the fix has teeth** — revert it, watch the specific test fail, restore.
+4. **Full suite** (Python + Rust as applicable), plus parity if the live tree is touched.
+5. **Close it here** with the evidence inline.
+
+**Hard rule: no irreversible action without a canary.** No backfill without sampling ~100 rows and inspecting the output. No restart without the before-measurement captured. No sync without knowing what breaks if it's wrong.
+
+*Why this rule exists:* the single most damaging finding (V-07, 28% junk entities) came from running 6,864 rows through an extractor whose output had never been inspected on 100. A four-minute canary would have caught it before 23,470 edges were written.
+
+*What this rule does not fix:* V-01, V-02 and V-03 were each a **faithful implementation of a spec that was wrong**, with passing tests. Sequencing doesn't catch those — adversarial verification against live data does, and only once the defect is live enough to be observable. Both disciplines are needed.
+
+Issues are grouped only when they share a file *and* a test run (e.g. the eval-gate LOW items). Bundling across subsystems is what produced this list.
 
 ---
 
@@ -96,21 +119,37 @@ Mitigating: OpenRouter is no longer used anywhere (`0` env vars, no config refer
 
 **Recommended:** (1) revoke at OpenRouter regardless of presumed-dead status; (2) purge the 5 entity rows and their edges — small, safe, reversible from the snapshot; (3) decide separately about redacting the 9 source memories, since that rewrites history; (4) add a secret-shape filter to `entity_extractor.py` — the extractor will otherwise keep surfacing whatever is in content.
 
-### V-05 — Orphan edges are accumulating: 11 → 192 · **OPEN**
+### V-05 — Orphan edges are accumulating: 11 → 192 → 329 → **1190** · **FIXED 2026-08-02**
 
-No FK or `ON DELETE CASCADE` from `edges.src_memory_id` → `memories.id`, and the delete path never cleans edges. 91 of the new orphans exist *because* the backfill linked memories that `reflect_tool` then consolidated away. Every reflection cycle mints more.
+No FK or `ON DELETE CASCADE` from `edges.src_memory_id` → `memories.id`. 91 of the first batch existed *because* the backfill linked memories that `reflect_tool` then consolidated away. Every reflection cycle mints more.
 
-Pre-ship this was a static curiosity (11); widening the scope turned it into a leak. **Recommended:** add `ON DELETE CASCADE` or an edge-cleanup step to `delete_memories`.
+**True count was undercounted.** Reads via `sqlite3 'file:...?mode=ro'` see a pre-checkpoint snapshot and miss uncommitted WAL frames — the 329/744/821 readings were low. A full `.backup` (WAL-aware) and a post-restart checkpoint both showed the real figure: **1190**.
 
-### V-06 — Production is running from an uncommitted working tree · **OPEN — needs owner decision**
+**Two distinct orphan sources, both reproduced live and both fixed:**
+
+1. **Delete path never cleaned edges** — the documented mechanism (~137/day). `store.delete_memories` (`store.rs`) deleted from `memories`/`memories_fts` only. Both live churn paths route through it — `/delete` and `/reflect`→`run_reflection` (`brain.rs:693`) — so every consolidation orphaned the deleted memory's edges. **Fix:** `DELETE FROM edges WHERE src_memory_id = ?1` inside the delete loop.
+2. **`link_memory_entities` inserted edges without checking the memory exists** — `/link-entities` on a never-saved id returned `{"linked":2}` and created 2 orphan edges. In production this is a race (a backfill, or a caller whose id `reflect` deleted between read and link); memory `d292e442` orphaned with 8 edges on the *already-fixed* binary, which is what surfaced this second source. **Fix:** an existence guard at the top of `link_memory_entities` (`SELECT EXISTS(... FROM memories WHERE id=?)` → return `0` if absent). TOCTOU-safe: every API op serialises on one brain `Mutex`.
+
+Chose the edge-cleanup step + existence guard over `ON DELETE CASCADE`, per "smallest change" — no schema migration, no per-connection `foreign_keys=ON` discipline. A CASCADE FK would also have covered both but is a recreate-table migration on a 44k-edge production table.
+
+**Teeth:** `delete_memories_cleans_edges` (orphan check via `entities_for_memory`, which joins on `src_memory_id`) and `link_memory_entities_skips_nonexistent_memory`. Each proven by reverting only its fix and watching that test fail, then restored.
+
+**Suites:** Rust **123 lib** (was 121) **+ 7 bin** · Python **390 / 5 skipped**. Rust-only; no parity impact.
+
+**Deployed + verified live** (rebuild → `kickstart -k`, backup at `~/brain-backups/v05-orphan-sweep-20260801-151704.db`):
+- delete path: saved a fact with 3 entities → 3 edges; `/delete` → **0 edges** (cleaned).
+- link guard: `/link-entities` on a ghost id → `{"linked":0}`, **0 edges**.
+- **one-off sweep** of `WHERE NOT EXISTS (live source memory)` — canary-verified 0 live edges in scope — cleared **1190 → 0**; residual orphans from the pre-guard window swept to **0**. Orphan count held at **0** afterward.
+
+### V-06 — Production was running from an uncommitted working tree · **CLOSED 2026-07-29**
 
 ```
-77 uncommitted entries · 55 files changed, 1175 insertions(+), 435 deletions(-)
+was: 77 uncommitted entries · 55 files changed, 1175 insertions(+), 435 deletions(-)
 ```
 
-The `brain_api` binary serving port 8787 was compiled from this tree (verified by inode via `lsof`, SHA-256 `774ccaa8…`). Six of these files are also the live hook tree's dependencies. There is **no commit boundary for what is running** — a stray `git checkout -- .`, `git clean`, or a lost worktree silently regresses production with nothing to recover from.
+The `brain_api` binary serving port 8787 had been compiled from an uncommitted tree (verified by inode via `lsof`, SHA-256 `774ccaa8…`), with six of those files also being the live hook tree's dependencies — no commit boundary, and a stray `git checkout -- .` would have silently regressed production.
 
-**Recommended:** commit `feature/durable-entity-linking` before anything else touches this repo.
+**Resolution:** committed and pushed. Verified `feature/durable-entity-linking` tracks `origin/feature/durable-entity-linking`; working tree clean apart from in-flight edits. Every subsequent issue now produces a readable per-issue diff against a real baseline.
 
 ### V-07 — Entity quality: ~28% junk, and generic words became hubs · **OPEN**
 
@@ -131,13 +170,38 @@ The top of the graph is still dominated by legitimate entities (`Next.js` 732, `
 **Direct consequence for A1:** running the A/B now measures noise propagation as much as knowledge retrieval. **Recommended:** cheap high-value cleanup first — drop degree-1 entities matching the junk regex, hand-stoplist the ~15 generic hubs. Reverses the ranking damage without touching the good 37%.
 **Related:** amendment A5 deferred stoplist tuning on the grounds that `graph_expand` was off by default. That was true but incomplete — the Linked UI surfaces these today and the gate depends on them tomorrow.
 
-### V-08 — Stop hook triggers real destructive maintenance with no dry-run guard · **OPEN**
+### V-08 — Stop hook triggered real destructive maintenance with no dry-run guard · **CLOSED 2026-07-29**
 
-`session_end.py` unconditionally spawns `run_reflect.py` (`POST /reflect`, which **deletes** memories — its log shows `-12`, `-7`, `-4` entries) and `run_cleanup.py` (BVH dedup with real `delete_memories`; noise auto-delete every 20th session). `_base_url()` always points at the real API regardless of where the script lives.
+`session_end.py` unconditionally spawned `run_reflect.py` (`POST /reflect`, which **deletes** memories — its log shows `-12`, `-7`, `-4` entries) and `run_cleanup.py` (BVH dedup with real `delete_memories`; noise auto-delete every 20th session). `_base_url()` always points at the real API regardless of where the script lives.
 
-Surfaced because a verification agent was told to run each hook. **No data was lost** — dedup found `0 duplicates` and both reflection attempts hit 429, so rate-limit saturation from concurrent agents inadvertently protected the DB.
+Surfaced because a verification agent was told to run each hook. **No data was lost** — dedup found `0 duplicates` and both reflection attempts hit 429, so rate-limit saturation from concurrent agents inadvertently protected the DB. The instruction that caused this was mine, and it was under-considered.
 
-The instruction that caused this was mine, and it was under-considered. **Recommended:** a `BRAIN_SKIP_BACKGROUND_JOBS` guard so the Stop hook's core logic can be integration-tested without risking production consolidation.
+**Fix:** `BRAIN_SKIP_BACKGROUND_JOBS` guard, extracted into a new `brain/hooks/background.py` rather than left inline — `session_end.py`'s body executes at import, which is exactly why nothing in it had test coverage (the existing `test_session_end_summary.py` tests `core/session_ingest` instead of the hook).
+
+**Proven both directions:**
+```
+guard ON   → both jobs skipped, no processes spawned, memories 17679 → 17679
+guard OFF  → Popen called (mocked; nothing actually spawned)
+teeth      → reverted to a bare Popen → structural test FAILED → restored → passes
+live       → real Stop hook honours the guard; real PostToolUse save still succeeds
+```
+16 tests in `brain/tests/test_hook_background_guard.py`, including a structural test that greps for `spawn_background` near each destructive script so a regression to a bare `Popen` is caught rather than silently reintroducing this.
+
+### V-38 — Hook *entry-point scripts* had drifted between trees · **CLOSED 2026-07-29**
+
+Found while checking parity before syncing the V-08 fix. `SYNC_SET` covered only *imported modules*; A9c's derivation traced the import graph and never considered the scripts the harness actually executes.
+
+```
+session_end.py     DIFFERS  — live tree imported the STALE brain.summarizer / brain.memory;
+                              repo imports brain.core.*
+post_tool_use.py   DIFFERS  — repo had 7 lines of edit-buffered logging the live tree lacked
+```
+
+So the live Stop hook had been running an older module layout the entire time. This is also the mechanism behind the earlier "nothing imports the stale duplicates" correction — it was the *live* copy doing the importing.
+
+**Fix:** verified the live tree could take the repo versions (`brain.core.*` imports cleanly there), backed up to `~/brain-backups/ai-hooks-232640/`, synced all three files, and added `session_end.py`, `post_tool_use.py` and `background.py` to `SYNC_SET`. Parity is now 11 tests over 9 files. Both hooks verified running live post-sync.
+
+**Note:** this is V-16 materialising within one issue of starting the queue — a required file existed that the parity guard structurally could not have flagged.
 
 ---
 
@@ -174,11 +238,23 @@ Measured against the live DB at `oversample=1.5`: every stratum has slack except
 ### V-15 — Lazy `brain/ingest/__init__.py` breaks submodule attribute access · **OPEN**
 `import brain.ingest as bi; bi.payloads` now raises `AttributeError` (pre-lazy it worked, because the eager `from ... import` registered the submodule on the package). Every in-repo site uses `from brain.ingest.<sub> import ...`, which still resolves — so the suite is green legitimately — but it is a silent public-API break for ad-hoc scripts and REPL use. **Fix:** map submodule names to themselves in `_LAZY_MEMBERS`.
 
-### V-16 — `test_deploy_parity.py` cannot catch a newly-required 7th file · **OPEN**
-`SYNC_SET` is a hand-maintained dict compared for byte-identity, not derived from a live AST trace. If a future edit to any of the six adds an import of a new sibling, the test still passes while the live tree silently lacks the dependency. It *does* correctly catch drift of known files — proven twice, once deliberately and once for real. The amendment's "not a checklist" framing overstates the guarantee: operationally it is a checklist, just an enforced one.
+### V-16 — `test_deploy_parity.py` cannot catch a newly-required file · **PARTIALLY ADDRESSED, still OPEN**
+`SYNC_SET` is a hand-maintained dict compared for byte-identity, not derived from a live AST trace. If a future edit adds an import of a new sibling, the test still passes while the live tree silently lacks the dependency. It *does* correctly catch drift of **known** files — proven three times now: twice deliberately, once for real when the V-03 extractor fix landed in the repo but not the live tree. The amendment's "not a checklist" framing overstates the guarantee: operationally it is a checklist, just an enforced one.
 
-### V-17 — Single shared rate-limit bucket starves the hooks · **OPEN**
+**Partial fix (2026-07-29):** coverage widened from 6 to 9 files after V-38 showed the omission was not hypothetical — hook entry points were missing and had already drifted. The structural weakness remains: a *newly required* file is still invisible until something breaks. **Proper fix:** derive `SYNC_SET` from an AST trace of the live tree's hook entry points at test time, so the guard computes its own requirement rather than trusting a literal.
+
+### V-17 — Single shared rate-limit bucket starves the hooks · **FIXED 2026-07-30**
 `client_key()` (`brain_api.rs:1388`) returns `"local"` for anything without an `x-forwarded-for` header, so hooks, MCP, evals, backfills and ad-hoc scripts share one 120 req/60 s budget. Reproduced repeatedly during verification. Hook saves then fail-soft into the spool — silent, and easy to miss. Not part of A1–A9, but it directly threatens Success Criterion 1.
+
+**Reproduced (live, pre-fix):** flooding read-only `GET /stats` to exhaust the shared `"local"` bucket (112×200 → 429) starved the very next `POST /save` → **429, no write**. A read-heavy client (evals, MCP searches, ad-hoc scripts) thus silently blocks hook saves.
+
+**Fix (owner chose read/write split, 2026-07-30):** the limiter key is now `(client_key, RateClass)` with `RateClass ∈ {Read, Write}` (`brain_api.rs`). Reads (`/stats`, `/search`, `/v1/*`, `/neighbors`, `/linked`, `/list`, `/entities`, `/get-episode`, `/stream`) and writes (`/save`, `/save-batch`, `/link-entities`, `/feedback`, `/delete`, `/reflect`, `PATCH /memories/:id`) hold independent 120/60 s budgets per client. No client changes; a read flood can no longer starve hook writes. All 18 call sites tagged (11 read / 7 write); `/health` remains unlimited.
+
+**Teeth:** new bin test `read_flood_does_not_starve_writes` exhausts the read bucket then asserts a same-client `/save` returns 200. Reverting only `save`'s class to `RateClass::Read` made it fail (`429 != 200`); restored → passes.
+
+**Suites:** Rust 121 lib + 7 bin (was 6) · Python 390 passed / 5 skipped. No parity impact (Rust-only; hook `SYNC_SET` untouched).
+
+**Verified live after rebuild + `launchctl kickstart -k com.brain.api` (pid 88127 → 50800):** read bucket exhausted (`/stats` → 429) while a same-client `/save` returned **200** (id `27fd5c0c…`) — the exact sequence that returned 429 pre-fix.
 
 ### V-18 — Extraction runs *before* the save, so it is paid on deduped and failed saves · **OPEN**
 Identical content saved twice returned the **same id** (server-side dedup) after a full 0.66 s GPU call on the second. Same shape on an API outage: full extraction cost, then a spooled payload that D5 forbids re-extracting — the work is discarded.
@@ -239,14 +315,37 @@ Recorded because it is evidence, not decoration:
 
 ---
 
-## Recommended order of work
+## Queue
 
-1. **V-06** commit the tree — everything else is built on sand until there is a boundary.
-2. **V-04** revoke and purge the credentials.
-3. **V-05** stop the orphan-edge leak (`ON DELETE CASCADE`).
-4. **V-07 + V-10** entity-quality cleanup and per-type caps — *before* A1's A/B, or the gate measures noise.
-5. **V-09, V-12, V-14** close the remaining gate holes, then run the A/B.
-6. **V-08, V-17** operational safety: Stop-hook dry-run guard, rate-limit keying.
-7. Remaining LOW items as hygiene.
+Owner chose **operational safety first** (2026-07-29).
 
-Nothing in the LOW table blocks anything.
+| # | Issue | State |
+|---|---|---|
+| — | **V-06** commit the tree | ✅ closed — baseline exists |
+| — | **V-08** Stop-hook background guard | ✅ closed |
+| — | **V-38** hook entry-point drift | ✅ closed (fell out of V-08) |
+| — | **V-17** rate-limit keying — read/write bucket split | ✅ closed — deployed + verified live |
+| 2 | **V-04** revoke + purge credentials, add a secret-shape filter | ← next · needs owner action |
+| — | **V-05** orphan-edge leak (delete path + link-without-check) | ✅ closed — deployed, swept 1190→0, verified live |
+| 4 | **V-07 + V-10** entity-quality cleanup and per-type caps | blocks the A/B |
+| 5 | **V-09, V-12, V-14** remaining gate holes → then run the A/B | |
+| 6 | **V-15, V-16, V-18** | |
+| 7 | LOW table as hygiene | nothing blocks |
+
+**Sequencing notes**
+
+- **V-17 is not purely additive.** Changing the bucket key affects every client, so reproduce the starvation first and agree the keying scheme before changing it.
+- **V-04 needs the owner**: key revocation is not mine to do, and purging entities writes to the production DB.
+- **V-07 gates the A1 A/B.** Running the gate on a 28%-junk graph produces a precise number that measures noise propagation. Cleanup first, or the result is misleading rather than merely weak.
+- **V-05 closed 2026-08-02** — was the only self-worsening item. Verification surfaced a second orphan source (`/link-entities` with no existence check) beyond the documented delete path; both fixed. Note for future readers: `?mode=ro` sqlite reads undercount against an uncheckpointed WAL — use `.backup` or checkpoint first when auditing live counts.
+
+## Closure log
+
+| Date | Issue | Evidence |
+|---|---|---|
+| 2026-07-28 | V-01, V-02, V-03, V-19, V-20, V-21 | fixed during verification; each proven by reverting the fix and observing the specific failure |
+| 2026-07-29 | V-06 | committed + pushed; branch tracks origin |
+| 2026-07-29 | V-08 | 16 tests; guard proven ON and OFF; teeth proven; live hooks verified |
+| 2026-07-29 | V-38 | 3 files synced; parity 11 tests / 9 files; both hooks verified live |
+| 2026-07-30 | V-17 | read/write bucket split; teeth-proven regression test; deployed (pid 88127→50800) and verified live — read flood no longer 429s a same-client save |
+| 2026-08-02 | V-05 | two orphan sources fixed (delete-path edge cleanup + link existence guard); 2 teeth-proven tests; deployed; swept 1190→0; verified live (delete cleans, link-guard blocks); orphans held at 0 |
