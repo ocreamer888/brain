@@ -24,6 +24,9 @@ from config import OLLAMA_URL, OLLAMA_SUMMARIZE_MODEL  # noqa: E402
 DURABLE_MEMORY_TYPES = frozenset({
     "fact", "solution", "decision", "pattern",
     "project_context", "error_lesson", "conversation",
+    # Authored corpus chunks get entity edges like other durable types
+    # (spec 2026-08-06). `episode` remains excluded (audit body, not a node).
+    "knowledge",
 })
 
 MAX_ENTITIES_PER_FACT = 12

@@ -132,3 +132,76 @@ def test_record_feedback_rejected_nudges_salience_down():
         out = server.record_feedback(event_type="rejected", memory_id="m1")
     upd.assert_called_once_with("m1", 0.4)
     assert "0.50 → 0.40" in out
+
+
+def test_normalize_memory_type_accepts_knowledge():
+    """knowledge is a first-class type — must NOT alias to fact anymore."""
+    import brain.mcp.server as server
+    assert server._normalize_memory_type("knowledge") == "knowledge"
+    assert server._normalize_memory_type("Knowledge") == "knowledge"
+
+
+def test_normalize_memory_type_unknown_still_coerces():
+    import brain.mcp.server as server
+    assert server._normalize_memory_type("banana") == "conversation"
+
+
+# --- grounding_hint fixtures (spec 2026-08-06) ---
+
+def _kresult(rid, dist, score=None, project="AI"):
+    r = _result(rid, dist)
+    r["metadata"]["type"] = "knowledge"
+    r["metadata"]["project"] = project
+    if score is not None:
+        r["score"] = score
+    return r
+
+
+def test_grounding_hint_off_without_knowledge():
+    import brain.mcp.server as server
+    assert server._grounding_hint([_result("a", 0.2)]) == "off"
+
+
+def test_grounding_hint_off_when_knowledge_far():
+    import brain.mcp.server as server
+    hits = [_result("a", 0.30), _kresult("k", 0.70)]
+    assert server._grounding_hint(hits) == "off"
+
+
+def test_grounding_hint_hard_close_with_project_match():
+    import brain.mcp.server as server
+    hits = [_kresult("k", 0.20, project="tilopay"), _result("a", 0.40)]
+    assert server._grounding_hint(hits, project="tilopay") == "hard"
+
+
+def test_grounding_hint_soft_close_without_project_or_lead():
+    import brain.mcp.server as server
+    # Knowledge is close but scores show another type leading, no project match.
+    hits = [_result("a", 0.25) | {"score": 0.9}, _kresult("k", 0.30, score=0.5)]
+    assert server._grounding_hint(hits, project="") == "soft"
+
+
+def test_grounding_hint_hard_on_bm25_keyword_win():
+    """Distance looks mediocre but the ranked score puts knowledge on top —
+    distance-only logic would say off; score-aware logic must say hard."""
+    import brain.mcp.server as server
+    hits = [_kresult("k", 0.60, score=0.8), _result("a", 0.30) | {"score": 0.6}]
+    assert server._grounding_hint(hits) == "hard"
+
+
+def test_search_brain_appends_grounding_line():
+    import brain.mcp.server as server
+    hits = [_kresult("k", 0.20, project="AI"), _result("a", 0.40)]
+    with patch.object(server, "backend_mode", return_value="api"), \
+         patch.object(server, "api_template_search", return_value=hits):
+        out = server.search_brain(query="q", project="AI")
+    assert "Grounding: hard" in out
+
+
+def test_search_brain_no_grounding_line_when_off():
+    import brain.mcp.server as server
+    with patch.object(server, "backend_mode", return_value="api"), \
+         patch.object(server, "api_template_search",
+                      return_value=[_result("a", 0.30), _result("b", 0.50)]):
+        out = server.search_brain(query="q")
+    assert "Grounding:" not in out

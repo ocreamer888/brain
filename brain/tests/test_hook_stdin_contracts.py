@@ -81,10 +81,19 @@ class TestSaveSessionSummaryContract:
         fixture_path = FIXTURES_DIR / "session_end_minimal.json"
         payload = json.loads(fixture_path.read_text())
 
+        # The transcript must be substantive AND the summary must be grounded
+        # in it — save_session_summary now filters ungrounded claims and skips
+        # thin sessions (groundedness gate). A trivial single-message input is
+        # correctly rejected before save, so the happy path needs real content
+        # whose tokens back the summary/decisions/next_steps.
+        messages = [
+            {"role": "user", "content": "We need to test the session_end hook contract with golden fixtures."},
+            {"role": "assistant", "content": "I added a golden fixture and a CI job to run the hook contract tests."},
+        ]
         fake_summary = {
-            "summary": "Session covered hook contract testing.",
-            "decisions": ["Use golden fixtures"],
-            "next_steps": ["Add CI job"],
+            "summary": "Session covered hook contract testing with golden fixtures.",
+            "decisions": ["Use golden fixtures for the hook contract tests"],
+            "next_steps": ["Add a CI job to run the hook contract tests"],
         }
 
         with (
@@ -94,7 +103,7 @@ class TestSaveSessionSummaryContract:
             from brain.core.session_ingest import save_session_summary
 
             save_session_summary(
-                messages=[{"role": "user", "content": "test"}],
+                messages=messages,
                 project="AI",
                 session_id=payload["session_id"],
                 ended_at=payload["ended_at"],

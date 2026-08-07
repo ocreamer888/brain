@@ -25,6 +25,35 @@ const DEDUP_DISTANCE_THRESHOLD: f32 = 0.03;
 /// neighbor (shared entity) into search results. Task 7 (Phase C).
 pub(crate) const GRAPH_HOP_DECAY: f32 = 0.85;
 
+// Knowledge-type retrieval prior (spec 2026-08-06). Single knob: corpus rows
+// are saved at neutral salience, so `knowledge_w` is the only corpus boost.
+/// Flat prior for any `knowledge` row.
+pub(crate) const K_BASE: f32 = 0.06;
+/// Extra prior when a project filter is active (surviving rows matched it).
+pub(crate) const K_PROJ: f32 = 0.08;
+/// Max proximity bonus, reached at/inside `KNOWLEDGE_TAU_CLOSE`.
+pub(crate) const K_CLOSE_MAX: f32 = 0.10;
+/// Cosine distance at/below which a knowledge hit counts as fully "close".
+pub(crate) const KNOWLEDGE_TAU_CLOSE: f32 = 0.35;
+/// Cosine distance at/above which a knowledge hit gets zero proximity bonus.
+pub(crate) const KNOWLEDGE_TAU_FAR: f32 = 0.55;
+/// Hard cap on the combined knowledge multiplier.
+pub(crate) const KNOWLEDGE_W_MAX: f32 = 1.22;
+
+/// Smoothstep closeness for knowledge rows: 1.0 at/inside τ_close, 0.0
+/// at/beyond τ_far. A plain `1 - distance` was rejected — it leaks boost to
+/// hits the grounding thresholds already call "not usefully close".
+pub(crate) fn knowledge_closeness(distance: f32) -> f32 {
+    if distance >= KNOWLEDGE_TAU_FAR {
+        return 0.0;
+    }
+    if distance <= KNOWLEDGE_TAU_CLOSE {
+        return 1.0;
+    }
+    let t = (KNOWLEDGE_TAU_FAR - distance) / (KNOWLEDGE_TAU_FAR - KNOWLEDGE_TAU_CLOSE);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// `1 - cosine_similarity`, matching the `distance` semantics used by
 /// `VectorIndex`. Embeddings are L2-normalized on write, so the dot product is
 /// the cosine similarity. Mismatched dimensions yield the neutral 1.0.
@@ -378,7 +407,6 @@ impl Brain {
             // salience=0.5 → 1.00 (neutral), salience=1.0 → 1.15 (boost), salience=0.0 → 0.85 (suppress).
             let sal = memory.metadata.salience as f32;
             let salience_w = (1.0 + 0.3 * (sal - 0.5)).clamp(0.85, 1.15);
-            let final_score = salience_w * recency_w * hybrid_score;
 
             let distance = cos_candidates
                 .iter()
@@ -386,12 +414,26 @@ impl Brain {
                 .map(|(_, d)| *d)
                 .unwrap_or(1.0);
 
+            // Knowledge prior: tiny, proximity-weighted, hard-capped. BM25-only
+            // candidates carry distance 1.0 → zero proximity bonus.
+            let knowledge_w = if memory.metadata.memory_type == MemoryType::Knowledge {
+                let mut w = 1.0 + K_BASE + K_CLOSE_MAX * knowledge_closeness(distance);
+                if filter.as_ref().and_then(|f| f.project.as_ref()).is_some() {
+                    w += K_PROJ;
+                }
+                w.clamp(1.0, KNOWLEDGE_W_MAX)
+            } else {
+                1.0
+            };
+            let final_score = salience_w * recency_w * hybrid_score * knowledge_w;
+
             scored.push((
                 SearchResult {
                     id: memory.id,
                     content: memory.content,
                     metadata: memory.metadata,
                     distance,
+                    score: final_score,
                 },
                 final_score,
             ));
@@ -537,6 +579,7 @@ impl Brain {
                     content: memory.content,
                     metadata: memory.metadata,
                     distance,
+                    score,
                 },
                 score,
             ));
@@ -672,7 +715,9 @@ impl Brain {
             .filter(|m| {
                 !matches!(
                     m.metadata.memory_type,
-                    MemoryType::Conversation | MemoryType::Episode
+                    // Knowledge = authored corpus; reflection must never
+                    // consolidate or delete it.
+                    MemoryType::Conversation | MemoryType::Episode | MemoryType::Knowledge
                 )
             })
             .take(10)
@@ -1244,6 +1289,7 @@ mod tests {
                 content: "zzz unique seed token".into(),
                 metadata: brain.store.get_memory(&seed).unwrap().unwrap().metadata,
                 distance: 1.0,
+                score: 0.0,
             },
             0.0_f32, // the pathological score
         )];
@@ -1617,5 +1663,85 @@ mod tests {
 
         assert!(age_with > 700.0, "event_time should give ~730 day age, got {age_with}");
         assert!(age_without < 1.0, "no event_time → timestamp → ~0 day age, got {age_without}");
+    }
+
+    #[test]
+    fn knowledge_closeness_smoothstep_bounds() {
+        assert_eq!(knowledge_closeness(0.0), 1.0);
+        assert_eq!(knowledge_closeness(KNOWLEDGE_TAU_CLOSE), 1.0);
+        assert_eq!(knowledge_closeness(KNOWLEDGE_TAU_FAR), 0.0);
+        assert_eq!(knowledge_closeness(0.9), 0.0);
+        let mid = knowledge_closeness(0.45);
+        assert!(mid > 0.0 && mid < 1.0, "midpoint should be interior, got {mid}");
+        assert!(
+            knowledge_closeness(0.40) > knowledge_closeness(0.50),
+            "closeness must decrease with distance"
+        );
+    }
+
+    #[test]
+    fn knowledge_twin_outranks_fact_twin() {
+        let brain = test_brain();
+        let fact_id = save(&brain, "tilopay webhook retries three times", MemoryType::Fact, "p");
+        let know_id = save(&brain, "tilopay webhook retries three times", MemoryType::Knowledge, "p");
+        // alpha=1.0 (pure cosine): identical twins tie on hybrid score, so the
+        // knowledge prior is the only differentiator. At default alpha the BM25
+        // rank normalizer (rank 1 → 1.0, rank 2 → 0.0) would swamp it.
+        let filter = SearchFilter {
+            alpha: Some(1.0),
+            ..SearchFilter::default()
+        };
+        let results = brain
+            .search("tilopay webhook retries three times", 5, Some(filter))
+            .unwrap();
+        let pos_k = results.iter().position(|r| r.id == know_id).expect("knowledge hit");
+        let pos_f = results.iter().position(|r| r.id == fact_id).expect("fact hit");
+        assert!(pos_k < pos_f, "knowledge twin must outrank fact twin");
+        let s_k = results[pos_k].score;
+        let s_f = results[pos_f].score;
+        assert!(s_k > s_f, "knowledge score {s_k} must exceed fact twin {s_f}");
+        // Exact-match distance ≈ 0 → full proximity: 1 + K_BASE + K_CLOSE_MAX.
+        let ratio = s_k / s_f;
+        assert!(
+            (ratio - (1.0 + K_BASE + K_CLOSE_MAX)).abs() < 0.01,
+            "expected ratio ≈ {}, got {ratio}",
+            1.0 + K_BASE + K_CLOSE_MAX
+        );
+    }
+
+    #[test]
+    fn knowledge_w_clamped_with_project_filter() {
+        let brain = test_brain();
+        let fact_id = save(&brain, "grounded corpus clamp check body", MemoryType::Fact, "p");
+        let know_id = save(&brain, "grounded corpus clamp check body", MemoryType::Knowledge, "p");
+        let filter = SearchFilter {
+            project: Some("p".into()),
+            alpha: Some(1.0),
+            ..SearchFilter::default()
+        };
+        let results = brain
+            .search("grounded corpus clamp check body", 5, Some(filter))
+            .unwrap();
+        let s_k = results.iter().find(|r| r.id == know_id).expect("knowledge hit").score;
+        let s_f = results.iter().find(|r| r.id == fact_id).expect("fact hit").score;
+        // 1 + 0.06 + 0.08 + 0.10 = 1.24 → must clamp at KNOWLEDGE_W_MAX.
+        let ratio = s_k / s_f;
+        assert!(
+            (ratio - KNOWLEDGE_W_MAX).abs() < 0.01,
+            "expected clamped ratio ≈ {KNOWLEDGE_W_MAX}, got {ratio}"
+        );
+    }
+
+    #[test]
+    fn search_results_carry_descending_scores() {
+        let brain = test_brain();
+        save(&brain, "alpha memory about parsers", MemoryType::Solution, "p");
+        save(&brain, "beta memory about compilers", MemoryType::Decision, "p");
+        let results = brain.search("memory about parsers", 5, None).unwrap();
+        assert!(!results.is_empty());
+        assert!(results[0].score > 0.0, "top score must be populated");
+        for w in results.windows(2) {
+            assert!(w[0].score >= w[1].score, "scores must be non-increasing");
+        }
     }
 }

@@ -189,6 +189,7 @@ fn parse_memory_type(v: Option<&Value>) -> MemoryType {
         Some("error_lesson") => MemoryType::ErrorLesson,
         Some("fact") => MemoryType::Fact,
         Some("episode") => MemoryType::Episode,
+        Some("knowledge") => MemoryType::Knowledge,
         // Legacy/foreign values default to conversation to keep migration lossless.
         _ => MemoryType::Conversation,
     }

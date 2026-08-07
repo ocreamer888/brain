@@ -196,6 +196,8 @@ try:
         sys.exit(0)
 
     memory_type, content, title, confidence = result
+    from brain.ingest.payloads import forbid_knowledge_type
+    memory_type = forbid_knowledge_type(memory_type, "post_tool_use")
     n = get_cached_corpus_size(state)
     save_state(state)
 

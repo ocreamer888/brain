@@ -172,10 +172,11 @@ def test_clean_entities_dedupes_case_insensitive_preserving_first() -> None:
 # DURABLE_MEMORY_TYPES
 # ---------------------------------------------------------------------------
 
-def test_durable_memory_types_contains_expected_seven() -> None:
+def test_durable_memory_types_contains_expected_eight() -> None:
     assert entity_extractor.DURABLE_MEMORY_TYPES == frozenset({
         "fact", "solution", "decision", "pattern",
         "project_context", "error_lesson", "conversation",
+        "knowledge",
     })
     # Bare strings, not the JSON-encoded form the DB stores.
     assert "episode" not in entity_extractor.DURABLE_MEMORY_TYPES

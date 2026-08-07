@@ -1269,6 +1269,7 @@ fn memory_type_as_str(t: &MemoryType) -> &'static str {
         MemoryType::ErrorLesson => "error_lesson",
         MemoryType::Fact => "fact",
         MemoryType::Episode => "episode",
+        MemoryType::Knowledge => "knowledge",
     }
 }
 
@@ -1294,6 +1295,7 @@ fn parse_memory_type(s: &str) -> Option<MemoryType> {
         "error_lesson" => Some(MemoryType::ErrorLesson),
         "fact" => Some(MemoryType::Fact),
         "episode" => Some(MemoryType::Episode),
+        "knowledge" => Some(MemoryType::Knowledge),
         _ => None,
     }
 }

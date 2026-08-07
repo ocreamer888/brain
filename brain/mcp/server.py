@@ -58,12 +58,12 @@ _VALID_MEMORY_TYPES = frozenset(
         "error_lesson",
         "fact",
         "episode",
+        "knowledge",
     }
 )
 
 # Common agent/LLM synonyms → canonical type.
 _MEMORY_TYPE_ALIASES = {
-    "knowledge": "fact",
     "note": "conversation",
     "memory": "conversation",
     "insight": "pattern",
@@ -123,6 +123,57 @@ mcp = FastMCP("brain", instructions=(
 _UNCERTAINTY_GAP = 0.05  # cosine distance gap below which top-2 results are "uncertain"
 _LOW_TRUST = 0.40  # salience below which a hit is flagged "⚠ low-trust"
 
+# Grounding-hint thresholds — MUST mirror KNOWLEDGE_TAU_CLOSE / KNOWLEDGE_TAU_FAR
+# in brain/rust/src/brain.rs so the ranker and the hint agree on "close".
+_TAU_CLOSE = 0.35  # distance at/below which a knowledge hit is "nearby" corpus
+_TAU_FAR = 0.55  # distance at/above which a knowledge hit is not usefully close
+
+
+def _score_of(result: dict) -> float | None:
+    """Final ranked score exposed by the Rust API. None on older binaries."""
+    try:
+        return float(result["score"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _grounding_hint(results: list[dict], project: str = "") -> str:
+    """Adaptive grounding from the score landscape (spec 2026-08-06).
+
+    hard — corpus clearly covers the query: prefer citing knowledge hits.
+    soft — corpus nearby: prefer knowledge when relevant, other types OK.
+    off  — no usefully close corpus: normal hybrid, no cite pressure.
+
+    Uses ranked scores when the API exposes them (a BM25 keyword win can put
+    knowledge on top while its cosine distance looks mediocre); falls back to
+    distance-only logic against older binaries.
+    """
+    know = [r for r in results if (r.get("metadata") or {}).get("type") == "knowledge"]
+    if not know:
+        return "off"
+    know_ids = {id(r) for r in know}
+    others = [r for r in results if id(r) not in know_ids]
+
+    d_star = 1.0
+    for r in know:
+        try:
+            d_star = min(d_star, float(r.get("distance")))
+        except (TypeError, ValueError):
+            pass
+
+    k_scores = [s for s in (_score_of(r) for r in know) if s is not None]
+    o_scores = [s for s in (_score_of(r) for r in others) if s is not None]
+    leads = bool(k_scores) and (not o_scores or max(k_scores) >= max(o_scores))
+
+    if d_star > _TAU_FAR and not leads:
+        return "off"
+    project_match = bool(project) and any(
+        (r.get("metadata") or {}).get("project") == project for r in know
+    )
+    if (d_star <= _TAU_CLOSE or leads) and (project_match or leads):
+        return "hard"
+    return "soft"
+
 
 def _salience_of(result: dict) -> float | None:
     """Trust score from a result's metadata. None when absent or unparseable."""
@@ -133,7 +184,13 @@ def _salience_of(result: dict) -> float | None:
         return None
 
 
-@mcp.tool(description="Semantic search across all memories. Returns most relevant past decisions, solutions, patterns.")
+@mcp.tool(description=(
+    "Semantic search across all memories. Returns most relevant past decisions, "
+    "solutions, patterns. When authored corpus (type=knowledge) is close to the "
+    "query, output ends with a 'Grounding: hard|soft' line — hard means prefer "
+    "citing knowledge hits and re-query with memory_type='knowledge' for the "
+    "full corpus ranking; no Grounding line means no cite pressure."
+))
 def search_brain(
     query: str,
     n: int = 10,
@@ -184,11 +241,27 @@ def search_brain(
         trust = "" if sal is None else f" | Trust: {sal:.2f}"
         if sal is not None and sal < _LOW_TRUST:
             trust += " ⚠ low-trust"
-        lines.append(f"    Distance: {r.get('distance', '?')}{trust}")
+        score = _score_of(r)
+        score_part = "" if score is None else f" | Score: {score:.3f}"
+        lines.append(f"    Distance: {r.get('distance', '?')}{score_part}{trust}")
         fp = meta.get("file_path")
         if fp:
             lines.append(f"    Source file: {fp}")
         lines.append("")
+
+    hint = _grounding_hint(results, project)
+    if hint == "hard":
+        lines.append(
+            "Grounding: hard — the knowledge corpus covers this query. Prefer "
+            "citing knowledge hits (with their source files); say when the corpus "
+            "lacks coverage. For the full corpus ranking past the type-diversity "
+            "cap, re-query with memory_type='knowledge'."
+        )
+    elif hint == "soft":
+        lines.append(
+            "Grounding: soft — corpus material is nearby. Prefer knowledge hits "
+            "when relevant; other memory types are fine."
+        )
 
     # Active learning: flag uncertain retrievals so user can provide feedback.
     if len(results) >= 2:
@@ -278,8 +351,11 @@ def get_neighbors_tool(memory_id: str) -> str:
     description=(
         "Save a new memory to the brain. "
         "memory_type must be one of: solution, decision, conversation, pattern, "
-        "project_context, error_lesson, fact, episode (snake_case). "
-        "Unknown labels are coerced to conversation."
+        "project_context, error_lesson, fact, episode, knowledge (snake_case). "
+        "Unknown labels are coerced to conversation. "
+        "Use knowledge ONLY for authored reference material (doc/book/spec/manual "
+        "chunks) with provenance (title and/or file path) — never for session "
+        "summaries, chat, or extracted facts."
     )
 )
 def save_memory_tool(

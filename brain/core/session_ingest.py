@@ -30,6 +30,12 @@ def save_memory_fn(**kwargs):
     brain provider, whose env has no numpy/sentence-transformers) never pull
     ``brain.core.memory`` and its heavy deps.
     """
+    from brain.ingest.payloads import forbid_knowledge_type
+
+    if "memory_type" in kwargs:
+        kwargs["memory_type"] = forbid_knowledge_type(
+            kwargs["memory_type"], "session_ingest"
+        )
     if backend_mode() == "python":
         from brain.core.memory import save_memory as py_save
         return py_save(**kwargs)

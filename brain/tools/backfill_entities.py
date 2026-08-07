@@ -38,6 +38,7 @@ PROGRESS_EVERY = 25
 _DURABLE_TYPES = (
     '"fact"', '"solution"', '"decision"', '"pattern"',
     '"project_context"', '"error_lesson"', '"conversation"',
+    '"knowledge"',
 )
 
 

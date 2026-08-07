@@ -14,6 +14,10 @@ pub enum MemoryType {
     Fact,
     /// Full session/document body retained for audit and Letta-style recall.
     Episode,
+    /// Authored corpus chunk (docs, books, specs, manuals) with provenance.
+    /// Written only by deliberate ingest or explicit agent choice — never by
+    /// session recycling or fact extraction.
+    Knowledge,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -93,6 +97,10 @@ pub struct SearchResult {
     pub content: String,
     pub metadata: MemoryMetadata,
     pub distance: f32,
+    /// Final ranked score (salience_w × recency_w × hybrid × knowledge_w).
+    /// Distance alone can't show BM25 keyword wins; grounding hints need this.
+    #[serde(default)]
+    pub score: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -229,6 +237,16 @@ mod tests {
             serde_json::to_string(&MemoryType::Episode).unwrap(),
             "\"episode\""
         );
+        assert_eq!(
+            serde_json::to_string(&MemoryType::Knowledge).unwrap(),
+            "\"knowledge\""
+        );
+    }
+
+    #[test]
+    fn memory_type_knowledge_round_trips() {
+        let t: MemoryType = serde_json::from_str("\"knowledge\"").unwrap();
+        assert_eq!(t, MemoryType::Knowledge);
     }
 
     #[test]
