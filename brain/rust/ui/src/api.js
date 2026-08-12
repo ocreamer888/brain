@@ -70,3 +70,38 @@ export function getLinked() {
 export function listMemories(limit = 30) {
   return api(`/list?limit=${limit}`)
 }
+
+export function listInstances(includeArchived = false) {
+  const q = includeArchived ? '?include_archived=1' : ''
+  return api(`/v1/instances${q}`)
+}
+
+export function createInstance({ name, description = '', tags = [] }) {
+  return api('/v1/instances', {
+    method: 'POST',
+    body: JSON.stringify({ name, description, tags }),
+  })
+}
+
+export function patchInstance(id, body) {
+  return api(`/v1/instances/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export function switchInstance(id) {
+  return api(`/v1/instances/${encodeURIComponent(id)}/switch`, { method: 'POST' })
+}
+
+export function archiveInstance(id) {
+  return api(`/v1/instances/${encodeURIComponent(id)}/archive`, { method: 'POST' })
+}
+
+export function unarchiveInstance(id) {
+  return api(`/v1/instances/${encodeURIComponent(id)}/unarchive`, { method: 'POST' })
+}
+
+export function deleteInstance(id) {
+  return api(`/v1/instances/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
