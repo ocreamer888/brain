@@ -8,11 +8,10 @@ export function FeedProvider({ children }) {
   const [status, setStatus] = useState('connecting') // connecting | live | reconnecting
   const seen = useRef(new Set())
 
-  useEffect(() => {
-    let cancelled = false
+  function seedFeed(cancelledRef) {
     listMemories(25)
       .then((data) => {
-        if (cancelled) return
+        if (cancelledRef && cancelledRef.current) return
         const items = (data.items || []).map((m) => ({
           id: m.id,
           content_snippet: (m.content || '').slice(0, 200),
@@ -26,10 +25,21 @@ export function FeedProvider({ children }) {
       .catch(() => {
         /* seed is best-effort */
       })
+  }
+
+  useEffect(() => {
+    const cancelledRef = { current: false }
+    seedFeed(cancelledRef)
     return () => {
-      cancelled = true
+      cancelledRef.current = true
     }
   }, [])
+
+  function resetFeed() {
+    seen.current = new Set()
+    setFeed([])
+    seedFeed()
+  }
 
   useEffect(() => {
     let es
@@ -81,7 +91,7 @@ export function FeedProvider({ children }) {
   }, [])
 
   return (
-    <FeedContext.Provider value={{ feed, status }}>
+    <FeedContext.Provider value={{ feed, status, resetFeed }}>
       {children}
     </FeedContext.Provider>
   )

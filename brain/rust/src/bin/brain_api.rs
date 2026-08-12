@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -17,8 +19,8 @@ use futures_util::StreamExt;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 use brain::brain::Brain;
-use brain::brain::BrainConfig;
 use brain::config::{anthropic_api_key, brain_config_from_env, openrouter_api_key};
+use brain::instances::{self, InstanceRegistry};
 use brain::store::MetadataStore;
 use brain::embedder::{embedder_from_env, EmbedderBackend};
 use brain::summarizer::{AnthropicClient, OllamaClient, OpenRouterClient};
@@ -39,6 +41,20 @@ struct AppState {
     /// Replaces the old per-request `open_brain` that reloaded all embeddings
     /// and rebuilt the index on every call (~300ms each).
     brain: Arc<Mutex<Brain>>,
+    /// Path to `~/.brain/instances.json` (or a temp override in tests).
+    registry_path: PathBuf,
+    /// Directory under which per-instance `<slug>/brain.db` files live.
+    instances_root: PathBuf,
+    /// In-memory instance registry, mutated on create/rename/archive/switch
+    /// (Task 4) and persisted back to `registry_path` on change.
+    registry: Arc<Mutex<InstanceRegistry>>,
+    /// db_path of the currently active instance's Brain. Tracked separately
+    /// from `registry` so the background worker (Task 5) can read it without
+    /// locking the full registry.
+    active_db_path: Arc<Mutex<String>>,
+    /// Set while an instance switch is in flight, so concurrent requests can
+    /// be rejected instead of racing the Brain swap (Task 5).
+    switching: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Debug)]
@@ -345,11 +361,27 @@ async fn main() {
     let settings = settings_from_env();
     let (memory_tx, _) = broadcast::channel::<brain::MemoryEvent>(256);
 
+    // Bootstrap (or load) the instance registry, then open the *active*
+    // instance's db_path rather than BRAIN_DB_PATH directly — on first boot
+    // this is a no-op (active == BRAIN_DB_PATH), but it gives later instance
+    // switching (Task 4/5) a coherent registry + AppState from the start.
+    let env_db = brain_config_from_env().db_path;
+    let reg_path = brain::instances::registry_path();
+    let instances_root = brain::instances::instances_root();
+    let registry = brain::instances::load_or_bootstrap(&reg_path, std::path::Path::new(&env_db))
+        .expect("failed to load or bootstrap instances registry");
+    let active_path = registry
+        .instances
+        .iter()
+        .find(|i| i.id == registry.active_id)
+        .map(|i| i.db_path.clone())
+        .unwrap_or_else(|| env_db.clone());
+
     // Build the Brain once at startup: load all embeddings, build the turbovec
     // index, and create the embedder/LLM client a single time. Shared across
     // all requests via Arc<Mutex<Brain>>.
     let boot = Instant::now();
-    let brain = open_brain_with_llm_tx(&memory_tx).expect("failed to open Brain at startup");
+    let brain = open_brain_at(&active_path, &memory_tx).expect("failed to open Brain at startup");
     eprintln!(
         "[BRAIN API] Brain ready ({} memories indexed) in {:.0} ms",
         brain.get_stats().map(|s| s.total_memories).unwrap_or(0),
@@ -363,29 +395,40 @@ async fn main() {
         limiter: Arc::new(Mutex::new(HashMap::new())),
         memory_tx,
         brain,
+        registry_path: reg_path,
+        instances_root,
+        registry: Arc::new(Mutex::new(registry)),
+        active_db_path: Arc::new(Mutex::new(active_path.clone())),
+        switching: Arc::new(AtomicBool::new(false)),
     };
 
     // Background job worker: open a short-lived DB handle per tick so the connection
-    // never crosses an `.await` (rusqlite::Connection is not `Send`).
-    let db_path = brain_config_from_env().db_path.clone();
-    if db_path != ":memory:" {
-        tokio::spawn(async move {
-            loop {
-                let db_path = db_path.clone();
+    // never crosses an `.await` (rusqlite::Connection is not `Send`). Reads
+    // `state.active_db_path` fresh every tick so an instance switch (Task 4)
+    // is picked up without restarting the process.
+    let active_db_path = state.active_db_path.clone();
+    tokio::spawn(async move {
+        loop {
+            let db_path = active_db_path
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .clone();
+            if db_path != ":memory:" {
+                let tick_path = db_path.clone();
                 let tick = tokio::task::spawn_blocking(move || {
-                    let store = MetadataStore::open(&db_path)?;
+                    let store = MetadataStore::open(&tick_path)?;
                     brain::worker::process_once(&store)
                 })
                 .await;
                 match tick {
                     Ok(Ok(_)) => {}
-                    Ok(Err(e)) => eprintln!("worker error: {e}"),
-                    Err(e) => eprintln!("worker join error: {e}"),
+                    Ok(Err(e)) => eprintln!("worker error (db_path={db_path}): {e}"),
+                    Err(e) => eprintln!("worker join error (db_path={db_path}): {e}"),
                 }
-                tokio::time::sleep(Duration::from_secs(5)).await;
             }
-        });
-    }
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+    });
 
     let app = build_router(state);
 
@@ -423,6 +466,17 @@ fn build_router(state: AppState) -> Router {
         .route("/feedback", post(feedback))
         .route("/reflect", post(reflect))
         .route("/memories/:id", patch(patch_memory))
+        .route(
+            "/v1/instances",
+            get(list_instances).post(create_instance_handler),
+        )
+        .route(
+            "/v1/instances/:id",
+            patch(patch_instance_handler).delete(delete_instance_handler),
+        )
+        .route("/v1/instances/:id/switch", post(switch_instance))
+        .route("/v1/instances/:id/archive", post(archive_instance))
+        .route("/v1/instances/:id/unarchive", post(unarchive_instance))
         .route("/eval_dashboard.json", get(eval_dashboard_handler))
         // Catch-all (`*path`) must be the final segment of the path (matchit).
         .route("/static/*path", get(static_handler))
@@ -468,18 +522,36 @@ async fn stats(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
+    // Copy id/name out from behind the registry lock first, then drop it
+    // before taking the brain lock, so we never hold both at once.
+    let (active_id, active_name) = {
+        let reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+        let name = instances::get(&reg, &reg.active_id)
+            .map(|r| r.name.clone())
+            .unwrap_or_default();
+        (reg.active_id.clone(), name)
+    };
     let brain = lock_brain(&state);
+    let mut value = stats_json(&brain)?;
+    drop(brain);
+    value["active_instance"] = serde_json::json!({ "id": active_id, "name": active_name });
+    log_request("GET", "/stats", StatusCode::OK, start);
+    Ok(Json(value))
+}
+
+/// Shared stats payload (without `active_instance`) used by both `/stats`
+/// and the switch handler's response.
+fn stats_json(brain: &Brain) -> Result<serde_json::Value, (StatusCode, Json<ApiError>)> {
     let stats = brain.get_stats().map_err(internal_err)?;
-    let response = Json(serde_json::json!({
+    Ok(serde_json::json!({
         "total_memories": stats.total_memories,
         "total_sessions": stats.total_sessions,
         "save_count_this_session": stats.save_count_this_session,
         "feedback_events_total": stats.feedback_events_total,
         "feedback_last_event_ts": stats.feedback_last_event_ts,
         "by_type": stats.by_type,
-    }));
-    log_request("GET", "/stats", StatusCode::OK, start);
-    Ok(response)
+    }))
 }
 
 async fn save(
@@ -489,6 +561,7 @@ async fn save(
 ) -> Result<Json<SaveResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let brain = lock_brain(&state);
     let memory_type = parse_memory_type(&req.memory_type)
         .ok_or_else(|| bad_request("invalid memory_type"))?;
@@ -540,6 +613,7 @@ async fn save_batch(
 ) -> Result<Json<SaveBatchResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let brain = lock_brain(&state);
     let mut accepted = 0usize;
     let mut failed = 0usize;
@@ -645,6 +719,7 @@ async fn search(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let brain = lock_brain(&state);
     let filter = SearchFilter {
         project: req.project,
@@ -677,6 +752,7 @@ async fn search_index_handler(
 ) -> Result<Json<SearchIndexResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let brain = lock_brain(&state);
     let filter = SearchFilter {
         project: req.project,
@@ -712,6 +788,7 @@ async fn get_observations_handler(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let brain = lock_brain(&state);
     let refs: Vec<&str> = req.ids.iter().map(String::as_str).collect();
     let mems = brain.get_memories_by_ids(&refs).map_err(internal_err)?;
@@ -778,6 +855,7 @@ async fn get_episode_handler(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let brain = lock_brain(&state);
     let mems = brain
         .get_memories_by_ids(&[q.id.as_str()])
@@ -808,6 +886,7 @@ async fn entities_handler(
 ) -> Result<Json<EntitiesResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let memory_id = require_memory_id(q.memory_id)?;
     let brain = lock_brain(&state);
     let rows = brain
@@ -828,6 +907,7 @@ async fn link_entities_handler(
 ) -> Result<Json<LinkEntitiesResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let linked = if req.entities.is_empty() {
         0
     } else {
@@ -847,6 +927,7 @@ async fn neighbors_handler(
 ) -> Result<Json<NeighborsResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let memory_id = require_memory_id(q.memory_id)?;
     let brain = lock_brain(&state);
     let ids = brain
@@ -892,6 +973,7 @@ async fn linked_handler(
 ) -> Result<Json<LinkedResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let brain = lock_brain(&state);
     let (rows, entity_counts) = brain.list_linked_graph().map_err(brain_err)?;
     let memories = rows
@@ -929,6 +1011,7 @@ async fn timeline_handler(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let brain = lock_brain(&state);
     let rows = brain
         .timeline_around(&req.anchor_id, req.before, req.after)
@@ -974,6 +1057,7 @@ async fn feedback(
 ) -> Result<Json<FeedbackResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let event_type = parse_feedback_event_type(&req.event_type)
         .ok_or_else(|| bad_request("invalid event_type"))?;
     let source = req
@@ -1018,6 +1102,7 @@ async fn list_memories(
 ) -> Result<Json<ListResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
 
     let type_filter = q
         .memory_type
@@ -1094,6 +1179,7 @@ async fn delete_memories(
 ) -> Result<Json<DeleteResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     if req.ids.is_empty() {
         return Err(bad_request("ids must not be empty"));
     }
@@ -1118,6 +1204,7 @@ async fn reflect(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     let brain = state.brain.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
         let brain = brain.lock().unwrap_or_else(|p| p.into_inner());
@@ -1153,6 +1240,7 @@ async fn patch_memory(
 ) -> Result<Json<PatchMemoryResponse>, (StatusCode, Json<ApiError>)> {
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers)?;
+    reject_if_switching(&state)?;
     if req.salience.is_none() {
         return Err(bad_request("no patchable fields provided"));
     }
@@ -1175,10 +1263,322 @@ async fn patch_memory(
     Ok(Json(PatchMemoryResponse { updated }))
 }
 
-fn open_brain_with_tx(memory_tx: &broadcast::Sender<brain::MemoryEvent>) -> Result<Brain, brain::BrainError> {
-    let config: BrainConfig = brain_config_from_env();
+fn reject_if_switching(state: &AppState) -> Result<(), (StatusCode, Json<ApiError>)> {
+    if state.switching.load(Ordering::SeqCst) {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiError {
+                error: "switching instance".into(),
+            }),
+        ));
+    }
+    Ok(())
+}
+
+fn conflict(msg: impl Into<String>) -> (StatusCode, Json<ApiError>) {
+    (
+        StatusCode::CONFLICT,
+        Json(ApiError { error: msg.into() }),
+    )
+}
+
+/// Maps `instances` module errors that represent bad input (create/patch):
+/// "instance not found: …" → 404, anything else (e.g. "name required") → 400.
+fn map_instance_err(msg: String) -> (StatusCode, Json<ApiError>) {
+    if msg.starts_with("instance not found") {
+        not_found(msg)
+    } else {
+        bad_request(&msg)
+    }
+}
+
+/// Maps `instances` module errors that represent state conflicts
+/// (archive/delete/switch guards): "instance not found: …" → 404, else 409.
+fn map_instance_conflict_err(msg: String) -> (StatusCode, Json<ApiError>) {
+    if msg.starts_with("instance not found") {
+        not_found(msg)
+    } else {
+        conflict(msg)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateInstanceRequest {
+    name: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    tags: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PatchInstanceRequest {
+    name: Option<String>,
+    description: Option<String>,
+    tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct InstanceListQuery {
+    #[serde(default)]
+    include_archived: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct InstanceListItem {
+    #[serde(flatten)]
+    record: instances::InstanceRecord,
+    /// Best-effort; `null` if we couldn't cheaply open the DB to count.
+    memory_count: Option<usize>,
+}
+
+async fn list_instances(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<InstanceListQuery>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers)?;
+    let include_archived = q.include_archived.as_deref() == Some("1");
+    let (active_id, records) = {
+        let reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+        let records: Vec<instances::InstanceRecord> = reg
+            .instances
+            .iter()
+            .filter(|i| include_archived || !i.archived)
+            .cloned()
+            .collect();
+        (reg.active_id.clone(), records)
+    };
+    // Active instance's count is cheap (already-open Brain); other instances
+    // are opened+closed just to count rows — best-effort, never fails the list.
+    let active_count = {
+        let brain = lock_brain(&state);
+        brain.get_stats().ok().map(|s| s.total_memories)
+    };
+    let items: Vec<InstanceListItem> = records
+        .into_iter()
+        .map(|record| {
+            let memory_count = if record.id == active_id {
+                active_count
+            } else {
+                MetadataStore::open(&record.db_path)
+                    .ok()
+                    .and_then(|store| store.count_memories().ok())
+            };
+            InstanceListItem { record, memory_count }
+        })
+        .collect();
+    log_request("GET", "/v1/instances", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({
+        "active_id": active_id,
+        "instances": items,
+    })))
+}
+
+async fn create_instance_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<CreateInstanceRequest>,
+) -> Result<Json<instances::InstanceRecord>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers)?;
+    let mut reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+    let record = instances::create_instance(
+        &mut reg,
+        &req.name,
+        &req.description,
+        req.tags,
+        &state.instances_root,
+    )
+    .map_err(map_instance_err)?;
+    instances::save_registry(&state.registry_path, &reg).map_err(internal_err)?;
+    log_request("POST", "/v1/instances", StatusCode::OK, start);
+    Ok(Json(record))
+}
+
+async fn patch_instance_handler(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<PatchInstanceRequest>,
+) -> Result<Json<instances::InstanceRecord>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers)?;
+    let mut reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+    let record = instances::patch_instance(&mut reg, &id, req.name, req.description, req.tags)
+        .map_err(map_instance_err)?
+        .clone();
+    instances::save_registry(&state.registry_path, &reg).map_err(internal_err)?;
+    log_request("PATCH", "/v1/instances/:id", StatusCode::OK, start);
+    Ok(Json(record))
+}
+
+async fn archive_instance(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<instances::InstanceRecord>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers)?;
+    let mut reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+    let active_id = reg.active_id.clone();
+    instances::set_archived(&mut reg, &id, true, &active_id).map_err(map_instance_conflict_err)?;
+    instances::save_registry(&state.registry_path, &reg).map_err(internal_err)?;
+    let record = instances::get(&reg, &id)
+        .cloned()
+        .ok_or_else(|| not_found(format!("instance not found: {id}")))?;
+    log_request("POST", "/v1/instances/:id/archive", StatusCode::OK, start);
+    Ok(Json(record))
+}
+
+async fn unarchive_instance(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<instances::InstanceRecord>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers)?;
+    let mut reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+    let active_id = reg.active_id.clone();
+    instances::set_archived(&mut reg, &id, false, &active_id).map_err(map_instance_conflict_err)?;
+    instances::save_registry(&state.registry_path, &reg).map_err(internal_err)?;
+    let record = instances::get(&reg, &id)
+        .cloned()
+        .ok_or_else(|| not_found(format!("instance not found: {id}")))?;
+    log_request("POST", "/v1/instances/:id/unarchive", StatusCode::OK, start);
+    Ok(Json(record))
+}
+
+async fn delete_instance_handler(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers)?;
+    let removed = {
+        let mut reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+        let active_id = reg.active_id.clone();
+        let removed = instances::delete_instance(&mut reg, &id, &active_id)
+            .map_err(map_instance_conflict_err)?;
+        instances::save_registry(&state.registry_path, &reg).map_err(internal_err)?;
+        removed
+    };
+    if let Err(e) = instances::remove_instance_files(&removed, &state.instances_root) {
+        eprintln!(
+            "[BRAIN API] remove_instance_files failed for {}: {e}",
+            removed.id
+        );
+    }
+    log_request("DELETE", "/v1/instances/:id", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({ "deleted": removed.id })))
+}
+
+/// Switch the active Brain to another instance. Never drops the current
+/// Brain until the new one has opened successfully — on failure the previous
+/// instance stays live and `active_id`/`active_db_path` are left untouched.
+async fn switch_instance(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers)?;
+
+    let already_active = {
+        let reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+        reg.active_id == id
+    };
+    if already_active {
+        let brain = lock_brain(&state);
+        let stats = stats_json(&brain)?;
+        drop(brain);
+        log_request("POST", "/v1/instances/:id/switch", StatusCode::OK, start);
+        return Ok(Json(serde_json::json!({ "active_id": id, "stats": stats })));
+    }
+
+    if state.switching.swap(true, Ordering::SeqCst) {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiError {
+                error: "switching instance".into(),
+            }),
+        ));
+    }
+
+    let db_path = {
+        let reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+        match instances::get(&reg, &id) {
+            None => {
+                state.switching.store(false, Ordering::SeqCst);
+                return Err(not_found(format!("instance not found: {id}")));
+            }
+            Some(record) if record.archived => {
+                state.switching.store(false, Ordering::SeqCst);
+                return Err(conflict("cannot activate an archived instance"));
+            }
+            Some(record) => record.db_path.clone(),
+        }
+    };
+
+    let memory_tx = state.memory_tx.clone();
+    let open_path = db_path.clone();
+    let opened = tokio::task::spawn_blocking(move || open_brain_at(&open_path, &memory_tx)).await;
+
+    let new_brain = match opened {
+        Ok(Ok(brain)) => brain,
+        Ok(Err(e)) => {
+            state.switching.store(false, Ordering::SeqCst);
+            return Err(internal_err(e));
+        }
+        Err(e) => {
+            state.switching.store(false, Ordering::SeqCst);
+            return Err(internal_err(format!("switch task join failed: {e}")));
+        }
+    };
+
+    // Only now that the replacement Brain opened successfully do we drop the
+    // previous one, by overwriting it behind the mutex.
+    {
+        let mut brain_guard = lock_brain(&state);
+        *brain_guard = new_brain;
+    }
+    *state.active_db_path.lock().unwrap_or_else(|p| p.into_inner()) = db_path.clone();
+    // Persist active_id only after the swap succeeded — a crash between the
+    // swap and this write just means a restart resumes the previous active_id,
+    // which is safe (the DB files themselves are untouched either way).
+    {
+        let mut reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+        if let Err(e) = instances::set_active(&mut reg, &id) {
+            eprintln!("[BRAIN API] failed to set active_id after switch: {e}");
+        }
+        if let Err(e) = instances::save_registry(&state.registry_path, &reg) {
+            eprintln!("[BRAIN API] failed to persist active_id after switch: {e}");
+        }
+    }
+    state.switching.store(false, Ordering::SeqCst);
+
+    let brain = lock_brain(&state);
+    let stats = stats_json(&brain)?;
+    drop(brain);
+    log_request("POST", "/v1/instances/:id/switch", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({ "active_id": id, "stats": stats })))
+}
+
+/// Open a Brain against an explicit `db_path`, overriding whatever
+/// `BRAIN_DB_PATH` says. All other config (embedder, hybrid alpha, reflection
+/// flags) still comes from the environment. This is the primary entry point
+/// for both boot and instance switching (Task 4/5).
+fn open_brain_at(
+    db_path: &str,
+    memory_tx: &broadcast::Sender<brain::MemoryEvent>,
+) -> Result<Brain, brain::BrainError> {
+    let mut config = brain_config_from_env();
+    config.db_path = db_path.to_string();
     let embedder = make_embedder()?;
-    Brain::open_with_event_bus(config, embedder, Some(memory_tx.clone()))
+    let brain = Brain::open_with_event_bus(config, embedder, Some(memory_tx.clone()))?;
+    attach_llm(brain)
 }
 
 /// Lock the shared Brain, recovering from a poisoned mutex (a prior panic
@@ -1187,8 +1587,10 @@ fn lock_brain(state: &AppState) -> std::sync::MutexGuard<'_, Brain> {
     state.brain.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-fn open_brain_with_llm_tx(memory_tx: &broadcast::Sender<brain::MemoryEvent>) -> Result<Brain, brain::BrainError> {
-    let brain = open_brain_with_tx(memory_tx)?;
+/// Wire up an LLM client per `BRAIN_LLM_PROVIDER` (falling back to whichever
+/// API key is present). Extracted so both `open_brain_at` and any future
+/// per-instance open path share the same provider selection logic.
+fn attach_llm(brain: Brain) -> Result<Brain, brain::BrainError> {
     let provider = std::env::var("BRAIN_LLM_PROVIDER")
         .unwrap_or_else(|_| "auto".to_string())
         .to_lowercase();
@@ -1426,13 +1828,28 @@ mod tests {
     fn test_state() -> (AppState, std::sync::MutexGuard<'static, ()>) {
         let guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("BRAIN_EMBEDDER", "mock");
+        // open_brain_at() attaches an LLM client per BRAIN_LLM_PROVIDER/*_API_KEY.
+        // Force "no client" so tests stay hermetic and don't depend on (or pay
+        // network calls for) whatever LLM env vars happen to be set on the host.
+        std::env::set_var("BRAIN_LLM_PROVIDER", "none");
+        std::env::remove_var("OPENROUTER_API_KEY");
+        std::env::remove_var("ANTHROPIC_API_KEY");
         let dir = tempfile::tempdir().expect("tempdir");
         let base = dir.keep();
-        std::env::set_var("BRAIN_DB_PATH", base.join("brain.db").to_string_lossy().as_ref());
+        let db_path = base.join("brain.db");
+        std::env::set_var("BRAIN_DB_PATH", db_path.to_string_lossy().as_ref());
         let (memory_tx, _) = broadcast::channel(64);
         let brain = Arc::new(Mutex::new(
-            open_brain_with_tx(&memory_tx).expect("open brain in test"),
+            open_brain_at(&db_path.to_string_lossy(), &memory_tx).expect("open brain in test"),
         ));
+
+        // Bootstrap a throwaway registry under the same tempdir so tests never
+        // touch the real `~/.brain/instances.json`.
+        let registry_path = base.join("instances.json");
+        let instances_root = base.join("instances");
+        let registry = brain::instances::load_or_bootstrap(&registry_path, &db_path)
+            .expect("bootstrap test registry");
+
         let state = AppState {
             bind_addr: "127.0.0.1:8787".to_string(),
             settings: ApiSettings {
@@ -1444,6 +1861,11 @@ mod tests {
             limiter: Arc::new(Mutex::new(HashMap::new())),
             memory_tx,
             brain,
+            registry_path,
+            instances_root,
+            active_db_path: Arc::new(Mutex::new(db_path.to_string_lossy().into_owned())),
+            registry: Arc::new(Mutex::new(registry)),
+            switching: Arc::new(AtomicBool::new(false)),
         };
         (state, guard)
     }
@@ -1510,6 +1932,219 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    async fn body_json(res: axum::response::Response) -> serde_json::Value {
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .expect("read response body");
+        serde_json::from_slice(&bytes).expect("response body is valid JSON")
+    }
+
+    fn get_request(uri: &str) -> axum::http::Request<Body> {
+        axum::http::Request::builder()
+            .uri(uri)
+            .header("x-api-key", "secret")
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    fn method_request(method: &str, uri: &str) -> axum::http::Request<Body> {
+        axum::http::Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("x-api-key", "secret")
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    fn json_request(method: &str, uri: &str, body: serde_json::Value) -> axum::http::Request<Body> {
+        axum::http::Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("x-api-key", "secret")
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn bootstrap_list_contains_main() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+
+        let res = app.oneshot(get_request("/v1/instances")).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = body_json(res).await;
+        assert_eq!(body["active_id"], "main");
+        assert!(body["instances"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["id"] == "main"));
+    }
+
+    #[tokio::test]
+    async fn create_grows_list_and_creates_db_file() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+
+        let create_res = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/v1/instances",
+                serde_json::json!({"name": "Biz", "description": "work", "tags": ["work"]}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(create_res.status(), StatusCode::OK);
+        let created = body_json(create_res).await;
+        assert_eq!(created["id"], "biz");
+        let db_path = created["db_path"].as_str().unwrap().to_string();
+        assert!(std::path::Path::new(&db_path).is_file());
+
+        let list_res = app.oneshot(get_request("/v1/instances")).await.unwrap();
+        let body = body_json(list_res).await;
+        assert_eq!(body["instances"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn switch_to_new_instance_and_back() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+
+        let create_res = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/v1/instances",
+                serde_json::json!({"name": "Empty"}),
+            ))
+            .await
+            .unwrap();
+        let created = body_json(create_res).await;
+        let id = created["id"].as_str().unwrap().to_string();
+
+        let switch_res = app
+            .clone()
+            .oneshot(method_request(
+                "POST",
+                &format!("/v1/instances/{id}/switch"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(switch_res.status(), StatusCode::OK);
+        let switch_body = body_json(switch_res).await;
+        assert_eq!(switch_body["active_id"], id);
+        assert_eq!(switch_body["stats"]["total_memories"], 0);
+
+        let stats_res = app.clone().oneshot(get_request("/stats")).await.unwrap();
+        let stats_body = body_json(stats_res).await;
+        assert_eq!(stats_body["total_memories"], 0);
+        assert_eq!(stats_body["active_instance"]["id"], id);
+
+        let back_res = app
+            .clone()
+            .oneshot(method_request("POST", "/v1/instances/main/switch"))
+            .await
+            .unwrap();
+        assert_eq!(back_res.status(), StatusCode::OK);
+
+        let stats_res2 = app.oneshot(get_request("/stats")).await.unwrap();
+        let stats_body2 = body_json(stats_res2).await;
+        assert_eq!(stats_body2["active_instance"]["id"], "main");
+    }
+
+    #[tokio::test]
+    async fn search_returns_503_while_switching() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        state.switching.store(true, Ordering::SeqCst);
+        let app = build_router(state);
+
+        let res = app
+            .oneshot(json_request(
+                "POST",
+                "/search",
+                serde_json::json!({"query": "test"}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn delete_requires_archived_and_not_active() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+
+        let del_active = app
+            .clone()
+            .oneshot(method_request("DELETE", "/v1/instances/main"))
+            .await
+            .unwrap();
+        assert_eq!(del_active.status(), StatusCode::CONFLICT);
+
+        let create_res = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/v1/instances",
+                serde_json::json!({"name": "Temp"}),
+            ))
+            .await
+            .unwrap();
+        let created = body_json(create_res).await;
+        let id = created["id"].as_str().unwrap().to_string();
+
+        let del_unarchived = app
+            .clone()
+            .oneshot(method_request("DELETE", &format!("/v1/instances/{id}")))
+            .await
+            .unwrap();
+        assert_eq!(del_unarchived.status(), StatusCode::CONFLICT);
+
+        let archive_res = app
+            .clone()
+            .oneshot(method_request(
+                "POST",
+                &format!("/v1/instances/{id}/archive"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(archive_res.status(), StatusCode::OK);
+
+        let del_res = app
+            .oneshot(method_request("DELETE", &format!("/v1/instances/{id}")))
+            .await
+            .unwrap();
+        assert_eq!(del_res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn patch_renames_name_only() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+
+        let res = app
+            .oneshot(json_request(
+                "PATCH",
+                "/v1/instances/main",
+                serde_json::json!({"name": "Casa"}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = body_json(res).await;
+        assert_eq!(body["name"], "Casa");
+        assert_eq!(body["id"], "main");
+        assert_eq!(body["slug"], "main");
     }
 
     #[tokio::test]
