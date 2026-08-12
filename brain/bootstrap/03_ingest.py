@@ -34,6 +34,7 @@ def run():
             project=s.get("project") or "general",
             session_id=s.get("session_id"),
             source="cursor_history",
+            auto_entities=False,  # bulk ingest: backfill_entities.py links these
         )
         saved += 1
 

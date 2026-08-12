@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getLinked, getObservations } from '../api'
+import { getLinked, getNeighbors, getObservations } from '../api'
 import LinkedFloater from '../components/LinkedFloater'
 import LinkedGraph from '../components/LinkedGraph'
 import {
@@ -23,6 +23,8 @@ export default function Linked() {
   const [listPin, setListPin] = useState(false)
   const [floaterMode, setFloaterMode] = useState<'list' | 'detail'>('detail')
   const [fullContent, setFullContent] = useState<string | null>(null)
+  const [neighborCount, setNeighborCount] = useState<number | null>(null)
+  const [entitiesOpen, setEntitiesOpen] = useState(true)
 
   const load = useCallback(async () => {
     setError(null)
@@ -75,13 +77,20 @@ export default function Linked() {
     let cancelled = false
     async function hydrate() {
       setFullContent(null)
+      setNeighborCount(null)
       if (!selected || selected.kind !== 'memory') return
-      try {
-        const obs = await getObservations([selected.id])
-        const row = obs?.results?.[0]
-        if (!cancelled && row?.content) setFullContent(String(row.content))
-      } catch {
-        /* keep snippet */
+      // Settled, not all: a failed neighbor lookup must not drop the content.
+      const [obsRes, neighRes] = await Promise.allSettled([
+        getObservations([selected.id]),
+        getNeighbors(selected.id),
+      ])
+      if (cancelled) return
+      if (obsRes.status === 'fulfilled') {
+        const row = obsRes.value?.results?.[0]
+        if (row?.content) setFullContent(String(row.content))
+      }
+      if (neighRes.status === 'fulfilled') {
+        setNeighborCount((neighRes.value?.ids ?? []).length)
       }
     }
     void hydrate()
@@ -143,81 +152,105 @@ export default function Linked() {
     setEgoFocusId(null)
   }
 
+  const entityCount = data?.entities?.length ?? 0
+  const pillClass = (active: boolean) =>
+    `rounded px-2 py-1 font-mono text-xs ${
+      active ? 'bg-zinc-200 text-black' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+    }`
+
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-900 px-4 py-3">
-        <div className="mr-2">
-          <h2 className="text-sm font-semibold text-white">Linked</h2>
-          <p className="text-[11px] text-zinc-500">
-            {data?.memories?.length ?? '—'} memories · {data?.entities?.length ?? '—'} entities
-            {graphMode === 'ego' ? ' · ego' : ''}
-          </p>
-        </div>
+      <div className="shrink-0 border-b border-zinc-900">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+          <div className="mr-2">
+            <h2 className="text-sm font-semibold text-white">Linked</h2>
+            <p className="text-[11px] text-zinc-500">
+              {data?.memories?.length ?? '—'} memories · {entityCount || '—'} entities
+              {graphMode === 'ego' ? ' · ego' : ''}
+            </p>
+          </div>
 
-        <button
-          type="button"
-          onClick={() => setEntityFilter('all')}
-          className={`rounded px-2 py-1 font-mono text-xs ${
-            entityFilter === 'all'
-              ? 'bg-zinc-200 text-black'
-              : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          all ({data?.memories?.length ?? 0})
-        </button>
-        {(data?.entities ?? []).map((e) => (
-          <button
-            key={e.id}
-            type="button"
-            onClick={() => setEntityFilter(e.name)}
-            className={`rounded px-2 py-1 font-mono text-xs ${
-              entityFilter === e.name
-                ? 'bg-zinc-200 text-black'
-                : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            {e.name} ({e.memory_count})
-          </button>
-        ))}
-
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setListPin(true)
-              setFloaterMode('list')
-              setFloaterOpen(true)
-            }}
-            className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-white"
-          >
-            List
-          </button>
-          {graphMode === 'ego' ? (
+          {!entitiesOpen && entityFilter !== 'all' && (
             <button
               type="button"
-              onClick={backToFull}
-              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-white"
+              onClick={() => setEntityFilter('all')}
+              className={pillClass(true)}
+              title="Clear entity filter"
             >
-              Back to full
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={!selectedId}
-              onClick={() => selectedId && enterEgo(selectedId)}
-              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-white disabled:opacity-40"
-            >
-              Focus
+              {entityFilter} ×
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-white"
-          >
-            Refresh
-          </button>
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEntitiesOpen((v) => !v)}
+              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-white"
+              aria-pressed={entitiesOpen}
+              aria-expanded={entitiesOpen}
+            >
+              {entitiesOpen ? 'Hide entities' : `Entities (${entityCount})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setListPin(true)
+                setFloaterMode('list')
+                setFloaterOpen(true)
+              }}
+              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-white"
+            >
+              List
+            </button>
+            {graphMode === 'ego' ? (
+              <button
+                type="button"
+                onClick={backToFull}
+                className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-white"
+              >
+                Back to full
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!selectedId}
+                onClick={() => selectedId && enterEgo(selectedId)}
+                className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-white disabled:opacity-40"
+              >
+                Focus
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-white"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
+
+        {entitiesOpen && (
+          <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto px-4 pb-3">
+            <button
+              type="button"
+              onClick={() => setEntityFilter('all')}
+              className={pillClass(entityFilter === 'all')}
+            >
+              all ({data?.memories?.length ?? 0})
+            </button>
+            {(data?.entities ?? []).map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => setEntityFilter(e.name)}
+                className={pillClass(entityFilter === e.name)}
+              >
+                {e.name} ({e.memory_count})
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && <p className="px-4 py-2 text-sm text-red-400">{error}</p>}
@@ -249,6 +282,7 @@ export default function Linked() {
             listMemories={listMemories}
             selected={selected}
             fullContent={fullContent}
+            neighborCount={neighborCount}
             onClose={() => {
               setFloaterOpen(false)
               setListPin(false)

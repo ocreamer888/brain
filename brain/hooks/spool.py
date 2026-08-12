@@ -135,7 +135,10 @@ def replay_once() -> ReplayStats:
     replayed = 0
 
     for rec in records:
-        payload = rec.get("payload", {})
+        # D5: spooled payloads predate extraction; re-extracting on every retry
+        # (up to MAX_ATTEMPTS) would burn an LLM call per attempt. The backfill
+        # picks these up instead.
+        payload = {**rec.get("payload", {}), "auto_entities": False}
         attempts = int(rec.get("attempts", 0))
         try:
             save_memory_with_status(**payload)

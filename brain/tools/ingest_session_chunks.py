@@ -96,7 +96,7 @@ def ingest_file(path: Path, dry_run: bool = False) -> int:
         print(f"[chunks] {path.name}: {len(chunks)} chunks (dry-run, not sent)")
         return len(chunks)
     for i in range(0, len(chunks), BATCH_SIZE):
-        save_memory_batch(chunks[i : i + BATCH_SIZE])
+        save_memory_batch(chunks[i : i + BATCH_SIZE], default_auto_entities=False)
     return len(chunks)
 
 

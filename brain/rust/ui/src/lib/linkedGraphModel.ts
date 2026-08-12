@@ -8,7 +8,6 @@ export type LinkedMemoryItem = {
   project: string
   timestamp: string
   entities: LinkedEntityRef[]
-  neighbor_ids: string[]
 }
 
 export type LinkedApiResponse = {
@@ -24,7 +23,6 @@ export type MemoryGraphNode = {
   project: string
   timestamp: string
   entityIds: string[]
-  neighbor_ids: string[]
 }
 
 export type EntityGraphNode = {
@@ -56,7 +54,6 @@ export function buildBipartiteGraph(data: LinkedApiResponse): {
     project: m.project,
     timestamp: m.timestamp,
     entityIds: (m.entities ?? []).map((e) => e.id),
-    neighbor_ids: m.neighbor_ids ?? [],
   }))
 
   const entityNodes: EntityGraphNode[] = entities.map((e) => ({

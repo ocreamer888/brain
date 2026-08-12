@@ -189,6 +189,7 @@ def _save_fact(
         salience=draft.salience,
         derived_from=draft.derived_from or None,
         entities=draft.entities or None,
+        auto_entities=False,
     )
 
 

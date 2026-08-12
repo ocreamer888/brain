@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.brain.api</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/abundancia888/Documents/Code/brain/brain/rust/target/release/brain_api</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/abundancia888</string>
+		<key>BRAIN_DB_PATH</key>
+		<string>/Users/abundancia888/Documents/Code/brain/brain/rust/brain.db</string>
+		<key>BRAIN_ONNX_PATH</key>
+		<string>/Users/abundancia888/Documents/Code/brain/brain/rust/models/all-mpnet-base-v2-onnx</string>
+		<key>ORT_DYLIB_PATH</key>
+		<string>/Users/abundancia888/Documents/Code/brain/.venv/lib/python3.14/site-packages/onnxruntime/capi/libonnxruntime.1.28.0.dylib</string>
+		<key>BRAIN_API_BIND</key>
+		<string>0.0.0.0:8787</string>
+		<key>BRAIN_API_KEY</key>
+		<string>local-dev-key</string>
+		<key>BRAIN_API_AUTH_REQUIRED</key>
+		<string>0</string>
+		<key>BRAIN_LLM_PROVIDER</key>
+		<string>ollama</string>
+		<key>OLLAMA_URL</key>
+		<string>http://127.0.0.1:11434</string>
+		<key>OLLAMA_MODEL</key>
+		<string>qwen3-coder:30b</string>
+	</dict>
+	<key>WorkingDirectory</key>
+	<string>/Users/abundancia888/Documents/Code/brain/brain/rust</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Users/abundancia888/Library/Logs/brain_api.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/abundancia888/Library/Logs/brain_api.err</string>
+</dict>
+</plist>

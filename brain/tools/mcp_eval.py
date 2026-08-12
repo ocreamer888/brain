@@ -6,8 +6,11 @@ Each gold entry: {"query": "...", "gold_memory_id": "uuid", "k": 10, "descriptio
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any, Callable
+
+_DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "brain" / "rust" / "brain.db"
 
 
 def load_gold(path: Path) -> list[dict[str, Any]]:
@@ -66,17 +69,43 @@ def offline_rrf_p1(db_path: Path, gold_path: Path, rrf_k: int = 60) -> float | N
     return round(hits / len(gold), 4)
 
 
+def _load_corpus_ids(db_path: Path) -> set[str] | None:
+    """Return the set of memory ids present in the corpus, or None if unreadable.
+
+    None means "no filtering" (caller falls back to pre-fix behavior) rather
+    than raising, so a missing/locked db never crashes an eval run.
+    """
+    try:
+        uri = f"file:{db_path}?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=5)
+        try:
+            return {str(r[0]) for r in conn.execute("SELECT id FROM memories")}
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+
+
 def run_mcp_eval(
     gold_path: Path,
     n: int = 10,
     baseline_offline_p1: float | None = None,
     search_fn: Callable[[str, int], list[dict[str, Any]]] | None = None,
+    db_path: Path | None = None,
+    corpus_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """Evaluate retrieval via the MCP/API search path.
 
-    Returns a dict with keys: status, n_queries, precision_at_1, mrr, gap_vs_offline_rrf.
-    gap_vs_offline_rrf compares the live path to plain offline RRF on the SAME
-    queries (positive = live path beats naive RRF). status is 'ok'|'skipped'|'error'.
+    Returns a dict with keys: status, n_queries, precision_at_1, mrr, gap_vs_offline_rrf,
+    n_skipped_dangling. gap_vs_offline_rrf compares the live path to plain offline RRF
+    on the SAME queries (positive = live path beats naive RRF). status is
+    'ok'|'skipped'|'error'.
+
+    Gold entries whose gold_memory_id is absent from the corpus are skipped
+    (not counted in n_valid) rather than scored as a guaranteed miss —
+    otherwise a dangling gold row silently deflates precision_at_1.
+    corpus_ids can be injected directly (tests); otherwise it is loaded from
+    db_path (default: brain/rust/brain.db in this repo).
     """
     from brain.api_client import BrainApiError
 
@@ -94,14 +123,22 @@ def run_mcp_eval(
     if not gold:
         return {"status": "error", "reason": "gold file is empty"}
 
+    if corpus_ids is None:
+        corpus_ids = _load_corpus_ids(db_path or _DEFAULT_DB_PATH)
+
     hits_at_1 = 0
     mrr_sum = 0.0
     n_valid = 0
+    n_skipped_dangling = 0
 
     for entry in gold:
         query = str(entry["query"])
         gold_id = str(entry["gold_memory_id"])
         k = int(entry.get("k", n))
+
+        if corpus_ids is not None and gold_id not in corpus_ids:
+            n_skipped_dangling += 1
+            continue
 
         try:
             results = search_fn(query, k)
@@ -133,6 +170,7 @@ def run_mcp_eval(
         "precision_at_1": round(p1, 4),
         "mrr": round(mrr, 4),
         "gap_vs_offline_rrf": None,
+        "n_skipped_dangling": n_skipped_dangling,
     }
 
     if baseline_offline_p1 is not None:

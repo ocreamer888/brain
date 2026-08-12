@@ -1,5 +1,5 @@
 #!/bin/bash
-# Claude Code / Cursor hook launcher — Shared/Code brain → local brain_api.
+# Claude Code / Cursor hook launcher — this checkout → local brain_api.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -24,8 +24,6 @@ if [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/bin/python" ]]; then
   PYTHON="${VIRTUAL_ENV}/bin/python"
 elif [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
   PYTHON="${REPO_ROOT}/.venv/bin/python"
-elif [[ -x "${HOME}/Documents/AI/.venv/bin/python" ]]; then
-  PYTHON="${HOME}/Documents/AI/.venv/bin/python"
 else
   PYTHON="$(command -v python3)"
 fi

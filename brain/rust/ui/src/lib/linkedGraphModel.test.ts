@@ -19,7 +19,6 @@ const sample: LinkedApiResponse = {
         { id: 'e-react', name: 'React' },
         { id: 'e-vite', name: 'Vite' },
       ],
-      neighbor_ids: ['m2'],
     },
     {
       id: 'm2',
@@ -28,7 +27,6 @@ const sample: LinkedApiResponse = {
       project: 'brain',
       timestamp: '2026-07-02T00:00:00Z',
       entities: [{ id: 'e-react', name: 'React' }],
-      neighbor_ids: ['m1'],
     },
     {
       id: 'm3',
@@ -40,7 +38,6 @@ const sample: LinkedApiResponse = {
         { id: 'e-vite', name: 'Vite' },
         { id: 'e-sql', name: 'SQLite' },
       ],
-      neighbor_ids: ['m1'],
     },
   ],
   entities: [

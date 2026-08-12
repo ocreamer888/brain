@@ -85,7 +85,7 @@ def run_with_dirs(
         nonlocal saved_count, pending_items, pending_ids, processed
         if not pending_items:
             return
-        res = save_memory_batch(pending_items)
+        res = save_memory_batch(pending_items, default_auto_entities=False)
         failed_idx = {
             int(r.get("index", -1))
             for r in res.get("results", [])

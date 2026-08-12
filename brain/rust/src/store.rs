@@ -55,7 +55,6 @@ pub struct LinkedMemoryRow {
     pub project: String,
     pub timestamp: String,
     pub entities: Vec<(String, String)>,
-    pub neighbor_ids: Vec<String>,
 }
 
 impl MetadataStore {
@@ -958,22 +957,28 @@ impl MetadataStore {
             .map_err(|e| BrainError::Database(e.to_string()))
     }
 
-    /// All memories that have ≥1 entity edge, with entity names and neighbor IDs.
+    /// All memories that have ≥1 entity edge, with their entity names.
+    ///
+    /// Single query, no per-row sub-queries. `m.id` follows `m.timestamp DESC`
+    /// in ORDER BY so timestamp ties cannot interleave two memories' rows —
+    /// without it the consecutive-run folding below would silently split a
+    /// memory into several entries. `e.name_normalized` is third to preserve
+    /// the per-memory entity ordering of `entities_for_memory`.
     pub fn list_linked_memories(
         &self,
     ) -> Result<Vec<LinkedMemoryRow>, BrainError> {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT m.id, m.content, m.type, m.project, m.timestamp
+                "SELECT m.id, substr(m.content, 1, 160), m.type, m.project, m.timestamp,
+                        e.id, e.name
                  FROM memories m
-                 WHERE EXISTS (
-                     SELECT 1 FROM edges e WHERE e.src_memory_id = m.id
-                 )
-                 ORDER BY m.timestamp DESC",
+                 JOIN edges x    ON x.src_memory_id = m.id
+                 JOIN entities e ON e.id = x.dst_entity_id
+                 ORDER BY m.timestamp DESC, m.id, e.name_normalized",
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
-        let mem_rows = stmt
+        let rows = stmt
             .query_map([], |r| {
                 Ok((
                     r.get::<_, String>(0)?,
@@ -981,28 +986,28 @@ impl MetadataStore {
                     r.get::<_, String>(2)?,
                     r.get::<_, String>(3)?,
                     r.get::<_, String>(4)?,
+                    r.get::<_, String>(5)?,
+                    r.get::<_, String>(6)?,
                 ))
             })
-            .map_err(|e| BrainError::Database(e.to_string()))?
-            .collect::<Result<Vec<_>, _>>()
             .map_err(|e| BrainError::Database(e.to_string()))?;
 
-        let mut out = Vec::with_capacity(mem_rows.len());
-        for (id, content, type_str, project, timestamp) in mem_rows {
-            let memory_type: MemoryType = serde_json::from_str(&type_str)
-                .unwrap_or(MemoryType::Conversation);
-            let entities = self.entities_for_memory(&id)?;
-            let neighbor_ids = self.neighbor_memory_ids(&[id.clone()], true)?;
-            let snippet: String = content.chars().take(160).collect();
-            out.push(LinkedMemoryRow {
-                id,
-                snippet,
-                memory_type,
-                project,
-                timestamp,
-                entities,
-                neighbor_ids,
-            });
+        let mut out: Vec<LinkedMemoryRow> = Vec::new();
+        for row in rows {
+            let (id, snippet, type_str, project, timestamp, entity_id, entity_name) =
+                row.map_err(|e| BrainError::Database(e.to_string()))?;
+            match out.last_mut() {
+                Some(last) if last.id == id => last.entities.push((entity_id, entity_name)),
+                _ => out.push(LinkedMemoryRow {
+                    id,
+                    snippet,
+                    memory_type: serde_json::from_str(&type_str)
+                        .unwrap_or(MemoryType::Conversation),
+                    project,
+                    timestamp,
+                    entities: vec![(entity_id, entity_name)],
+                }),
+            }
         }
         Ok(out)
     }
@@ -1032,10 +1037,19 @@ impl MetadataStore {
             .map_err(|e| BrainError::Database(e.to_string()))
     }
 
+    /// 1-hop neighbor memory ids that share an entity with any of `memory_ids`.
+    ///
+    /// `memory_type` / `project` are applied here rather than by the caller so
+    /// that a search filter is enforced *before* the caller's neighbor cap:
+    /// filtering after the cap would silently drop matching neighbors that the
+    /// cap happened to exclude. `m.type` is stored JSON-encoded (`"fact"`), so
+    /// the predicate compares against `serde_json::to_string`, not a bare name.
     pub fn neighbor_memory_ids(
         &self,
         memory_ids: &[String],
         exclude_superseded: bool,
+        memory_type: Option<&MemoryType>,
+        project: Option<&str>,
     ) -> Result<Vec<String>, BrainError> {
         if memory_ids.is_empty() {
             return Ok(vec![]);
@@ -1046,6 +1060,20 @@ impl MetadataStore {
         } else {
             ""
         };
+        let type_json = memory_type
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        let type_clause = if type_json.is_some() {
+            "AND m.type = ?"
+        } else {
+            ""
+        };
+        let project_clause = if project.is_some() {
+            "AND m.project = ?"
+        } else {
+            ""
+        };
         let sql = format!(
             "SELECT DISTINCT e2.src_memory_id
              FROM edges e1
@@ -1053,17 +1081,25 @@ impl MetadataStore {
              JOIN memories m ON m.id = e2.src_memory_id
              WHERE e1.src_memory_id IN ({placeholders})
                AND e2.src_memory_id NOT IN ({placeholders})
-               {superseded_clause}"
+               {superseded_clause}
+               {type_clause}
+               {project_clause}"
         );
         let mut stmt = self
             .conn
             .prepare(&sql)
             .map_err(|e| BrainError::Database(e.to_string()))?;
-        let params: Vec<&dyn rusqlite::ToSql> = memory_ids
+        let mut params: Vec<&dyn rusqlite::ToSql> = memory_ids
             .iter()
             .chain(memory_ids.iter())
             .map(|s| s as &dyn rusqlite::ToSql)
             .collect();
+        if let Some(t) = type_json.as_ref() {
+            params.push(t as &dyn rusqlite::ToSql);
+        }
+        if let Some(p) = project.as_ref() {
+            params.push(p as &dyn rusqlite::ToSql);
+        }
         let rows = stmt
             .query_map(params.as_slice(), |r| r.get::<_, String>(0))
             .map_err(|e| BrainError::Database(e.to_string()))?;
@@ -1703,7 +1739,7 @@ mod tests {
         let ents = store.entities_for_memory("f1").unwrap();
         assert_eq!(ents.len(), 2);
 
-        let neighbors = store.neighbor_memory_ids(&["f1".into()], true).unwrap();
+        let neighbors = store.neighbor_memory_ids(&["f1".into()], true, None, None).unwrap();
         assert!(neighbors.contains(&"f2".into()));
         assert!(!neighbors.contains(&"f3".into()));
         assert!(!neighbors.contains(&"f1".into()));
@@ -1726,8 +1762,144 @@ mod tests {
         }
         store.link_memory_entities("f1", &["X".into()]).unwrap();
         store.link_memory_entities("f2", &["X".into()]).unwrap();
-        let neighbors = store.neighbor_memory_ids(&["f1".into()], true).unwrap();
+        let neighbors = store.neighbor_memory_ids(&["f1".into()], true, None, None).unwrap();
         assert!(!neighbors.contains(&"f2".into()));
+    }
+
+    /// The `memory_type` / `project` predicates must compare against the
+    /// JSON-encoded `m.type` column and the raw project, and must combine.
+    #[test]
+    fn neighbor_memory_ids_applies_type_and_project_predicates() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        // (id, type, project) — all linked to the same entity as the seed.
+        let rows = [
+            ("f1", MemoryType::Fact, "p1"),          // seed
+            ("f2", MemoryType::Fact, "p1"),          // matches both predicates
+            ("f3", MemoryType::Solution, "p1"),      // wrong type
+            ("f4", MemoryType::Fact, "p2"),          // wrong project
+        ];
+        for (id, ty, project) in rows {
+            let mut meta = fact_metadata("ep-1");
+            meta.memory_type = ty;
+            meta.project = project.into();
+            store
+                .upsert_memory(&Memory {
+                    id: id.into(),
+                    content: format!("body {id}"),
+                    metadata: meta,
+                    embedding: None,
+                })
+                .unwrap();
+            store.link_memory_entities(id, &["X".into()]).unwrap();
+        }
+
+        let unfiltered = store.neighbor_memory_ids(&["f1".into()], true, None, None).unwrap();
+        assert_eq!(unfiltered.len(), 3, "control: all three neighbors visible");
+
+        let typed = store
+            .neighbor_memory_ids(&["f1".into()], true, Some(&MemoryType::Fact), None)
+            .unwrap();
+        assert!(!typed.contains(&"f3".into()), "type predicate must drop the Solution");
+        assert!(typed.contains(&"f2".into()) && typed.contains(&"f4".into()));
+
+        let scoped = store
+            .neighbor_memory_ids(&["f1".into()], true, Some(&MemoryType::Fact), Some("p1"))
+            .unwrap();
+        assert_eq!(scoped, vec!["f2".to_string()]);
+    }
+
+    /// Insert a linked memory with an explicit timestamp and body.
+    fn seed_linked(store: &MetadataStore, id: &str, secs: u32, content: &str, entities: &[&str]) {
+        let mut meta = fact_metadata("ep-1");
+        meta.timestamp = Utc.with_ymd_and_hms(2026, 4, 20, 0, 0, secs).unwrap();
+        store
+            .upsert_memory(&Memory {
+                id: id.into(),
+                content: content.into(),
+                metadata: meta,
+                embedding: None,
+            })
+            .unwrap();
+        let names: Vec<String> = entities.iter().map(|s| (*s).to_string()).collect();
+        store.link_memory_entities(id, &names).unwrap();
+    }
+
+    #[test]
+    fn list_linked_memories_groups_entities_per_memory() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        seed_linked(&store, "m1", 1, "one", &["Alpha", "Beta"]);
+        seed_linked(&store, "m2", 2, "two", &["Gamma"]);
+        // Unlinked memory must not appear at all.
+        seed_linked(&store, "m3", 3, "three", &[]);
+
+        let rows = store.list_linked_memories().unwrap();
+        assert_eq!(rows.len(), 2, "one row per memory, not per edge");
+        let m1 = rows.iter().find(|r| r.id == "m1").unwrap();
+        assert_eq!(m1.entities.len(), 2);
+        let m2 = rows.iter().find(|r| r.id == "m2").unwrap();
+        assert_eq!(m2.entities.len(), 1);
+        assert!(!rows.iter().any(|r| r.id == "m3"));
+    }
+
+    #[test]
+    fn list_linked_memories_orders_by_timestamp_desc() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        seed_linked(&store, "old", 1, "old", &["Alpha"]);
+        seed_linked(&store, "mid", 2, "mid", &["Beta"]);
+        seed_linked(&store, "new", 3, "new", &["Gamma"]);
+
+        let ids: Vec<String> = store
+            .list_linked_memories()
+            .unwrap()
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(ids, vec!["new", "mid", "old"]);
+    }
+
+    /// Fails if `m.id` is dropped from ORDER BY: tied timestamps let the two
+    /// memories' edge rows interleave and the consecutive-run folding splits
+    /// each memory into multiple entries.
+    #[test]
+    fn list_linked_memories_groups_across_timestamp_ties() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        // Same timestamp; entity names interleave alphabetically across the two
+        // memories so a name-first sort would break grouping.
+        seed_linked(&store, "aaa", 7, "first", &["Alpha", "Charlie"]);
+        seed_linked(&store, "bbb", 7, "second", &["Bravo", "Delta"]);
+
+        let rows = store.list_linked_memories().unwrap();
+        assert_eq!(rows.len(), 2, "tied timestamps must not split a memory");
+        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["aaa", "bbb"]);
+        assert_eq!(rows[0].entities.len(), 2);
+        assert_eq!(rows[1].entities.len(), 2);
+    }
+
+    #[test]
+    fn list_linked_memories_entities_sorted_by_normalized_name() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        seed_linked(&store, "m1", 1, "body", &["zeta", "  Open Router ", "alpha"]);
+
+        let rows = store.list_linked_memories().unwrap();
+        assert_eq!(rows[0].entities.len(), 3);
+        let names: Vec<&str> = rows[0].entities.iter().map(|(_, n)| n.as_str()).collect();
+        assert_eq!(names, vec!["alpha", "Open Router", "zeta"]);
+        // Same ordering the /entities endpoint returns.
+        let via_helper = store.entities_for_memory("m1").unwrap();
+        assert_eq!(rows[0].entities, via_helper);
+    }
+
+    #[test]
+    fn list_linked_memories_snippet_truncates_at_160_chars() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        // Multi-byte chars: SQLite substr() counts characters, matching chars().take(160).
+        let content = "é".repeat(200);
+        seed_linked(&store, "m1", 1, &content, &["Alpha"]);
+
+        let rows = store.list_linked_memories().unwrap();
+        assert_eq!(rows[0].snippet.chars().count(), 160);
+        assert_eq!(rows[0].snippet, content.chars().take(160).collect::<String>());
     }
 }
 
