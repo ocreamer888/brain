@@ -65,7 +65,7 @@ def test_extract_entities_strips_markdown_fence(monkeypatch: pytest.MonkeyPatch)
     raw = '```json\n{"entities": ["Rust", "SQLite"]}\n```'
     monkeypatch.setattr(entity_extractor, "_call_llm", lambda *a, **kw: raw)
     result = entity_extractor.extract_entities("Rust talks to SQLite directly.")
-    assert result == ["Rust", "SQLite"]
+    assert set(result) == {"Rust", "SQLite"}
 
 
 def test_extract_entities_applies_cleaning(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -87,7 +87,8 @@ def test_extract_entities_dedups_case_insensitive_and_caps(
     )
     result = entity_extractor.extract_entities("text")
     assert len(result) == entity_extractor.MAX_ENTITIES_PER_FACT
-    assert result[0] == "Entity0"
+    # Deduped; order is salience-ranked (V-10), not LLM order.
+    assert len({n.lower() for n in result}) == len(result)
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +156,7 @@ def test_parse_entities_non_list_entities() -> None:
 
 def test_clean_entities_drops_stoplist() -> None:
     result = entity_extractor._clean_entities(["git", "React", "commit", "Supabase"])
-    assert result == ["React", "Supabase"]
+    assert set(result) == {"React", "Supabase"}
 
 
 def test_clean_entities_drops_short_and_punct() -> None:
@@ -166,6 +167,125 @@ def test_clean_entities_drops_short_and_punct() -> None:
 def test_clean_entities_dedupes_case_insensitive_preserving_first() -> None:
     result = entity_extractor._clean_entities(["React", "react", "REACT"])
     assert result == ["React"]
+
+
+def test_clean_entities_drops_secret_shapes() -> None:
+    """V-04: credential-shaped strings must not become graph entities."""
+    secrets = [
+        "sk-or-v1-" + "a" * 64,
+        "sk-or-v1-*",
+        "sk-or-v1-free",
+        "sk-or-v1",
+        "sk-or",
+        "ghp/github_pat/AKIA",
+        "sk-ant-api03-" + "b" * 40,
+        "sk-proj-" + "c" * 40,
+        "sk-live-" + "d" * 40,
+        "ghp_" + "e" * 36,
+        "github_pat_" + "f" * 40,
+        "AKIA" + "G" * 16,
+        "xoxb-1234-5678-token",
+    ]
+    result = entity_extractor._clean_entities([*secrets, "Next.js", "OpenRouter", "sk-order"])
+    # sk-order is a legitimate-looking word, not a credential prefix boundary
+    assert result == ["Next.js", "OpenRouter", "sk-order"]
+
+
+def test_extract_entities_filters_secrets_from_llm_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Teeth: without the secret filter this would keep the OpenRouter key."""
+    monkeypatch.setattr(
+        entity_extractor,
+        "_call_llm",
+        lambda *a, **kw: json.dumps({
+            "entities": [
+                "sk-or-v1-" + "a" * 64,
+                "React",
+                "sk-or-v1-*",
+                "sk-or-v1",
+                "ghp/github_pat/AKIA",
+            ]
+        }),
+    )
+    assert entity_extractor.extract_entities("text mentioning a key") == ["React"]
+
+
+def test_clean_entities_drops_v07_hubs_and_junk() -> None:
+    """V-07: generic hubs + mechanical junk must not become entities."""
+    result = entity_extractor._clean_entities([
+        "solver", "SPHERE", "rod", "bg-gray-100", "15.5.6", ".main-content",
+        "fetch()", "text-sm", "text-generation-webui", "Next.js", "React",
+    ])
+    assert "Next.js" in result and "React" in result
+    assert "text-generation-webui" in result  # long non-numeric: not Tailwind junk
+    assert "p-queue" in entity_extractor._clean_entities(["p-queue", "bg-gray-100"])
+    assert "font-awesome" in entity_extractor._clean_entities(["font-awesome", "text-sm"])
+    assert not any(x.lower() in {"solver", "sphere", "rod"} for x in result)
+    assert "bg-gray-100" not in result
+    assert "15.5.6" not in result
+    assert ".main-content" not in result
+    assert "fetch()" not in result
+    assert "text-sm" not in result
+
+
+def test_clean_entities_drops_machine_path_and_host_junk() -> None:
+    """INV-ENTITY-02: per-machine path/host junk must not become graph nodes.
+
+    Cases are the exact leaks the 2026-08-14 backfill dry-run surfaced.
+    """
+    junk = [
+        "/Users/lifehub/code/brain/.cursor/mcp.json",
+        "/Users/lifehub/.mcp.json",
+        "~/Documents/AI/brain/rust/brain.db",
+        "Mac-Studio-de-Abundancia888.local",
+        "http://192.168.0.3:8787",
+        "http://Mac-Studio-de-Abundancia888.local:8787",
+        "0.0.0.0:8787",
+        "192.168.0.3",
+        "localhost",
+        "localhost:8787",                    # host:port, no scheme
+        "Mac-Studio-de-Abundancia888.local:8787",  # .local WITH port
+        "api.example.com:443",               # dotted host:port
+        "C:\\Users\\dev\\config.json",
+    ]
+    keep = [
+        "brain/api_client.py",       # repo-relative code path — meaningful
+        "com.brain.api.plist",
+        "start_api.sh",
+        "brain.db",
+        "Supabase",
+        "/cr/precios",               # API route fragment, not a machine path
+    ]
+    result = entity_extractor._clean_entities(junk + keep)
+    for j in junk:
+        assert j not in result, f"junk survived: {j}"
+    for k in keep:
+        assert k in result, f"legit entity dropped: {k}"
+
+
+def test_clean_entities_per_type_cap_and_salience_rank() -> None:
+    """V-10: conversation keeps more than fact; salience beats LLM order."""
+    # Lowercase fillers first in LLM order; proper nouns last.
+    names = [f"filler{i}" for i in range(30)] + ["Next.js", "Supabase"]
+    as_fact = entity_extractor._clean_entities(names, memory_type="fact")
+    as_conv = entity_extractor._clean_entities(names, memory_type="conversation")
+    assert len(as_fact) == 12
+    assert len(as_conv) == 24
+    # Proper nouns rank above bare lowercase fillers.
+    assert as_fact[0] in {"Next.js", "Supabase"}
+    assert as_conv[0] in {"Next.js", "Supabase"}
+
+
+def test_extract_entities_passes_memory_type_into_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    names = [f"Entity{i}" for i in range(30)]
+    monkeypatch.setattr(
+        entity_extractor, "_call_llm", lambda *a, **kw: json.dumps({"entities": names})
+    )
+    assert len(entity_extractor.extract_entities("t", memory_type="fact")) == 12
+    assert len(entity_extractor.extract_entities("t", memory_type="conversation")) == 24
 
 
 # ---------------------------------------------------------------------------

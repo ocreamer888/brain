@@ -259,6 +259,104 @@ def test_run_skips_already_processed_ids_on_resume(
     assert "f4" in calls
 
 
+def _add_edge(db_path: Path, src_memory_id: str) -> None:
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO edges (id, src_memory_id, dst_entity_id, relation_type) "
+        "VALUES (?, ?, ?, ?)",
+        (f"e-{src_memory_id}", src_memory_id, "ent-x", "mentions"),
+    )
+    conn.commit()
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# --limit work-set freeze (crash-stable bounded canaries)
+# ---------------------------------------------------------------------------
+
+def test_limit_freezes_work_set_in_checkpoint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_test_db(db_path)
+    checkpoint_path = tmp_path / "checkpoint.json"
+
+    monkeypatch.setattr(
+        backfill_entities.entity_extractor, "extract_entities", lambda *a, **kw: ["Rust"]
+    )
+    monkeypatch.setattr(
+        backfill_entities.api_client, "link_entities", lambda mid, ents: len(ents)
+    )
+
+    backfill_entities.run(limit=2, db_path=db_path, checkpoint_path=checkpoint_path)
+
+    saved = json.loads(checkpoint_path.read_text())
+    # Two newest edge-less durable rows by timestamp DESC.
+    assert set(saved["work_set"]) == {"d-con", "d-err"}
+    assert set(saved["processed_ids"]) == {"d-con", "d-err"}
+
+
+def test_resume_limit_stays_within_frozen_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The 38-not-25 regression: after a partial run, one processed row gains an
+    edge and leaves the edgeless set. Resume must process only the remaining
+    frozen id — never re-query and pull in a fresh edgeless row (d-ctx)."""
+    db_path = tmp_path / "test_brain.db"
+    _make_test_db(db_path)
+    checkpoint_path = tmp_path / "checkpoint.json"
+    # Simulate a crash after processing d-con (which now has an edge).
+    checkpoint_path.write_text(
+        json.dumps(
+            {
+                "processed_ids": ["d-con"],
+                "linked_total": 1,
+                "facts_seen": 1,
+                "work_set": ["d-con", "d-err"],
+            }
+        )
+    )
+    _add_edge(db_path, "d-con")
+
+    monkeypatch.setattr(
+        backfill_entities.entity_extractor, "extract_entities", lambda *a, **kw: ["Rust"]
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        backfill_entities.api_client,
+        "link_entities",
+        lambda mid, ents: calls.append(mid) or len(ents),
+    )
+
+    backfill_entities.run(limit=2, db_path=db_path, checkpoint_path=checkpoint_path)
+
+    assert calls == ["d-err"]  # only the unprocessed frozen id
+    assert "d-ctx" not in calls  # the fresh edgeless row a re-query would grab
+    saved = json.loads(checkpoint_path.read_text())
+    assert set(saved["processed_ids"]) == {"d-con", "d-err"}  # exactly the limit
+
+
+def test_unlimited_run_does_not_freeze(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Full-corpus (no --limit) runs re-query edgeless and must not freeze."""
+    db_path = tmp_path / "test_brain.db"
+    _make_test_db(db_path)
+    checkpoint_path = tmp_path / "checkpoint.json"
+
+    monkeypatch.setattr(
+        backfill_entities.entity_extractor, "extract_entities", lambda *a, **kw: ["Rust"]
+    )
+    monkeypatch.setattr(
+        backfill_entities.api_client, "link_entities", lambda mid, ents: len(ents)
+    )
+
+    backfill_entities.run(db_path=db_path, checkpoint_path=checkpoint_path)
+
+    saved = json.loads(checkpoint_path.read_text())
+    assert "work_set" not in saved
+
+
 def test_api_failure_skips_and_does_not_checkpoint(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
