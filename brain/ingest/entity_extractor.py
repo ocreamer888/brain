@@ -76,6 +76,12 @@ _ENTITY_STOPLIST = frozenset({
     "code", "file", "files", "function", "component", "app", "application",
     "project", "system", "user", "data", "text", "string", "number",
     "localhost",
+    # High-precision generics the backfill dry-run surfaced. Capitalized, so
+    # _salience_key wrongly ranks them ABOVE real lowercase libs (json, serde)
+    # and the per-type cap keeps them. Only unambiguous non-entities here — NOT
+    # Row/Stat/Table/Stack/State/Query, which can be meaningful in data contexts
+    # and are left to post-backfill degree-based hub pruning.
+    "users", "shared", "card", "grid", "edit", "del", "switch",
     # V-07 hubs measured live (generic single words with hub-scale degree)
     "solver", "sphere", "rod", "spin", "sheet", "transfer", "wall", "wind",
     "scene", "constants", "import",
@@ -123,7 +129,12 @@ def _looks_like_secret(name: str) -> bool:
 # junk the 2026-08-14 backfill dry-run surfaced: absolute/home filesystem paths,
 # URLs, mDNS *.local hostnames, and IP[:port].
 _ABS_PATH_RE = re.compile(
-    r"(?i)^(?:~|/(?:users|home|private|tmp|var|etc|opt|usr|mnt|root)(?:/|$)|[a-z]:\\)"
+    r"(?i)^(?:"
+    r"~"
+    r"|/(?:users|home|private|tmp|var|etc|opt|usr|mnt|root)(?:/|$)"  # absolute
+    r"|(?:users|home|private|tmp|var|etc|opt|usr|mnt|root)/"  # LLM dropped the leading slash
+    r"|[a-z]:\\"                                               # Windows
+    r")"
 )
 _URL_RE = re.compile(r"(?i)^[a-z][a-z0-9+.-]*://")
 _DOTLOCAL_HOST_RE = re.compile(r"(?i)^[a-z0-9][a-z0-9.-]*\.local$")
@@ -215,7 +226,10 @@ def _clean_entities(
     kept: list[str] = []
     for item in names:
         name = str(item).strip()
-        if not name or len(name) < 2:
+        # Upper bound guards against a pathological LLM name bloating the
+        # entities table (no server-side length cap). 80 clears real names —
+        # the longest legit ones are dotted repo paths ~45 chars.
+        if not name or len(name) < 2 or len(name) > 80:
             continue
         if not any(c.isalnum() for c in name):
             continue

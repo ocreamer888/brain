@@ -238,6 +238,8 @@ def test_clean_entities_drops_machine_path_and_host_junk() -> None:
         "/Users/lifehub/code/brain/.cursor/mcp.json",
         "/Users/lifehub/.mcp.json",
         "~/Documents/AI/brain/rust/brain.db",
+        "Users/Shared/Code/magic-portfolio/src/resources/content.js",  # slash-less home path
+        "var/folders/xyz/T/tmpfile",  # slash-less machine dir
         "Mac-Studio-de-Abundancia888.local",
         "http://192.168.0.3:8787",
         "http://Mac-Studio-de-Abundancia888.local:8787",
@@ -256,12 +258,39 @@ def test_clean_entities_drops_machine_path_and_host_junk() -> None:
         "brain.db",
         "Supabase",
         "/cr/precios",               # API route fragment, not a machine path
+        "src/app/api/og/route.tsx",  # repo-relative path (no machine root)
+        "var",                       # bare dir-word must NOT over-match the path rule
     ]
     result = entity_extractor._clean_entities(junk + keep)
     for j in junk:
         assert j not in result, f"junk survived: {j}"
     for k in keep:
         assert k in result, f"legit entity dropped: {k}"
+
+
+def test_clean_entities_drops_high_precision_generics_keeps_real_libs() -> None:
+    """Generic UI/CRUD words drop; real short libraries/types survive.
+
+    Salience ranks capitalized generics above lowercase libs, so without the
+    stoplist the caps would keep Card/Grid and trim json/serde — the wrong way.
+    """
+    generics = ["Users", "Shared", "Card", "Grid", "Edit", "Del", "Switch"]
+    real = ["React", "Arc", "Mutex", "serde", "json", "re", "fs", "std", "chrono"]
+    result = entity_extractor._clean_entities(generics + real)
+    for g in generics:
+        assert g not in result, f"generic survived: {g}"
+    for r in real:
+        assert r in result, f"real library dropped: {r}"
+
+
+def test_clean_entities_drops_pathologically_long_names() -> None:
+    long_name = "Supercalifragilistic" * 6  # 120 chars
+    result = entity_extractor._clean_entities([long_name, "React"])
+    assert long_name not in result
+    assert "React" in result
+    # A realistic dotted repo path (~45 chars) must still be kept.
+    path = "docs/superpowers/plans/2026-07-27-brain-instances.md"
+    assert path in entity_extractor._clean_entities([path])
 
 
 def test_clean_entities_per_type_cap_and_salience_rank() -> None:
