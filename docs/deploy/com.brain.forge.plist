@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.brain.forge</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/abundancia888/Documents/Code/brain/.venv/bin/python</string>
+		<string>/Users/abundancia888/Documents/Code/brain/brain/harness/supervisor.py</string>
+		<string>daemon</string>
+		<string>--poll</string>
+		<string>5</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/abundancia888</string>
+		<key>BRAIN_REFLECTION_DISABLED</key>
+		<string>1</string>
+	</dict>
+	<key>WorkingDirectory</key>
+	<string>/Users/abundancia888/Documents/Code/brain</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Users/abundancia888/Library/Logs/brain/brain_forge.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/abundancia888/Library/Logs/brain/brain_forge.err</string>
+</dict>
+</plist>

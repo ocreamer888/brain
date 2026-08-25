@@ -1,0 +1,76 @@
+# Example invariants registry (annotated)
+
+Copy to `brain/constitution/invariants.yaml` when executing Phase A.
+Remove comments before use — YAML below is illustrative.
+
+```yaml
+version: 1
+project: brain
+
+# Editing rules:
+# - Human PR to add/change/supersede rows
+# - superseded_by: NEW-ID instead of delete
+# - agents propose via Architect; humans lock
+
+invariants:
+  - id: INV-SESSION-01
+    statement: "Empty or meta-only transcript produces zero LLM memory writes"
+    source: "transcript.py + session_ingest grounding"
+    tests:
+      - brain/tests/test_transcript_normalize.py
+      - brain/tests/test_session_ingest_grounding.py
+    teeth: true
+    gold_eval: null
+    parity: false
+    live_smoke: false
+
+  - id: INV-ENTITY-01
+    statement: "Secret-shaped token names never become entities"
+    source: "V-04 verification closure"
+    tests:
+      - brain/tests/test_entity_extractor.py
+    teeth: true
+    gold_eval: null
+    parity: false
+
+  - id: INV-DEPLOY-01
+    statement: "Hook-path modules match AST-derived deploy parity sync set"
+    source: "test_deploy_parity_trace.py"
+    tests:
+      - brain/tests/test_deploy_parity.py
+    teeth: false
+    gold_eval: null
+    parity: true
+
+  - id: INV-INGEST-01
+    statement: "import brain.ingest does not eagerly import torch"
+    source: "V-15 lazy submodules"
+    tests:
+      - brain/tests/test_ingest_lazy_submodules.py
+    teeth: true
+    gold_eval: null
+    parity: true
+
+  - id: INV-HOOK-01
+    statement: "session_end background guard prevents runaway subprocess"
+    source: "V-08 brain/hooks/background.py"
+    tests:
+      - brain/tests/test_hook_background_guard.py
+    teeth: true
+    gold_eval: null
+    parity: false
+```
+
+## Optional fields (future)
+
+```yaml
+  - id: INV-RETRIEVAL-01
+    statement: "P@1 on conversation sample >= warn threshold"
+    source: "ingest_quality_gate.py"
+    tests: []
+    teeth: false
+    gold_eval: ingest_quality_gate  # special runner hook in run_gates.py
+    parity: false
+    threshold_warn: 0.45
+    threshold_error: 0.25
+```

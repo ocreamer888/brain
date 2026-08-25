@@ -55,6 +55,7 @@ brain/bootstrap/sessions_export/
 brain/bootstrap/perplexity_exports/
 brain/bootstrap/**/checkpoint*.json
 brain/bootstrap/**/*.jsonl
+brain/bootstrap/junk_scrub_backups/
 brain/**/*.log
 brain/tmp/
 brain/logs/
@@ -63,6 +64,7 @@ brain/db/
 brain/hooks/spool/
 brain/eval/reingest_backups/
 brain/eval/runs/
+brain/eval/jobs/
 
 # UI deps (commit package.json + lock only)
 brain/rust/ui/node_modules/

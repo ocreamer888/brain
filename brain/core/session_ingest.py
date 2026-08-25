@@ -21,6 +21,14 @@ from pathlib import Path
 from brain.api_client import backend_mode
 from brain.core.summarizer import summarize_session
 from brain.ingest.payloads import with_ingest_tag
+from brain.ingest.transcript import (
+    claim_is_grounded,
+    filter_grounded_claims,
+    has_substantive_transcript,
+    normalize_messages,
+    summary_is_grounded,
+    transcript_corpus,
+)
 
 
 def save_memory_fn(**kwargs):
@@ -85,10 +93,25 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
         )
         return
 
+    # Claude Code JSONL nests text under message.content — normalize before LLM.
+    # Empty/meta-only transcripts previously produced textbook hallucinations.
+    if not has_substantive_transcript(messages):
+        print(
+            f"[session_ingest] skipped recycling: no substantive transcript "
+            f"session_id={session_id} project={project}",
+            file=sys.stderr,
+        )
+        return
+
+    normalized = normalize_messages(messages)
+    corpus = transcript_corpus(normalized)
+
     # Pass 1: Error-fix pairs → solution memories
     try:
         from brain.core.summarizer import extract_error_fix_pairs
-        pairs = extract_error_fix_pairs(messages)
+        pairs = filter_grounded_claims(
+            extract_error_fix_pairs(normalized), corpus, key="error"
+        )
         for pair in pairs:
             if not should_save(ACTION_CONFIDENCE["session_error_fix"]):
                 continue
@@ -118,7 +141,9 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
     # Pass 2: Decisions → pattern memories
     try:
         from brain.core.summarizer import extract_decisions
-        decisions = extract_decisions(messages)
+        decisions = filter_grounded_claims(
+            extract_decisions(normalized), corpus, key="decision"
+        )
         for dec in decisions:
             if not should_save(ACTION_CONFIDENCE["session_decision"]):
                 continue
@@ -150,7 +175,7 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
 
     # Pass 3: Lean session summary (existing behavior)
     save_session_summary(
-        messages=messages,
+        messages=normalized,
         project=project,
         session_id=session_id,
         ended_at=ended_at,
@@ -159,19 +184,44 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
 
 def save_session_summary(*, messages: list, project: str, session_id: str, ended_at: str):
     """Generate a session summary and persist it as a project_context memory."""
+    if not has_substantive_transcript(messages):
+        print(
+            f"[session_ingest] skipped session_summary: no substantive transcript "
+            f"project={project} ended_at={ended_at}",
+            file=sys.stderr,
+        )
+        return
+
+    normalized = normalize_messages(messages)
+    corpus = transcript_corpus(normalized)
+
     try:
-        summary = summarize_session(messages)
+        summary = summarize_session(normalized)
     except Exception as e:
         print(f"[session_ingest] summarize_session failed project={project} error={e}", file=sys.stderr)
         return
 
     summary_text = summary.get("summary", "")
-    decisions = summary.get("decisions", [])
-    next_steps = summary.get("next_steps", [])
+    decisions = [
+        d for d in summary.get("decisions", [])
+        if isinstance(d, str) and claim_is_grounded(d, corpus)
+    ]
+    next_steps = [
+        s for s in summary.get("next_steps", [])
+        if isinstance(s, str) and claim_is_grounded(s, corpus)
+    ]
 
     if _is_trivial_summary(summary_text, decisions, next_steps):
         print(
             f"[session_ingest] skipped trivial session_summary project={project} ended_at={ended_at}"
+            f' preview="{summary_text[:80]}"',
+            file=sys.stderr,
+        )
+        return
+
+    if not summary_is_grounded(summary_text, corpus):
+        print(
+            f"[session_ingest] skipped ungrounded session_summary project={project} ended_at={ended_at}"
             f' preview="{summary_text[:80]}"',
             file=sys.stderr,
         )

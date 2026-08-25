@@ -1,0 +1,10 @@
+#!/bin/sh
+# Brain Forge pre-commit: block constitution/gate path commits.
+# Install: ln -sf ../../brain/harness/git-hooks/pre-commit .git/hooks/pre-commit
+set -e
+ROOT="$(git rev-parse --show-toplevel)"
+PY="$ROOT/.venv/bin/python"
+if [ ! -x "$PY" ]; then
+  PY="${PYTHON:-python3}"
+fi
+exec "$PY" "$ROOT/brain/harness/refine_audit.py" check-staged

@@ -17,6 +17,18 @@ without numpy can still use the light members.
 
 from typing import TYPE_CHECKING
 
+# Submodule names map to their own module path so ``import brain.ingest as bi;
+# bi.payloads`` works (PEP 562 lazy packages do not auto-register submodules).
+_LAZY_SUBMODULES = {
+    "payloads": "brain.ingest.payloads",
+    "text_chunking": "brain.ingest.text_chunking",
+    "fact_extractor": "brain.ingest.fact_extractor",
+    "fact_curator": "brain.ingest.fact_curator",
+    "entity_extractor": "brain.ingest.entity_extractor",
+    "transcript": "brain.ingest.transcript",
+    "project_infer": "brain.ingest.project_infer",
+}
+
 _LAZY_MEMBERS = {
     # payloads (light)
     "TAG_BRAIN_INGEST": "brain.ingest.payloads",
@@ -40,10 +52,17 @@ _LAZY_MEMBERS = {
 
 
 def __getattr__(name: str):
+    import importlib
+
+    sub_path = _LAZY_SUBMODULES.get(name)
+    if sub_path is not None:
+        value = importlib.import_module(sub_path)
+        globals()[name] = value
+        return value
+
     module_path = _LAZY_MEMBERS.get(name)
     if module_path is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    import importlib
 
     value = getattr(importlib.import_module(module_path), name)
     globals()[name] = value  # cache so subsequent access skips __getattr__
@@ -51,7 +70,7 @@ def __getattr__(name: str):
 
 
 def __dir__() -> list[str]:
-    return sorted(__all__)
+    return sorted(set(__all__) | set(_LAZY_SUBMODULES))
 
 
 if TYPE_CHECKING:  # static analysers still see the real symbols
@@ -72,6 +91,14 @@ if TYPE_CHECKING:  # static analysers still see the real symbols
     )
 
 __all__ = [
+    # Submodules (lazy; no heavy import until accessed)
+    "entity_extractor",
+    "fact_curator",
+    "fact_extractor",
+    "payloads",
+    "project_infer",
+    "text_chunking",
+    "transcript",
     "TAG_BRAIN_INGEST",
     "chunk_by_paragraphs",
     "chunk_by_sections",

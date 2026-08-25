@@ -1,0 +1,38 @@
+{
+  "job_id": "forge-entity-backfill-canary-25",
+  "intent": "Mutating canary: link entities for 25 edgeless durable memories via API",
+  "invariants": ["INV-ENTITY-01", "INV-ENTITY-02"],
+  "gates": [
+    ".venv/bin/python brain/harness/run_gates.py --phase smoke --skip-quality-gate --filter INV-ENTITY-*"
+  ],
+  "steps": [
+    {
+      "type": "canary",
+      "label": "forge-entity-backfill-canary-25",
+      "limit": 100,
+      "sql": "SELECT id, type, project, substr(content, 1, 240) AS content_preview, timestamp FROM memories WHERE type IN ('\"fact\"', '\"solution\"', '\"decision\"', '\"pattern\"', '\"project_context\"', '\"error_lesson\"', '\"conversation\"', '\"knowledge\"') AND (superseded_by IS NULL OR superseded_by = '') AND id NOT IN (SELECT DISTINCT src_memory_id FROM edges) ORDER BY timestamp DESC LIMIT ?"
+    },
+    {
+      "type": "command",
+      "argv": [
+        ".venv/bin/python",
+        "brain/tools/backfill_entities.py",
+        "--limit",
+        "25",
+        "--checkpoint",
+        "brain/eval/runs/checkpoint_forge_entity_backfill_canary.json",
+        "--checkpoint-every",
+        "1"
+      ]
+    }
+  ],
+  "autonomous": {
+    "max_turns": 3,
+    "max_wall_ms": 1800000,
+    "gate_retries": 1
+  },
+  "canary_required": true,
+  "irreversible": true,
+  "run_end_gate": true,
+  "certificate_path": "docs/superpowers/specs/brain-forge/certificates/forge-entity-backfill-canary-25.md"
+}

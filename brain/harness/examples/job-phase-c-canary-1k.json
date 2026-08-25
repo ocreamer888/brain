@@ -1,0 +1,39 @@
+{
+  "job_id": "phase-c-canary-1k",
+  "intent": "Phase C acceptance: 1000-row read-only canary with mid+end gates (no DB mutation)",
+  "invariants": [
+    "INV-SESSION-01",
+    "INV-ENTITY-01",
+    "INV-ENTITY-02",
+    "INV-DEPLOY-01",
+    "INV-HOOK-01",
+    "INV-INGEST-01"
+  ],
+  "gates": [
+    ".venv/bin/python brain/harness/run_gates.py --phase smoke --skip-quality-gate"
+  ],
+  "steps": [
+    {
+      "type": "canary",
+      "label": "phase-c-canary-1k",
+      "limit": 1000
+    },
+    {
+      "type": "command",
+      "argv": [
+        ".venv/bin/python",
+        "-c",
+        "print('phase-c mid-marker ok')"
+      ]
+    }
+  ],
+  "autonomous": {
+    "max_turns": 3,
+    "max_wall_ms": 600000,
+    "gate_retries": 1
+  },
+  "canary_required": true,
+  "irreversible": false,
+  "run_end_gate": true,
+  "certificate_path": "docs/superpowers/specs/brain-forge/certificates/phase-c-canary-1k.md"
+}
