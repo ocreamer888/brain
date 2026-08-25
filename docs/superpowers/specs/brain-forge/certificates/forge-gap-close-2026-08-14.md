@@ -49,9 +49,12 @@
 
 - ~~Not tested: live `POST /link-entities` × 25 via worker; crash then `recover`~~ — **TESTED 2026-08-18** (crash at 13/25 → recover → success; see History). Superseded.
 - ~~Open (behavior): `--limit N` is not a lifetime cap across a crash~~ — **CLOSED 2026-08-19** (frozen work_set; see History). Bounded canaries are now crash-stable.
-- ~~Open (data quality): path-fragment/hostname junk still becomes entities~~ — **CLOSED 2026-08-19** (path/host filter in `_looks_like_junk`, synced to live tree; see History). Full ~1437-row backfill unblocked pending a fresh dry-run confirm.
-- Assumes: `brain_api` on `:8787` (health ok 2026-08-14 and 2026-08-18); Ollama for extract (empty entities on LLM fail still checkpoint)
-- Deferred: `launchctl load` of `com.brain.forge`
+- ~~Open (data quality): path-fragment/hostname junk still becomes entities~~ — **CLOSED 2026-08-19** (path/host filter in `_looks_like_junk`, synced to live tree; see History). Confirmation dry-run 2026-08-18: zero path/host/URL/IP junk.
+- ~~Open (data quality): capitalized UI generics steal salience from real libs~~ — **CLOSED 2026-08-19** (`0834003` stoplist Card/Grid/Users/…).
+- ~~Open (data quality): CSS vars / `styles.*` / UUID tokens~~ — **CLOSED 2026-08-24** (see History). Offline re-clean of post-`0834003` dry-run drops those shapes.
+- Open (accepted residual): short acronyms / DOM fillers (`CE`, `catch`, `curl`) and already-minted canary junk (+134 entities from Aug 18 drill) — not auto-purged; full ~1.2k backfill still **owner-triggered**, not unattended.
+- Assumes: `brain_api` on `:8787`; Ollama for extract (empty entities on LLM fail still checkpoint)
+- Deferred: `launchctl load` of `com.brain.forge`; unattended full edgeless backfill
 - Does not touch: production `brain/bootstrap/checkpoint_entity_backfill_durable.json` (verified untouched post-drill, mtime Jul 28)
 
 ---
@@ -130,3 +133,16 @@
 - **Full backfill unblock:** with #2 live, the data-quality gate on the ~1.4k-row backfill is closed.
   Junk shapes are filtered at the golden path; remaining recommendation before a full run is a fresh
   read-only dry-run to confirm the residual entity mix.
+
+### 2026-08-24 — Production-ready packaging loop
+
+- Fresh read-only dry-run `--limit 25` → `brain/eval/runs/dryrun-post-0834003.log` (1 Ollama timeout → `[]`).
+  Path/host/URL/IP junk: **zero**. Residual noise was CSS `var(--…)`, `styles.*`, UUID, and fillers
+  `styl`/`img`/`ref`/`Nav`.
+- Filter extended in `entity_extractor.py`: `_CSS_VAR_RE`, `_STYLES_DOT_RE`, `_UUID_RE` + stoplist
+  `styl`/`img`/`ref`/`nav`. Test `test_clean_entities_drops_css_var_styles_and_uuid_junk`. INV-ENTITY-02
+  teeth pass; live hook tree re-synced; deploy parity 22 passed.
+- Offline per-row re-clean of that dry-run: 101→75 unique after new filters; path/host still zero.
+- Forge package previously untracked (`brain/harness/`, `constitution/`, skills, most docs) shipped in
+  accompanying commit(s). Owner sign-off still pending. Full edgeless backfill (~1211) remains
+  **owner-triggered** (not launchd; not auto). Canary +134 junk entities not purged this loop.

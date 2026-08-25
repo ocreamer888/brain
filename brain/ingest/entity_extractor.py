@@ -82,6 +82,8 @@ _ENTITY_STOPLIST = frozenset({
     # Row/Stat/Table/Stack/State/Query, which can be meaningful in data contexts
     # and are left to post-backfill degree-based hub pruning.
     "users", "shared", "card", "grid", "edit", "del", "switch",
+    # CSS / DOM filler the 2026-08-24 dry-run minted as entities
+    "styl", "img", "ref", "nav",
     # V-07 hubs measured live (generic single words with hub-scale degree)
     "solver", "sphere", "rod", "spin", "sheet", "transfer", "wall", "wind",
     "scene", "constants", "import",
@@ -143,6 +145,13 @@ _IP_OPT_PORT_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?$")
 # api.example.com:443. Requires a dotted host (or literal localhost) so a bare
 # single word:port cannot false-positive a legit token.
 _HOST_PORT_RE = re.compile(r"(?i)^(?:localhost|[a-z0-9][a-z0-9.-]*\.[a-z0-9-]+):\d{2,5}$")
+# 2026-08-24 dry-run residuals: CSS custom properties (incl. truncated),
+# CSS-module style accessors, and bare UUID tokens are not graph entities.
+_CSS_VAR_RE = re.compile(r"(?i)^var\(--")
+_STYLES_DOT_RE = re.compile(r"(?i)^styles\.[A-Za-z_]")
+_UUID_RE = re.compile(
+    r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
 
 
 def _looks_like_host_or_path_junk(name: str) -> bool:
@@ -161,6 +170,8 @@ def _looks_like_junk(name: str) -> bool:
     if not n:
         return True
     if _looks_like_host_or_path_junk(n):
+        return True
+    if _CSS_VAR_RE.match(n) or _STYLES_DOT_RE.match(n) or _UUID_RE.match(n):
         return True
     if re.fullmatch(r"\^?\d+(?:\.\d+)*", n):
         return True

@@ -268,6 +268,36 @@ def test_clean_entities_drops_machine_path_and_host_junk() -> None:
         assert k in result, f"legit entity dropped: {k}"
 
 
+def test_clean_entities_drops_css_var_styles_and_uuid_junk() -> None:
+    """2026-08-24 dry-run: CSS vars, styles.*, UUIDs must not become entities."""
+    junk = [
+        "var(--section-padding-y)",
+        "var(--ghost-100)",
+        "var(--cont",  # truncated LLM token
+        "styles.titleRow",
+        "styles.eyebrow",
+        "styles.backgroundImage",
+        "e7a6b9bb-9489-424a-a47d-05fe4567f687",
+        "styl",
+        "img",
+        "ref",
+        "Nav",
+    ]
+    keep = [
+        "Next.js",
+        "Features.tsx",
+        "HeroFigma.module.css",
+        "intelli-ehr",
+        "gsap",
+        "svg",  # real tech token — not in the CSS filler stoplist
+    ]
+    result = entity_extractor._clean_entities(junk + keep)
+    for j in junk:
+        assert j not in result, f"junk survived: {j}"
+    for k in keep:
+        assert k in result, f"legit entity dropped: {k}"
+
+
 def test_clean_entities_drops_high_precision_generics_keeps_real_libs() -> None:
     """Generic UI/CRUD words drop; real short libraries/types survive.
 
