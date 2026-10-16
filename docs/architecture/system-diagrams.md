@@ -8,6 +8,9 @@ This document captures the brain system architecture in several views:
 4. End-to-end chain (real time → scheduled → review)
 5. **Import → transcribe/extract → ingest → production → digest** (below)
 6. **Unified motor map** — all major processes on one diagram + inventory (below)
+7. **Memory contract + agent loop** — see `docs/MEMORY_CONTRACT.md` and
+   `docs/superpowers/specs/2026-10-16-trustworthy-memory-and-advisory-routing-design.md`
+   (Brain retrieves and ranks; host plans/acts; route identification is future/advisory)
 
 **Storage note (Rust primary):** `brain_api` keeps vectors **in memory** (cosine index) and rebuilds from SQLite (`memories.embedding` BLOB + metadata) on startup. Some deploy docs still mention `BRAIN_INDEX_PATH` / `.bin` for backup or older layouts; the diagrams below emphasize **SQLite + in-process index** unless labeled otherwise.
 
