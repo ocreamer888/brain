@@ -5,6 +5,7 @@ pub mod embedder;
 pub mod error;
 pub mod index;
 pub mod ingest;
+pub mod instances;
 pub mod migrate;
 pub mod privacy;
 pub mod store;

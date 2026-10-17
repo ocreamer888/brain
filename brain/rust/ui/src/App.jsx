@@ -7,6 +7,7 @@ import Search from './views/Search'
 import Linked from './views/Linked'
 import Curate from './views/Curate'
 import Eval from './views/Eval'
+import Instances from './views/Instances'
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: '◉' },
@@ -14,6 +15,7 @@ const NAV = [
   { id: 'linked', label: 'Linked', icon: '⚭' },
   { id: 'curate', label: 'Curate', icon: '✦' },
   { id: 'eval', label: 'Eval', icon: '▦' },
+  { id: 'instances', label: 'Instances', icon: '⧉' },
 ]
 
 function Shell() {
@@ -26,7 +28,9 @@ function Shell() {
     <div className="flex h-full min-h-0 bg-black text-white">
       <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-900 bg-zinc-950">
         <div className="border-b border-zinc-900 px-4 py-4">
-          <p className="text-sm font-semibold tracking-wide">Brain</p>
+          <p className="text-sm font-semibold tracking-wide">
+            {stats?.active_instance?.name || 'Brain'}
+          </p>
           <p className="text-xs text-zinc-500">
             {stats?.total_memories ?? '—'} memories
           </p>
@@ -83,6 +87,11 @@ function Shell() {
         {view === 'eval' && (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <Eval activeView={view} />
+          </div>
+        )}
+        {view === 'instances' && (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <Instances />
           </div>
         )}
       </main>
