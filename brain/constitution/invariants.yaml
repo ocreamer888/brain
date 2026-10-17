@@ -1,0 +1,67 @@
+version: 1
+project: brain
+
+# Editing: human PR / explicit owner OK. Never delete rows — use superseded_by.
+# Agents propose; humans lock. See README.md.
+
+invariants:
+  - id: INV-SESSION-01
+    statement: "Empty or meta-only transcript produces zero LLM memory writes"
+    source: "transcript.py + session_ingest grounding"
+    tests:
+      - brain/tests/test_transcript_normalize.py
+      - brain/tests/test_session_ingest_grounding.py
+    teeth: true
+    gold_eval: null
+    parity: false
+    live_smoke: false
+
+  - id: INV-ENTITY-01
+    statement: "Secret-shaped token names never become entities"
+    source: "V-04"
+    tests:
+      - brain/tests/test_entity_extractor.py
+    teeth: true
+    gold_eval: null
+    parity: false
+    live_smoke: false
+
+  - id: INV-ENTITY-02
+    statement: "Junk and hub entity names are filtered (deg1/hub caps)"
+    source: "V-07 V-10"
+    tests:
+      - brain/tests/test_entity_extractor.py
+    teeth: true
+    gold_eval: null
+    parity: false
+    live_smoke: false
+
+  - id: INV-DEPLOY-01
+    statement: "Hook-path Python modules match AST-derived deploy parity sync set"
+    source: "test_deploy_parity / deploy_parity_trace"
+    tests:
+      - brain/tests/test_deploy_parity.py
+    teeth: true
+    gold_eval: null
+    parity: true
+    live_smoke: false
+
+  - id: INV-HOOK-01
+    statement: "session_end background guard prevents runaway subprocess"
+    source: "V-08 brain/hooks/background.py"
+    tests:
+      - brain/tests/test_hook_background_guard.py
+    teeth: true
+    gold_eval: null
+    parity: false
+    live_smoke: false
+
+  - id: INV-INGEST-01
+    statement: "import brain.ingest does not eagerly import torch"
+    source: "V-15 lazy submodules"
+    tests:
+      - brain/tests/test_ingest_lazy_submodules.py
+    teeth: true
+    gold_eval: null
+    parity: true
+    live_smoke: false
