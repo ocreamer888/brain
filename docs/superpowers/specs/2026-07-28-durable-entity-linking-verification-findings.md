@@ -1,22 +1,21 @@
 # Verification Findings — Durable Entity Linking
 
-**Verification run:** 2026-07-28 · **Last updated:** 2026-08-02
+**Verification run:** 2026-07-28 · **Last updated:** 2026-08-12
 **Scope:** adversarial verification of amendments A1–A9 (see [`2026-07-28-durable-entity-linking-amendments.md`](./2026-07-28-durable-entity-linking-amendments.md))
 **Method:** five independent read-only agents, each briefed to *find defects* and to report `PASS` only for claims it reproduced itself. Domains: Rust (A2/A8), Python save path (A3–A5/A7), backfill data integrity, live deployment (A9c), eval statistics (A1).
 
-**System state (2026-07-29)**
+**System state (2026-08-12 validation remount)**
 
 | | |
 |---|---|
-| memories / edges / entities / linked | 17,679 · 44,439 · 16,866 · 13,357 |
-| orphan edges | **0** — was 11 pre-ship, peaked at a true 1190; both sources fixed + swept, see V-05 |
-| Python suite | 390 passed, 5 skipped, 0 failed |
-| Rust lib suite | 121 passed, 0 failed |
-| deployed binary | rebuilt + restarted with the P@1 fix (V-02) |
-| live hook tree | synced, parity-enforced across 9 files |
-| git | committed + pushed on `feature/durable-entity-linking` |
+| memories / edges / entities / linked | 18,205 · 45,826 · 18,367 · 13,498 |
+| orphan edges | **0** |
+| live hook tree | synced for extractor + api_client after V-04b |
+| git | `feature/durable-entity-linking` + uncommitted validation fixes |
 
-**38 findings — 12 closed, 26 open.**
+**38 findings — ~20 closed / revised, ~18 open.** (August 2026 snapshot. Do not treat this line as current.)
+
+**Current rollup (2026-10-17):** 31 closed or fixed in source, 7 open. Per-item table, live counts, and what not to run: [`2026-10-17-verification-queue-status.md`](./2026-10-17-verification-queue-status.md). The October code is uncommitted and `brain_api` has not been rebuilt.
 
 Every severity below was independently reproduced before being recorded; anything an agent could not verify is marked as such rather than asserted.
 
@@ -103,21 +102,24 @@ Net: a stalled Ollama loses the memory entirely, with no spool entry and no erro
 **Fix:** split budgets as `(connect, read)` tuples — `LIVE_TIMEOUT = (3, 10)`, `BACKFILL_TIMEOUT = (5, 120)`; backfill opts in explicitly. **Measured 120 s → 10.0 s** against a socket that accepts and never responds.
 **Root cause:** amendment A5 said "move `_call_llm` verbatim". Verbatim was right for the prompt and stoplist and wrong for the timeout, because the execution context changed from batch to interactive.
 
-### V-04 — Credential material stored as graph entities · **OPEN — needs owner action**
+### V-04 — Credential material stored as graph entities · **FIXED 2026-08-12**
 
 ```
-entities matching sk-or-v1-* : 5  (4 real-shaped @73 chars, 1 placeholder)
-  added by this backfill     : 3
-  pre-existing               : 2
-memories containing the keys in CONTENT : 9   (dated 2026-04-03 .. 2026-05-03)
-other secret shapes (sk-ant-, ghp_, AKIA, xox) : 0
+entities matching sk-or-v1-* at reopen : 6  (4 real @73 chars, sk-or-v1-free, sk-or-v1-*)
+edges                                  : 8
+memories containing keys in CONTENT    : 10  (9 historical + 1 status-check save)
+other secret shapes (sk-ant-, ghp_, AKIA, xox) as entities : 0
 ```
 
 **The leak is ~3 months old and lives in memory content.** This ship did not create it — entity extraction surfaced the keys into a table designed to be exposed by retrieval, turning buried strings into queryable graph nodes. PII also present (a personal email, a named individual).
 
 Mitigating: OpenRouter is no longer used anywhere (`0` env vars, no config references; the June migration moved everything to local Ollama), so the keys are probably already inactive.
 
-**Recommended:** (1) revoke at OpenRouter regardless of presumed-dead status; (2) purge the 5 entity rows and their edges — small, safe, reversible from the snapshot; (3) decide separately about redacting the 9 source memories, since that rewrites history; (4) add a secret-shape filter to `entity_extractor.py` — the extractor will otherwise keep surfacing whatever is in content.
+**Closed 2026-08-12 (revised after validation — V-04b):**
+1. **Secret-shape filter** widened to `search()` for bare `sk-or-v1` / `sk-or`, slash-meta `ghp/…/AKIA`, embedded keys; `_clean_entities` also runs on caller-supplied `entities=` and `link_entities` (no bypass). Synced to live hook tree. Reload MCP after deploy.
+2. **Purges** — initial 6/8; remints (`sk-or-v1`, `sk-or`, `ghp/github_pat/AKIA`) + **Scene** hub re-purged. Backups under `junk_scrub_backups/` (**gitignored**; v04 JSON **redacted**). Live filter-matching secret entities: **0**.
+3. **Memory redaction still deferred** — source memories can still contain key strings in **content** (retrieval exposure). Owner should **revoke** OpenRouter keys.
+4. **Rust `/link-entities`** still has no server-side secret check — Python client sanitizes; direct HTTP can still plant secrets until a Rust guard lands.
 
 ### V-05 — Orphan edges are accumulating: 11 → 192 → 329 → **1190** · **FIXED 2026-08-02**
 
@@ -151,7 +153,7 @@ The `brain_api` binary serving port 8787 had been compiled from an uncommitted t
 
 **Resolution:** committed and pushed. Verified `feature/durable-entity-linking` tracks `origin/feature/durable-entity-linking`; working tree clean apart from in-flight edits. Every subsequent issue now produces a readable per-issue diff against a real baseline.
 
-### V-07 — Entity quality: ~28% junk, and generic words became hubs · **OPEN**
+### V-07 — Entity quality: ~28% junk, and generic words became hubs · **FIXED 2026-08-12**
 
 Hand-classified sample of 200 of the 8,133 new entities:
 
@@ -167,7 +169,12 @@ Nine generic single words now have hub-scale degree: `solver` 93, `SPHERE` 48, `
 
 The top of the graph is still dominated by legitimate entities (`Next.js` 732, `React` 475, `PPF Contact Solver API` 464 — the last a genuine new domain). But **degree-weighted graph expansion should not ship on this as-is**, because that is what high degree does.
 
-**Direct consequence for A1:** running the A/B now measures noise propagation as much as knowledge retrieval. **Recommended:** cheap high-value cleanup first — drop degree-1 entities matching the junk regex, hand-stoplist the ~15 generic hubs. Reverses the ranking damage without touching the good 37%.
+**Closed 2026-08-12 (honest residual):**
+1. **Forward filter** — junk shapes + stoplist hubs including `scene` / `constants` / `import`. Keep real short names like `p-queue` / `font-awesome` (suffix allowlist, not len≤18).
+2. **DB purge** — 398 entities / 711 edges (deg-1 junk + 8 measured hubs). **Later:** `Scene` (deg 101) purged with V-04b residual pass. `constants` / `import` may still exist at low degree (forward-stoplist only).
+3. **Residual** — hundreds of **non-deg1** Tailwind/dotfile entities remain (out of cheap-pass scope; ~1–2% of graph). Deg-1 mechanical junk held at 0 post-purge.
+4. Synced extractor (+ `api_client`) to live hook tree.
+
 **Related:** amendment A5 deferred stoplist tuning on the grounds that `graph_expand` was off by default. That was true but incomplete — the Linked UI surfaces these today and the gate depends on them tomorrow.
 
 ### V-08 — Stop hook triggered real destructive maintenance with no dry-run guard · **CLOSED 2026-07-29**
@@ -207,10 +214,12 @@ So the live Stop hook had been running an older module layout the entire time. T
 
 ## MEDIUM
 
-### V-09 — Criterion 9 is vacuous on the default invocation · **OPEN**
+### V-09 — Criterion 9 is vacuous on the default invocation · **FIXED 2026-08-12**
 `filter_violations(rows, None, None)` returns `0`, and the gate accepts `0`. The unfiltered main run therefore passes criterion 9 without ever exercising a filter. Worse, `--surface template` (the default, and the one in A1's own verification command) **raises** on `--memory-type`, so the type-filtered sub-run is impossible on that surface. As written, A1's verification block can never produce criterion-9 evidence yet always passes it.
 
-### V-10 — Entity cap truncates 43% of `conversation` memories · **OPEN**
+**Closed 2026-08-12 (revised after validation):** gate returns **INVALID_SET** on unfiltered runs for criterion 9 (no silent skip / no vacuous PASS). Full PASS requires `--memory-type` and/or `--project`. Lift-only analysis uses `--lift-only` / `GateConfig.allow_unfiltered_skip_criterion_9`. `filter_criterion_status` wired into consistency checks. Type-filtered sub-runs still require `--surface plain`.
+
+### V-10 — Entity cap truncates 43% of `conversation` memories · **FIXED 2026-08-12**
 `MAX_ENTITIES_PER_FACT = 12` was calibrated for ~100-char facts and holds there (0.1% saturation). Measured saturation at exactly 12:
 
 | type | at cap | linked | % |
@@ -221,27 +230,43 @@ So the live Stop hook had been running an older module layout the entire time. T
 | solution | 197 | 1,308 | 15.1% |
 | fact | 14 | 10,428 | 0.1% |
 
-The 11→119→**734** cliff is a wall, not a distribution. `_clean_entities` breaks on the first 12 survivors **in LLM output order**, so what is kept is arbitrary rather than most-salient. **Recommended:** per-type cap, and rank before truncating.
+The 11→119→**734** cliff is a wall, not a distribution. `_clean_entities` breaks on the first 12 survivors **in LLM output order**, so what is kept is arbitrary rather than most-salient.
+
+**Closed 2026-08-12 (forward path):** `MAX_ENTITIES_BY_TYPE` — fact/error_lesson=12, pattern/solution/decision/knowledge=16, project_context=20, conversation=24. Salience rank (uppercase / pathish / multi-word / length) before truncate. `api_client` + backfill pass `memory_type`. Existing at-cap rows are not re-extracted (would need a separate backfill pass).
 
 ### V-11 — 2,654 durable memories still have zero edges · **OPEN**
 Checkpoint records 6,869 processed but only 4,219 received edges — **38.6% of processed rows produced zero entities**, 2,565 of them facts. Not corruption, but coverage is materially short of what "6,864 processed" implies.
 
-### V-12 — `--bootstrap-iters` is unvalidated and guts criterion 6 · **OPEN**
+### V-12 — `--bootstrap-iters` is unvalidated and guts criterion 6 · **FIXED 2026-08-12**
 False-positive rate of `ci_lo > 0` under a true null (400 trials): `iters=1` → **0.26** (nominal 0.025); `iters=3` → 0.07; `iters=200` → 0.00. With `iters=1` the "95% CI" is a single replicate. **Recommended:** floor at 1000. Seed-shopping is *not* exploitable (0/200 seeds produced a false positive at 1000 iters).
 
-### V-13 — `eval_suite` never passes `db_path` to `run_mcp_eval` · **OPEN**
+**Closed 2026-08-12:** `MIN_BOOTSTRAP_ITERS = 1000`; CLI rejects lower values with exit 2 before any live searches.
+
+### V-13 — `eval_suite` never passes `db_path` to `run_mcp_eval` · **FIXED 2026-10-16**
 `eval_suite.py:203-206` passes `--db` to `offline_rrf_p1` but not to `run_mcp_eval`, which falls back to `_DEFAULT_DB_PATH`. With `--db <other.db>` the dangling-skip set is computed against one database and the baseline against another. Latent today (the two defaults are identical).
 
-### V-14 — `decision` stratum has zero slack; the gate will likely return INVALID_SET · **OPEN**
+**Closed 2026-10-16:** both `brain/tools/eval_suite.py` and the top-level `brain/eval_suite.py` pass `db_path=` into `run_mcp_eval`.
+
+### V-14 — `decision` stratum has zero slack; the gate will likely return INVALID_SET · **FIXED 2026-08-12**
 Measured against the live DB at `oversample=1.5`: every stratum has slack except `decision` (want 10, asked 15, **got 10, slack +0**), because `MIN_CONTENT_CHARS=200` binds. Max achievable `n_queries` is exactly 150 at a **0% rejection rate** — so a single rejection anywhere drops below `min_n` → criterion 1 → `INVALID_SET`, after burning ~300 live searches. **Recommended:** decide before the run whether to lower `min_n`, relax `MIN_CONTENT_CHARS` for `decision`, or reallocate those 10 slots.
 
-### V-15 — Lazy `brain/ingest/__init__.py` breaks submodule attribute access · **OPEN**
-`import brain.ingest as bi; bi.payloads` now raises `AttributeError` (pre-lazy it worked, because the eager `from ... import` registered the submodule on the package). Every in-repo site uses `from brain.ingest.<sub> import ...`, which still resolves — so the suite is green legitimately — but it is a silent public-API break for ad-hoc scripts and REPL use. **Fix:** map submodule names to themselves in `_LAZY_MEMBERS`.
+**Closed 2026-08-12 (revised after validation):** `check_stratum_capacity` uses `rejection_headroom = min(pool, asked) - want` with `MIN_REJECTION_SLACK=5` (oversample binds). Live re-measure: decision pool=16, want=10, asked=15, headroom=5 — passes.
 
-### V-16 — `test_deploy_parity.py` cannot catch a newly-required file · **PARTIALLY ADDRESSED, still OPEN**
-`SYNC_SET` is a hand-maintained dict compared for byte-identity, not derived from a live AST trace. If a future edit adds an import of a new sibling, the test still passes while the live tree silently lacks the dependency. It *does* correctly catch drift of **known** files — proven three times now: twice deliberately, once for real when the V-03 extractor fix landed in the repo but not the live tree. The amendment's "not a checklist" framing overstates the guarantee: operationally it is a checklist, just an enforced one.
+### V-15 — Lazy `brain/ingest/__init__.py` breaks submodule attribute access · **FIXED 2026-08-12**
+`import brain.ingest as bi; bi.payloads` raised `AttributeError` after PEP 562 lazy re-exports (submodules no longer auto-registered on the package).
 
-**Partial fix (2026-07-29):** coverage widened from 6 to 9 files after V-38 showed the omission was not hypothetical — hook entry points were missing and had already drifted. The structural weakness remains: a *newly required* file is still invisible until something breaks. **Proper fix:** derive `SYNC_SET` from an AST trace of the live tree's hook entry points at test time, so the guard computes its own requirement rather than trusting a literal.
+**Fix:** `_LAZY_SUBMODULES` maps all seven ingest submodules; `__getattr__` returns the module for those names. Symbol re-exports unchanged.
+
+**Teeth:** `brain/tests/test_ingest_lazy_submodules.py` (8 tests). Reverting the submodule branch → `AttributeError` on `bi.payloads`.
+
+### V-16 — `test_deploy_parity.py` cannot catch a newly-required file · **FIXED 2026-08-12**
+Hand-maintained `SYNC_SET` could not see newly imported siblings until something broke.
+
+**Fix:** `brain/tests/deploy_parity_trace.py` — AST-closure of static `brain.*` imports from `HOOK_ENTRY_POINTS` (`post_tool_use.py`, `session_end.py`), minus `EXCLUDED`, plus `brain/ingest/__init__.py` when any ingest submodule is required. `test_deploy_parity.py` parametrizes over `derive_sync_set()` at collection time; `SYNC_SET_REASONS` is documentation-only.
+
+**Discovered drift:** AST added `action_state.py`, `session_start.py`, `db.py`, `embedder.py`, `corpus_barrier.py` — two were out of sync with Documents/AI (synced). `fact_curator.py` correctly **drops** from hook sync (tool-only via `backfill_facts.py`, not hook path).
+
+**Teeth:** `test_derive_sync_set_teeth_empty_entry_points` — empty entry points → `session_end` not required. `test_derive_sync_set_includes_hook_entry_points` — both entry points always in set.
 
 ### V-17 — Single shared rate-limit bucket starves the hooks · **FIXED 2026-07-30**
 `client_key()` (`brain_api.rs:1388`) returns `"local"` for anything without an `x-forwarded-for` header, so hooks, MCP, evals, backfills and ad-hoc scripts share one 120 req/60 s budget. Reproduced repeatedly during verification. Hook saves then fail-soft into the spool — silent, and easy to miss. Not part of A1–A9, but it directly threatens Success Criterion 1.
@@ -256,8 +281,12 @@ Measured against the live DB at `oversample=1.5`: every stratum has slack except
 
 **Verified live after rebuild + `launchctl kickstart -k com.brain.api` (pid 88127 → 50800):** read bucket exhausted (`/stats` → 429) while a same-client `/save` returned **200** (id `27fd5c0c…`) — the exact sequence that returned 429 pre-fix.
 
-### V-18 — Extraction runs *before* the save, so it is paid on deduped and failed saves · **OPEN**
-Identical content saved twice returned the **same id** (server-side dedup) after a full 0.66 s GPU call on the second. Same shape on an API outage: full extraction cost, then a spooled payload that D5 forbids re-extracting — the work is discarded.
+### V-18 — Extraction runs *before* the save, so it is paid on deduped and failed saves · **FIXED 2026-08-12**
+Identical content saved twice returned the **same id** (server-side dedup) after a full GPU call on the second. Same shape on API outage: full extraction cost, then a spooled payload that D5 forbids re-extracting.
+
+**Fix:** `POST /save` response adds `deduped: bool` (`SaveOutcome` in Rust). Python `save_memory*` saves without entities, then `_link_entities_after_save` runs extract + `link_entities` only when save succeeded and `deduped` is false. Failed saves never call the extractor.
+
+**Teeth:** `test_deduped_save_skips_extraction`, `test_save_failure_skips_extraction` in `test_api_client_auto_entities.py`; `save_memory_reports_deduped_flag` in Rust.
 
 ---
 
@@ -268,22 +297,22 @@ Identical content saved twice returned the **same id** (server-side dedup) after
 | V-19 | `extract_entities` raised on non-`str` input (`text[:N]` was outside the `try`) — the docstring promised it never raises, and the test named for that invariant only made `_call_llm` raise | **FIXED** |
 | V-20 | `_parse_entities` was outside the `try`; an OpenAI-compatible gateway returning `content` as a list of parts would raise | **FIXED** |
 | V-21 | `[str(item) for item in raw_entities]` stringified junk — `{"entities":[{"name":"React"}]}` became an entity named `{'name': 'React'}` | **FIXED** |
-| V-22 | `cosine_distance` returns a bare `1.0` on dimension mismatch with no log; if the embed model ever changes without a re-embed, every expanded hit silently reverts to the value downstream consumers discard. Unreachable today (all 17,681 embeddings are 768-dim, 0 NULL) | OPEN |
-| V-23 | Bootstrap percentile index off by one, biased **up** — the lower bound is the one criterion 6 gates on, so the bias direction is unsafe. No measurable practical effect | OPEN |
-| V-24 | `mcnemar_exact` overflows at `b+c ≥ 1024` (`2.0**n`). Unreachable at `min_n=150` | OPEN |
-| V-25 | Criterion 10 fails **open** when `baseline.latency_ms_p95` rounds to 0.00 — demonstrated passing a ~1e7× slowdown | OPEN |
-| V-26 | `gate()` raises `TypeError` on `p_two_sided: null` instead of failing closed; every other malformed input degrades to FAIL | OPEN |
-| V-27 | No `hit@5` no-harm gate despite A1's prose calling k=3 and k=5 "no-harm gates"; implementation matches the numbered criteria, prose and criteria disagree | OPEN |
-| V-28 | `MAX_VOCAB_OVERLAP = 0.45` is tightly coupled to the exact shipped `_STOPWORDS`; the spec's cited mean (0.224) reproduces under a *different* stoplist than the one shipped (0.2356). Max (0.4545) reproduces exactly | OPEN |
-| V-29 | `n_skipped_dangling` is dropped exactly when it matters — an all-dangling gold set returns `status="skipped"`, `reason="no queries completed"` with no indication that 100% dangling was the cause | OPEN |
-| V-30 | `brain/mcp_eval.py` is a **divergent** stale duplicate lacking the A9b fix (no importer found) | OPEN |
-| V-31 | `_load_corpus_ids` counts superseded memories as present, so a superseded gold target is scored as a guaranteed miss — the same P@1-deflation shape A9b fixed | OPEN |
-| V-32 | 78.7% of new entities are degree-1 (6,397 of 8,133) — index weight, no traversal value | OPEN |
-| V-33 | Identity fragmentation: `FEM`/`FINITE ELEMENT METHOD`, `MCP`/`MCP servers`, `gen_gold_graph.py`/`brain/tools/gen_gold_graph.py`. Normalization is lowercase-only; no aliasing | OPEN |
-| V-34 | `MAX_INPUT_CHARS` is a char cap, not a token cap — 8,000 chars is 8 KB ASCII but 24 KB CJK / 32 KB emoji, so A5's "≈1,221 tokens ≈ 2.0 s" holds only for ASCII | OPEN |
-| V-35 | `memory_type` is matched case- and whitespace-sensitively; `"Solution"` or `"solution "` silently skip extraction. `mcp/server.py` normalizes, so only direct `api_client` callers are exposed | OPEN |
-| V-36 | `pop_matching_error`'s proximity fallback (`MAX_FIX_DISTANCE = 3`) mislabels memories — a Bash failure matched an unrelated `Write` one call later, producing a `solution` claiming a fix that never happened. Pre-existing | OPEN |
-| V-37 | `brain_api.err` holds a ~600-line historical crash-loop (`database disk image is malformed`), never rotated and undateable. `PRAGMA integrity_check` is `ok` now | OPEN |
+| V-22 | `cosine_distance` returns a bare `1.0` on dimension mismatch with no log; if the embed model ever changes without a re-embed, every expanded hit silently reverts to the value downstream consumers discard. Unreachable today (all 17,681 embeddings are 768-dim, 0 NULL) | **FIXED 2026-10-16** — still returns neutral 1.0; logs once per process. Test `cosine_distance_mismatch_is_neutral_not_a_truncated_dot` |
+| V-23 | Bootstrap percentile index off by one, biased **up** — the lower bound is the one criterion 6 gates on, so the bias direction is unsafe. No measurable practical effect | **FIXED 2026-10-16** — type-1 `ceil` via `_percentile` |
+| V-24 | `mcnemar_exact` overflows at `b+c ≥ 1024` (`2.0**n`). Unreachable at `min_n=150` | **FIXED 2026-10-16** — log-space; `2.0**1024` is `inf`, new p stays finite |
+| V-25 | Criterion 10 fails **open** when `baseline.latency_ms_p95` rounds to 0.00 — demonstrated passing a ~1e7× slowdown | **FIXED 2026-10-16** — ratio key omitted → INVALID_SET |
+| V-26 | `gate()` raises `TypeError` on `p_two_sided: null` instead of failing closed; every other malformed input degrades to FAIL | **FIXED 2026-10-16** — null/non-numeric → INVALID_SET |
+| V-27 | No `hit@5` no-harm gate despite A1's prose calling k=3 and k=5 "no-harm gates"; implementation matches the numbered criteria, prose and criteria disagree | OPEN — numbered criteria win; do not add a gate the criteria do not name |
+| V-28 | `MAX_VOCAB_OVERLAP = 0.45` is tightly coupled to the exact shipped `_STOPWORDS`; the spec's cited mean (0.224) reproduces under a *different* stoplist than the one shipped (0.2356). Max (0.4545) reproduces exactly | OPEN — calibration note, threshold not retuned |
+| V-29 | `n_skipped_dangling` is dropped exactly when it matters — an all-dangling gold set returns `status="skipped"`, `reason="no queries completed"` with no indication that 100% dangling was the cause | **FIXED 2026-10-16** — skipped payload includes the count and a dangling reason |
+| V-30 | `brain/mcp_eval.py` is a **divergent** stale duplicate lacking the A9b fix (no importer found) | **FIXED 2026-10-16** — module re-exports `brain.tools.mcp_eval` |
+| V-31 | `_load_corpus_ids` counts superseded memories as present, so a superseded gold target is scored as a guaranteed miss — the same P@1-deflation shape A9b fixed | **FIXED 2026-10-16** — SQL skips `superseded_by` when the column exists |
+| V-32 | 78.7% of new entities are degree-1 (6,397 of 8,133) — index weight, no traversal value | OPEN — product fact, not a defect to mass-delete |
+| V-33 | Identity fragmentation: `FEM`/`FINITE ELEMENT METHOD`, `MCP`/`MCP servers`, `gen_gold_graph.py`/`brain/tools/gen_gold_graph.py`. Normalization is lowercase-only; no aliasing | OPEN — no alias table without an owner-locked list |
+| V-34 | `MAX_INPUT_CHARS` is a char cap, not a token cap — 8,000 chars is 8 KB ASCII but 24 KB CJK / 32 KB emoji, so A5's "≈1,221 tokens ≈ 2.0 s" holds only for ASCII | OPEN — changing the cap changes extraction input |
+| V-35 | `memory_type` is matched case- and whitespace-sensitively; `"Solution"` or `"solution "` silently skip extraction. `mcp/server.py` normalizes, so only direct `api_client` callers are exposed | **FIXED 2026-10-16** — strip+lower before the durable-type check; cap lookup too |
+| V-36 | `pop_matching_error`'s proximity fallback (`MAX_FIX_DISTANCE = 3`) mislabels memories — a Bash failure matched an unrelated `Write` one call later, producing a `solution` claiming a fix that never happened. Pre-existing | **FIXED 2026-10-16** — path match only; proximity fallback removed |
+| V-37 | `brain_api.err` holds a ~600-line historical crash-loop (`database disk image is malformed`), never rotated and undateable. `PRAGMA integrity_check` is `ok` now | OPEN — do not delete the log from this pass |
 
 ---
 
@@ -325,19 +354,21 @@ Owner chose **operational safety first** (2026-07-29).
 | — | **V-08** Stop-hook background guard | ✅ closed |
 | — | **V-38** hook entry-point drift | ✅ closed (fell out of V-08) |
 | — | **V-17** rate-limit keying — read/write bucket split | ✅ closed — deployed + verified live |
-| 2 | **V-04** revoke + purge credentials, add a secret-shape filter | ← next · needs owner action |
+| — | **V-04** revoke + purge credentials, add a secret-shape filter | ✅ closed — filter + purge; revoke still owner; redact deferred |
 | — | **V-05** orphan-edge leak (delete path + link-without-check) | ✅ closed — deployed, swept 1190→0, verified live |
-| 4 | **V-07 + V-10** entity-quality cleanup and per-type caps | blocks the A/B |
-| 5 | **V-09, V-12, V-14** remaining gate holes → then run the A/B | |
-| 6 | **V-15, V-16, V-18** | |
+| — | **V-07 + V-10** entity-quality cleanup and per-type caps | ✅ closed — junk/hubs purged; caps+rank forward |
+| — | **V-09, V-12, V-14** remaining gate holes → then run the A/B | ✅ closed — gate/CLI/gold preflight fixed |
+| 7 | **A/B run** or **V-11** backfill | ← next (V-15–V-18 closed) |
 | 7 | LOW table as hygiene | nothing blocks |
 
 **Sequencing notes**
 
-- **V-17 is not purely additive.** Changing the bucket key affects every client, so reproduce the starvation first and agree the keying scheme before changing it.
-- **V-04 needs the owner**: key revocation is not mine to do, and purging entities writes to the production DB.
-- **V-07 gates the A1 A/B.** Running the gate on a 28%-junk graph produces a precise number that measures noise propagation. Cleanup first, or the result is misleading rather than merely weak.
-- **V-05 closed 2026-08-02** — was the only self-worsening item. Verification surfaced a second orphan source (`/link-entities` with no existence check) beyond the documented delete path; both fixed. Note for future readers: `?mode=ro` sqlite reads undercount against an uncheckpointed WAL — use `.backup` or checkpoint first when auditing live counts.
+- **V-04b (2026-08-12):** graph secret entities held at 0 after widened filter + residual purge; **revoke keys + content redaction** still owner. `junk_scrub_backups/` gitignored. Reload MCP so filter loads. Rust `/link-entities` still lacks server-side secret check.
+- **V-07 + V-10 closed 2026-08-12** — deg-1 junk + measured hubs purged; Scene removed in V-04b; non-deg1 Tailwind residual remains; forward caps/salience.
+- **V-09 / V-12 / V-14 closed 2026-08-12** — unfiltered → INVALID_SET for criterion 9; bootstrap floor 1000; gold capacity preflight. A/B ready (plus filtered sub-runs).
+- **V-05 closed 2026-08-02** — orphan sources fixed; orphans held at 0.
+- **Next:** A/B run or V-11 backfill. V-15/V-16/V-18 closed 2026-08-12.
+- **Superseded 2026-10-17:** the A/B already ran (expand hurts; leave `graph_expand` off). V-11 remeasured at 6,667 edgeless durable rows and was not backfilled. Read [`2026-10-17-verification-queue-status.md`](./2026-10-17-verification-queue-status.md) before picking the next issue.
 
 ## Closure log
 
@@ -349,3 +380,54 @@ Owner chose **operational safety first** (2026-07-29).
 | 2026-07-29 | V-38 | 3 files synced; parity 11 tests / 9 files; both hooks verified live |
 | 2026-07-30 | V-17 | read/write bucket split; teeth-proven regression test; deployed (pid 88127→50800) and verified live — read flood no longer 429s a same-client save |
 | 2026-08-02 | V-05 | two orphan sources fixed (delete-path edge cleanup + link existence guard); 2 teeth-proven tests; deployed; swept 1190→0; verified live (delete cleans, link-guard blocks); orphans held at 0 |
+| 2026-08-12 | V-04 | secret-shape filter + teeth tests; purged 6→0 entities/8 edges then 1 re-mint from stale MCP process (re-purged); live count 0; sync to Documents/AI hook tree; memory redact deferred; provider revoke still owner; **reload Cursor brain MCP** so filter loads |
+| 2026-08-12 | V-04b | validation: widen filter (bare/slash secrets); sanitize entities=/link_entities; purge remints+Scene; gitignore+redact v04 backups; content redact still deferred; Rust link path still open |
+| 2026-08-12 | V-07 | stoplist hubs + junk-shape filter; purged 398 entities/711 edges (deg-1 junk + 8 hubs); backup under junk_scrub_backups/; hubs gone; orphans 0; teeth-proven |
+| 2026-08-12 | V-10 | MAX_ENTITIES_BY_TYPE + salience rank before truncate; api_client/backfill pass memory_type; forward-only (no re-extract of existing at-cap rows) |
+| 2026-08-12 | V-09 | gate skips criterion 9 unless filtered sub-run; filter_criterion_status; 61 tests |
+| 2026-08-12 | V-09b | validation fix: unfiltered → INVALID_SET (not silent skip); --lift-only escape; teeth tests |
+| 2026-08-12 | V-12 | MIN_BOOTSTRAP_ITERS=1000; CLI exit 2 if lower |
+| 2026-08-12 | V-12b | build_report also enforces floor; CLI test checks V-12 stderr before gold load |
+| 2026-08-12 | V-14 | check_stratum_capacity + MIN_REJECTION_SLACK=5; live decision slack +6 |
+| 2026-08-12 | V-18 | extract-after-save + `deduped` on `/save`; link_entities post-save; Python+Rust teeth |
+| 2026-08-12 | V-16 | AST-derived sync set via deploy_parity_trace.py; 21 parity tests; synced action_state+session_start drift; fact_curator off hook path |
+| 2026-08-12 | V-15 | `_LAZY_SUBMODULES` + 8 teeth tests; `bi.payloads` / `bi.fact_curator` etc. resolve without eager heavy imports |
+| 2026-10-16 | V-13, V-22–V-26, V-29–V-31, V-35, V-36, V-04 Rust link guard | code fixes + tests below. Not deployed. No bulk DB write. |
+
+## Updates
+
+### 2026-10-16 — fail-closed hygiene, no bulk
+
+Reproduced in the working tree, then fixed. Tests run: `pytest` on `test_graph_expand_ab.py`, `test_mcp_eval.py`, `test_api_client_auto_entities.py`, `test_smart_capture.py`, `test_entity_extractor.py` (164 passed, then the overflow assertion tightened and the new cases re-run, 15 passed). Rust: `cosine_distance_mismatch_is_neutral_not_a_truncated_dot` and `link_memory_entities_drops_secret_shaped_names` passed. `link_memory_entities_skips_nonexistent_memory` kept its `#[test]` (an edit had briefly stripped it; restored before the warning was left in the tree).
+
+Left open on purpose:
+
+- **V-11** — edgeless backfill is a bulk write. No canary eyeball this session, so it was not run.
+- **V-27, V-28, V-32, V-33, V-34, V-37** — spec disagreement, calibration note, degree-1 share, aliasing, char-vs-token cap, historical log. No code change.
+- **V-04 content redaction** — owner already said dead keys stay in memory bodies. Graph filter + the new Rust `looks_like_secret` guard on `link_memory_entities` is the remaining code hole. Provider revoke is still the owner's.
+
+`brain_api` was not rebuilt or restarted, so the Rust secret guard is in source only until the next release build.
+
+### 2026-10-16 — forensic remeasure (read-only)
+
+Three read-only passes inspected the tree before the fixes above were saved. Re-checked after: V-13, V-22–V-26, V-29–V-31, V-35, V-36, and `looks_like_secret` are in the working tree. Their "still open" line cites are stale.
+
+Live DB (`mode=ro`), same day:
+
+| Check | Measured |
+|---|---|
+| Memories / edges / entities | 26,321 · 70,671 · 27,348 |
+| V-11 edgeless durable, non-superseded | **6,667** (solution 5,140, fact 1,054, knowledge 168, project_context 86, conversation 80, pattern 57, decision 55, error_lesson 27). The Aug-19 "backfill finished, ~9 left" note does not match this database. |
+| V-32 degree exactly 1 | **65.75%** (17,980 / 27,348). The 78.7% figure is stale. |
+| V-31 superseded rows inside an unfiltered `SELECT id` | **9,982** |
+| V-28 overlap, 17/17 `gold_semantic.jsonl` vs live content | mean **0.2356**, max **0.4545**. Comment updated. `MAX_VOCAB_OVERLAP` stays 0.45. |
+| Generic names still stored | `JSON` deg 127, `table` 28, `stack` 20, `Re` 17. Stoplist comment still leaves Row/Stat/Table/Stack/State/Query out. Not purged. |
+
+Still not done, with reason:
+
+- **V-11** stays a bulk link job. No canary eyeball, no backfill.
+- **V-27** prose clarified in the amendments. No new `hit@5` gate.
+- **V-33 / V-34** alias map and token cap stay out. Both change extraction or merge existing rows.
+- **Index residual:** `mark_superseded` is a SQL update. Python curators write it directly, so the in-memory vector index keeps those embeddings until `brain_api` restarts. Startup load now skips `superseded_by`. Search drops them only when a filter is present and `exclude_superseded` is set. No mid-process `index.remove` was added.
+- **V-37** live log is `~/Library/Logs/brain_api.err` (~12 MB). Plist has no rotation. Log was not deleted.
+- **V-18** save-then-link is in the uncommitted tree. Batch saves still do not auto-extract. A response missing `deduped` is treated as not deduped, so an old binary would still extract. `brain_api` was not restarted.

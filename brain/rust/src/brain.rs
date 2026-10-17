@@ -13,7 +13,7 @@ use crate::title::derive_memory_title;
 use crate::summarizer::{LlmClient, ReflectionResult, Summarizer};
 use crate::{
     BrainError, BrainStats, FeedbackEventRecord, FeedbackEventType, FeedbackSource, Memory,
-    MemoryMetadata, MemorySource, MemoryType, SearchFilter, SearchResult,
+    MemoryMetadata, MemorySource, MemoryType, SaveOutcome, SearchFilter, SearchResult,
 };
 
 /// Cosine-distance threshold for the preventive save-time dedup guard. Memories
@@ -59,6 +59,17 @@ pub(crate) fn knowledge_closeness(distance: f32) -> f32 {
 /// the cosine similarity. Mismatched dimensions yield the neutral 1.0.
 fn cosine_distance(query: &[f32], other: &[f32]) -> f32 {
     if query.len() != other.len() {
+        // Once per process. A dim mismatch means the embedder changed without
+        // a re-embed; every expanded hit would otherwise look orthogonal (V-22).
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static LOGGED: AtomicBool = AtomicBool::new(false);
+        if !LOGGED.swap(true, Ordering::Relaxed) {
+            eprintln!(
+                "cosine_distance: dimension mismatch {} vs {} — returning neutral 1.0",
+                query.len(),
+                other.len()
+            );
+        }
         return 1.0;
     }
     (1.0 - query.iter().zip(other).map(|(a, b)| a * b).sum::<f32>()).clamp(0.0, 2.0)
@@ -167,11 +178,7 @@ impl Brain {
         self.memory_events.as_ref().map(|tx| tx.subscribe())
     }
 
-    /// Save a memory. Returns the new memory ID.
-    ///
-    /// Pass `timestamp` to preserve event time for backfilled / historical content
-    /// (e.g. old session ended_at, perplexity created_at, file mtime). When `None`,
-    /// `Utc::now()` is used — correct for live captures.
+    /// Save a memory. Returns the memory id and whether the write was deduplicated.
     #[allow(clippy::too_many_arguments)]
     pub fn save_memory(
         &self,
@@ -189,7 +196,7 @@ impl Brain {
         event_time: Option<DateTime<Utc>>,
         salience: Option<f64>,
         derived_from: Option<&str>,
-    ) -> Result<String, BrainError> {
+    ) -> Result<SaveOutcome, BrainError> {
         let content = crate::privacy::strip_private_blocks(content);
         let resolved_title = title
             .map(str::trim)
@@ -220,7 +227,10 @@ impl Brain {
                     memory_type: mt,
                 });
             }
-            return Ok(existing_id);
+            return Ok(SaveOutcome {
+                id: existing_id,
+                deduped: true,
+            });
         }
 
         let memory = Memory {
@@ -276,7 +286,10 @@ impl Brain {
             }
         }
 
-        Ok(id)
+        Ok(SaveOutcome {
+            id,
+            deduped: false,
+        })
     }
 
     /// Return the id of an existing near-duplicate (cosine distance below
@@ -910,7 +923,8 @@ mod tests {
                 None,
                 None,
             )
-            .unwrap();
+            .unwrap()
+            .id;
         let evt = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv())
             .await
             .expect("timeout")
@@ -922,17 +936,19 @@ mod tests {
     #[test]
     fn save_memory_returns_uuid() {
         let brain = test_brain();
-        let id = brain
+        let outcome = brain
             .save_memory("fix the parser bug", MemoryType::Solution, &["parser", "bug"], "myproject", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None)
             .unwrap();
-        assert!(!id.is_empty());
-        assert_eq!(id.len(), 36); // UUID v4 format
+        assert!(!outcome.deduped);
+        assert!(!outcome.id.is_empty());
+        assert_eq!(outcome.id.len(), 36); // UUID v4 format
     }
 
     fn save(brain: &Brain, content: &str, ty: MemoryType, project: &str) -> String {
         brain
             .save_memory(content, ty, &[], project, None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None)
             .unwrap()
+            .id
     }
 
     #[test]
@@ -943,6 +959,48 @@ mod tests {
         // Duplicate is skipped: returns the existing id, corpus does not grow.
         assert_eq!(id1, id2);
         assert_eq!(brain.list_all_memories().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn save_memory_reports_deduped_flag() {
+        let brain = test_brain();
+        let first = brain
+            .save_memory(
+                "identical body text",
+                MemoryType::Solution,
+                &[],
+                "p",
+                None,
+                MemorySource::ClaudeCodeSession,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        assert!(!first.deduped);
+        let dup = brain
+            .save_memory(
+                "identical body text",
+                MemoryType::Solution,
+                &[],
+                "p",
+                None,
+                MemorySource::ClaudeCodeSession,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        assert!(dup.deduped);
+        assert_eq!(dup.id, first.id);
     }
 
     #[test]
@@ -991,7 +1049,8 @@ mod tests {
                 None,
                 None,
             )
-            .expect("save");
+            .expect("save")
+            .id;
         let mem = brain.store.get_memory(&id).expect("get").expect("exists");
         assert!(!mem.content.contains("secret"));
         assert!(mem.content.contains("public part"));
@@ -1016,7 +1075,8 @@ mod tests {
                 None,
                 None,
             )
-            .unwrap();
+            .unwrap()
+            .id;
         let mem = brain.store.get_memory(&id).unwrap().expect("get");
         assert_eq!(mem.metadata.title.as_deref(), Some("API"));
     }
@@ -1056,7 +1116,8 @@ mod tests {
         let brain = test_brain();
         let id = brain
             .save_memory("refactor the embedder module", MemoryType::Solution, &["refactor"], "AI", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None)
-            .unwrap();
+            .unwrap()
+            .id;
         let results = brain.search("refactor the embedder module", 5, None).unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].id, id);
@@ -1130,13 +1191,16 @@ mod tests {
 
         let seed_id = brain
             .save_memory(query, MemoryType::Fact, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None)
-            .unwrap();
+            .unwrap()
+            .id;
         let decoy_id = brain
             .save_memory(&decoy_text, MemoryType::Fact, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None)
-            .unwrap();
+            .unwrap()
+            .id;
         let neighbor_id = brain
             .save_memory(&neighbor_text, MemoryType::Fact, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None)
-            .unwrap();
+            .unwrap()
+            .id;
         for filler in &fillers {
             brain
                 .save_memory(filler, MemoryType::Fact, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None)
@@ -1317,6 +1381,14 @@ mod tests {
         }
     }
 
+    #[test]
+    fn cosine_distance_mismatch_is_neutral_not_a_truncated_dot() {
+        // Without the length guard, zip stops at the shorter vector and a
+        // unit prefix scores as identical (distance 0) instead of neutral 1.
+        assert_eq!(cosine_distance(&[1.0, 0.0], &[1.0]), 1.0);
+        assert_eq!(cosine_distance(&[], &[1.0]), 1.0);
+    }
+
     /// A2.3: injected neighbors carried a hardcoded `distance: 1.0`, which
     /// downstream consumers read as "orthogonal to the query" and discard.
     #[test]
@@ -1397,8 +1469,8 @@ mod tests {
     #[test]
     fn delete_memories_removes_from_store_and_index() {
         let brain = test_brain();
-        let id1 = brain.save_memory("keep this", MemoryType::Solution, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None).unwrap();
-        let id2 = brain.save_memory("delete this", MemoryType::Solution, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None).unwrap();
+        let id1 = brain.save_memory("keep this", MemoryType::Solution, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None).unwrap().id;
+        let id2 = brain.save_memory("delete this", MemoryType::Solution, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None).unwrap().id;
 
         let removed = brain.delete_memories(&[&id2]).unwrap();
         assert_eq!(removed, 1);
@@ -1631,7 +1703,8 @@ mod tests {
                 None,
                 None,
             )
-            .unwrap();
+            .unwrap()
+            .id;
         let mem = brain.store.get_memory(&id).unwrap().expect("saved memory");
         assert_eq!(
             mem.metadata.file_path.as_deref(),

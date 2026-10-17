@@ -34,6 +34,7 @@ This doc series preserves **complete context** for the Brain Forge Harness visio
 
 - [Verification queue handoff](./2026-07-29-verification-queue-handoff.md) — teeth tests, canary rule, working agreement
 - [Verification findings queue](./2026-07-28-durable-entity-linking-verification-findings.md) — V-01…V-38
+- [Verification queue status, 2026-10-17](./2026-10-17-verification-queue-status.md) — current per-item rollup. The handoff’s “start at V-17” section is historical.
 - [Knowledge type design](./2026-08-06-knowledge-type-design.md) — corpus truth layer
 - [Eval framework design](./2026-05-23-eval-framework-design.md) — gold sets, thresholds
 - [TOOLS.md](../../TOOLS.md) — existing tool catalog
@@ -140,3 +141,9 @@ Update this table when a phase starts or closes. **Do not remove rows.**
 - Confirmation dry-run post-`0834003` clean on path/host; CSS/UUID/`styles.*` filter added + live-tree sync.
 - Forge package (`brain/harness/`, `brain/constitution/`, skills, docs) committed so gates/teeth/worker are cloneable.
 - Full corpus backfill still owner-triggered; `com.brain.forge` not launchd-loaded.
+
+### 2026-10-17 — verification queue status page
+
+- Per-item rollup: `docs/superpowers/specs/2026-10-17-verification-queue-status.md` (31 closed or fixed in source, 7 open).
+- Live remeasure 2026-10-16: 6,667 edgeless durable memories. V-11 was not backfilled.
+- October fail-closed fixes (V-13, V-22–V-26, V-29–V-31, V-35, V-36, Rust `looks_like_secret`) are in the working tree only. `brain_api` was not rebuilt.

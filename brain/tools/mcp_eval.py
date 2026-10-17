@@ -79,7 +79,17 @@ def _load_corpus_ids(db_path: Path) -> set[str] | None:
         uri = f"file:{db_path}?mode=ro"
         conn = sqlite3.connect(uri, uri=True, timeout=5)
         try:
-            return {str(r[0]) for r in conn.execute("SELECT id FROM memories")}
+            cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(memories)")}
+            if "superseded_by" in cols:
+                # Superseded / quarantined rows are not retrievable. Counting
+                # them makes a gold hit on a dead id a guaranteed miss (V-31).
+                sql = (
+                    "SELECT id FROM memories "
+                    "WHERE superseded_by IS NULL OR superseded_by = ''"
+                )
+            else:
+                sql = "SELECT id FROM memories"
+            return {str(r[0]) for r in conn.execute(sql)}
         finally:
             conn.close()
     except sqlite3.Error:
@@ -159,7 +169,19 @@ def run_mcp_eval(
                 break
 
     if n_valid == 0:
-        return {"status": "skipped", "reason": "no queries completed"}
+        if n_skipped_dangling:
+            reason = (
+                f"all {n_skipped_dangling} gold id(s) dangling "
+                "(absent or superseded)"
+            )
+        else:
+            reason = "no queries completed"
+        return {
+            "status": "skipped",
+            "reason": reason,
+            "n_queries": 0,
+            "n_skipped_dangling": n_skipped_dangling,
+        }
 
     p1 = hits_at_1 / n_valid
     mrr = mrr_sum / n_valid

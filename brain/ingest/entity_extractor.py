@@ -189,8 +189,9 @@ def _looks_like_junk(name: str) -> bool:
 
 
 def _cap_for_type(memory_type: str | None) -> int:
-    if memory_type and memory_type in MAX_ENTITIES_BY_TYPE:
-        return MAX_ENTITIES_BY_TYPE[memory_type]
+    key = (memory_type or "").strip().lower()
+    if key in MAX_ENTITIES_BY_TYPE:
+        return MAX_ENTITIES_BY_TYPE[key]
     return MAX_ENTITIES_PER_FACT
 
 

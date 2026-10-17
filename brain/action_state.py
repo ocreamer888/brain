@@ -106,17 +106,11 @@ def pop_matching_error(state: dict, file_path: str) -> dict | None:
     stem = Path(file_path).stem.lower()
     name = Path(file_path).name.lower()
 
-    # Match by file stem appearing in error snippet
+    # Match only when the edited path appears in the error. A proximity
+    # fallback paired a Bash failure with the next unrelated Write (V-36).
     for i, err in enumerate(state["recent_errors"]):
         snippet_lower = err["error_snippet"].lower()
         if stem in snippet_lower or name in snippet_lower:
-            return state["recent_errors"].pop(i)
-
-    # Proximity fallback: most recent error within MAX_FIX_DISTANCE tool calls
-    current = state["tool_count"]
-    for i in range(len(state["recent_errors"]) - 1, -1, -1):
-        err = state["recent_errors"][i]
-        if current - err["tool_count_at"] <= MAX_FIX_DISTANCE:
             return state["recent_errors"].pop(i)
 
     return None

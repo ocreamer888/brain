@@ -1,0 +1,199 @@
+{
+  "overall": {
+    "n": 18370,
+    "mrr": 0.9554,
+    "precision@1": 0.9325,
+    "precision@3": 0.9763,
+    "precision@5": 0.9826,
+    "precision@10": 0.9872,
+    "median_rank": 1
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 1309,
+      "mrr": 0.816,
+      "precision@1": 0.7609,
+      "precision@3": 0.8564,
+      "precision@5": 0.8816,
+      "precision@10": 0.9045
+    },
+    "\"decision\"": {
+      "n": 44,
+      "mrr": 0.9356,
+      "precision@1": 0.8864,
+      "precision@3": 0.9773,
+      "precision@5": 0.9773,
+      "precision@10": 1.0
+    },
+    "\"episode\"": {
+      "n": 2,
+      "mrr": 0.5001,
+      "precision@1": 0.5,
+      "precision@3": 0.5,
+      "precision@5": 0.5,
+      "precision@10": 0.5
+    },
+    "\"error_lesson\"": {
+      "n": 71,
+      "mrr": 0.9371,
+      "precision@1": 0.9014,
+      "precision@3": 0.9859,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"fact\"": {
+      "n": 14875,
+      "mrr": 0.9753,
+      "precision@1": 0.9568,
+      "precision@3": 0.9942,
+      "precision@5": 0.9971,
+      "precision@10": 0.9983
+    },
+    "\"pattern\"": {
+      "n": 133,
+      "mrr": 0.8914,
+      "precision@1": 0.8346,
+      "precision@3": 0.9248,
+      "precision@5": 0.9624,
+      "precision@10": 0.985
+    },
+    "\"project_context\"": {
+      "n": 354,
+      "mrr": 0.8413,
+      "precision@1": 0.8079,
+      "precision@3": 0.8644,
+      "precision@5": 0.8842,
+      "precision@10": 0.8955
+    },
+    "\"solution\"": {
+      "n": 1582,
+      "mrr": 0.9157,
+      "precision@1": 0.8856,
+      "precision@3": 0.9368,
+      "precision@5": 0.9532,
+      "precision@10": 0.9716
+    }
+  },
+  "by_project": {
+    "cursor": {
+      "n": 6056,
+      "mrr": 0.9775,
+      "precision@1": 0.9584,
+      "precision@3": 0.997,
+      "precision@5": 0.9993,
+      "precision@10": 1.0
+    },
+    "src": {
+      "n": 1625,
+      "mrr": 0.9708,
+      "precision@1": 0.9465,
+      "precision@3": 0.9963,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "perplexity": {
+      "n": 1482,
+      "mrr": 0.9867,
+      "precision@1": 0.9757,
+      "precision@3": 0.9973,
+      "precision@5": 0.9993,
+      "precision@10": 1.0
+    },
+    "ppf-contact-solver": {
+      "n": 1070,
+      "mrr": 0.9058,
+      "precision@1": 0.8645,
+      "precision@3": 0.943,
+      "precision@5": 0.9589,
+      "precision@10": 0.9701
+    },
+    "ocreamer": {
+      "n": 975,
+      "mrr": 0.9549,
+      "precision@1": 0.9282,
+      "precision@3": 0.9805,
+      "precision@5": 0.9897,
+      "precision@10": 0.9928
+    },
+    "landingpage": {
+      "n": 880,
+      "mrr": 0.9695,
+      "precision@1": 0.9455,
+      "precision@3": 0.9955,
+      "precision@5": 0.9989,
+      "precision@10": 1.0
+    },
+    "AI": {
+      "n": 846,
+      "mrr": 0.8992,
+      "precision@1": 0.8759,
+      "precision@3": 0.9125,
+      "precision@5": 0.9303,
+      "precision@10": 0.9397
+    },
+    "frontend": {
+      "n": 747,
+      "mrr": 0.9726,
+      "precision@1": 0.9518,
+      "precision@3": 0.9946,
+      "precision@5": 0.9973,
+      "precision@10": 0.9987
+    },
+    "owelign": {
+      "n": 708,
+      "mrr": 0.9707,
+      "precision@1": 0.9562,
+      "precision@3": 0.9816,
+      "precision@5": 0.9873,
+      "precision@10": 0.9887
+    },
+    "sicop": {
+      "n": 601,
+      "mrr": 0.9975,
+      "precision@1": 0.995,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "general": {
+      "n": 547,
+      "mrr": 0.9252,
+      "precision@1": 0.8848,
+      "precision@3": 0.9634,
+      "precision@5": 0.9762,
+      "precision@10": 0.989
+    },
+    "sicop-health": {
+      "n": 514,
+      "mrr": 0.9016,
+      "precision@1": 0.8755,
+      "precision@3": 0.9202,
+      "precision@5": 0.9319,
+      "precision@10": 0.9416
+    },
+    ".claude": {
+      "n": 455,
+      "mrr": 0.8469,
+      "precision@1": 0.8044,
+      "precision@3": 0.8681,
+      "precision@5": 0.8901,
+      "precision@10": 0.9319
+    },
+    "le_chandelier": {
+      "n": 222,
+      "mrr": 0.9899,
+      "precision@1": 0.982,
+      "precision@3": 0.9955,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "brain": {
+      "n": 211,
+      "mrr": 0.8964,
+      "precision@1": 0.8483,
+      "precision@3": 0.9431,
+      "precision@5": 0.9431,
+      "precision@10": 0.9621
+    }
+  }
+}

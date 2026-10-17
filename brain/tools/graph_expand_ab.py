@@ -29,6 +29,11 @@ Usage:
     python3 brain/tools/graph_expand_ab.py \
         --gold brain/eval/gold_graph_expand.jsonl --ks 1,3,5,10 \
         --surface template --report brain/eval/runs/graph_expand_ab_$(date +%F).json
+    # Criterion 9 (filter integrity) — separate filtered sub-runs (V-09):
+    python3 brain/tools/graph_expand_ab.py ... --surface plain --memory-type solution \
+        --report brain/eval/runs/graph_expand_ab_type.json
+    python3 brain/tools/graph_expand_ab.py ... --project brain \
+        --report brain/eval/runs/graph_expand_ab_project.json
 """
 from __future__ import annotations
 
@@ -54,6 +59,10 @@ DEFAULT_GOLD = _REPO_ROOT / "brain" / "eval" / "gold_graph_expand.jsonl"
 EXCLUDED_TYPE = "episode"
 PRIMARY_K = 10
 
+# V-12: iters below this make criterion 6's "95% CI" a coin flip (iters=1 →
+# false-positive rate ~0.26 vs nominal 0.025). CLI must refuse.
+MIN_BOOTSTRAP_ITERS = 1000
+
 # Criterion 8's CI floor on the MRR delta. Not a GateConfig field because the
 # A1 interface fixes GateConfig's members; kept explicit here rather than
 # reusing max_delta_mrr_loss, which is a different quantity (point vs CI).
@@ -73,6 +82,9 @@ class GateConfig:
     max_delta_mrr_loss: float = 0.01
     max_delta_hit3_loss: float = 0.02
     max_p95_latency_ratio: float = 1.25
+    # V-09: full PASS requires a filtered sub-run. Set True only for lift-only
+    # analysis that explicitly skips criterion 9 (--lift-only).
+    allow_unfiltered_skip_criterion_9: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -241,8 +253,16 @@ def mcnemar_exact(b: int, c: int) -> float:
     n = b + c
     if n == 0:
         return 1.0
-    tail = sum(math.comb(n, i) for i in range(min(b, c) + 1))
-    return min(1.0, 2.0 * tail / (2.0**n))
+    # log-space: 2.0**n overflows float at n >= 1024 (V-24).
+    k = min(b, c)
+    log_two = math.log(2.0)
+    logs = [
+        math.lgamma(n + 1) - math.lgamma(i + 1) - math.lgamma(n - i + 1) - n * log_two
+        for i in range(k + 1)
+    ]
+    pivot = max(logs)
+    tail = math.exp(pivot) * sum(math.exp(x - pivot) for x in logs)
+    return min(1.0, 2.0 * tail)
 
 
 def bootstrap_delta_ci(
@@ -266,8 +286,10 @@ def bootstrap_delta_ci(
             total += diffs[rng.randrange(size)]
         deltas.append(total / size)
     deltas.sort()
-    lo = deltas[max(0, int(0.025 * iters))]
-    hi = deltas[min(iters - 1, int(0.975 * iters))]
+    # Type-1 percentile (ceil). int(0.025 * n) sits one rank high and biases
+    # the lower bound up — criterion 6 gates on that bound (V-23).
+    lo = _percentile(deltas, 0.025)
+    hi = _percentile(deltas, 0.975)
     return (round(lo, 4), round(hi, 4))
 
 
@@ -401,13 +423,20 @@ def build_report(
     bootstrap_iters: int = 10_000,
     seed: int = 42,
 ) -> dict[str, Any]:
+    if bootstrap_iters < MIN_BOOTSTRAP_ITERS:
+        raise ValueError(
+            f"bootstrap_iters {bootstrap_iters} < {MIN_BOOTSTRAP_ITERS} (V-12)"
+        )
     baseline = _score_arm(rows, ks, "off")
     expanded = _score_arm(rows, ks, "on")
 
     delta = {f"hit@{k}": round(expanded[f"hit@{k}"] - baseline[f"hit@{k}"], 4) for k in ks}
     delta["mrr"] = round(expanded[f"mrr@{PRIMARY_K}"] - baseline[f"mrr@{PRIMARY_K}"], 4)
     base_p95 = baseline["latency_ms_p95"]
-    delta["latency_ratio_p95"] = round(expanded["latency_ms_p95"] / base_p95, 4) if base_p95 else 0.0
+    # A 0 baseline must not become ratio 0.0, which criterion 10 reads as a pass
+    # even when the expanded arm is arbitrarily slow (V-25). Absent key → INVALID_SET.
+    if base_p95:
+        delta["latency_ratio_p95"] = round(expanded["latency_ms_p95"] / base_p95, 4)
 
     n_by_type: dict[str, int] = {}
     for entry in gold:
@@ -461,6 +490,10 @@ def build_report(
             "mean_neighbor_degree": round(statistics.mean(degrees), 2) if degrees else None,
             "injected_neighbors_median": statistics.median(injected) if injected else 0,
             "filter_violations": filter_violations(rows, memory_type, project),
+            # V-09: unfiltered runs must not claim criterion 9 via vacuous 0.
+            "filter_criterion_status": (
+                "evaluated" if (memory_type or project) else "skipped_unfiltered"
+            ),
             "dangling_gold_ids": targets["dangling_gold_ids"],
             "n_unlinked_targets": targets["n_unlinked_targets"],
             "n_episode_targets": targets["n_episode_targets"],
@@ -545,9 +578,21 @@ def gate(report: dict[str, Any], cfg: GateConfig = GateConfig()) -> tuple[str, l
     if b_gain <= c_loss:
         underpowered.append(f"4: b_gain {b_gain} <= c_loss {c_loss}")
 
-    # 5 — significance
-    p_value = float(mc.get("p_two_sided", 1.0))
-    if p_value >= cfg.alpha:
+    # 5 — significance. A present null must fail closed, not raise TypeError (V-26).
+    raw_p = mc.get("p_two_sided", 1.0)
+    p_value: float | None
+    if raw_p is None:
+        invalid.append("5: mcnemar['p_two_sided'] is null — cannot evaluate criterion 5")
+        p_value = None
+    else:
+        try:
+            p_value = float(raw_p)
+        except (TypeError, ValueError):
+            invalid.append(
+                f"5: mcnemar['p_two_sided'] {raw_p!r} is not a number — cannot evaluate criterion 5"
+            )
+            p_value = None
+    if p_value is not None and p_value >= cfg.alpha:
         failed.append(f"5: mcnemar p {p_value} >= {cfg.alpha}")
 
     # A criterion whose input is MISSING must never be treated as satisfied.
@@ -592,10 +637,31 @@ def gate(report: dict[str, Any], cfg: GateConfig = GateConfig()) -> tuple[str, l
     if float(ci_mrr[0]) <= CI_DELTA_MRR_FLOOR:
         failed.append(f"8: ci delta_mrr lower bound {ci_mrr[0]} <= {CI_DELTA_MRR_FLOOR}")
 
-    # 9 — filter integrity (A2.1)
-    violations = int(diag.get("filter_violations") or 0)
-    if violations != 0:
-        failed.append(f"9: filter_violations {violations} != 0")
+    # 9 — filter integrity (A2.1). Full PASS requires a filtered sub-run (V-09).
+    # Unfiltered runs used to auto-pass via vacuous filter_violations=0; skipping
+    # silently still left overall PASS (flip hazard). Default: INVALID_SET unless
+    # --lift-only / GateConfig.allow_unfiltered_skip_criterion_9.
+    has_filter = bool(report.get("memory_type_filter") or report.get("project_filter"))
+    status = (diag.get("filter_criterion_status")
+              or ("evaluated" if has_filter else "skipped_unfiltered"))
+    if has_filter:
+        if status != "evaluated":
+            invalid.append(
+                f"9: filter_criterion_status {status!r} but filters are set — inconsistent report"
+            )
+        violations = diag.get("filter_violations")
+        if violations is None:
+            invalid.append("9: diagnostics['filter_violations'] missing — cannot evaluate criterion 9")
+        elif int(violations) != 0:
+            failed.append(f"9: filter_violations {int(violations)} != 0")
+    elif cfg.allow_unfiltered_skip_criterion_9:
+        pass  # lift-only: criterion 9 not part of this verdict
+    else:
+        invalid.append(
+            "9: unfiltered run cannot satisfy criterion 9 — re-run with "
+            "--memory-type (and --surface plain) and/or --project; "
+            "or pass --lift-only to evaluate criteria 1–8,10 only"
+        )
 
     # 10 — latency
     ratio = float(delta.get("latency_ratio_p95", 0.0))
@@ -686,11 +752,25 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--ks", default="1,3,5,10", help="cut-offs to score (must include 10)")
     parser.add_argument("--n", type=int, default=10, help="results requested per search")
     parser.add_argument("--surface", default="template", choices=("template", "plain"))
-    parser.add_argument("--memory-type", default=None, help="type-filtered sub-run (criterion 9)")
+    parser.add_argument("--memory-type", default=None, help="type-filtered sub-run (criterion 9; requires --surface plain)")
     parser.add_argument("--project", default=None, help="project-filtered sub-run (criterion 9)")
-    parser.add_argument("--bootstrap-iters", type=int, default=10_000)
+    parser.add_argument("--bootstrap-iters", type=int, default=10_000,
+                        help=f"bootstrap replicates for CI (min {MIN_BOOTSTRAP_ITERS}; V-12)")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--lift-only",
+        action="store_true",
+        help="evaluate criteria 1–8,10 only (skip criterion 9). Default full PASS requires a filtered run.",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
+
+    if args.bootstrap_iters < MIN_BOOTSTRAP_ITERS:
+        print(
+            f"[graph_expand_ab] --bootstrap-iters {args.bootstrap_iters} < "
+            f"{MIN_BOOTSTRAP_ITERS} (V-12: low iters gut criterion 6's CI)",
+            file=sys.stderr,
+        )
+        return 2
 
     try:
         ks = _parse_ks(args.ks)
@@ -717,7 +797,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         bootstrap_iters=args.bootstrap_iters,
         seed=args.seed,
     )
-    cfg = GateConfig()
+    cfg = GateConfig(allow_unfiltered_skip_criterion_9=args.lift_only)
     verdict, failed_criteria = gate(report, cfg)
     report["gate"] = {
         "verdict": verdict,

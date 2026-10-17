@@ -128,14 +128,16 @@ class TestActionState:
         assert "config.py" in matched["error_snippet"]
         assert len(state["recent_errors"]) == 0
 
-    def test_pop_matching_error_proximity_fallback(self):
+    def test_pop_matching_error_ignores_unrelated_proximity(self):
+        """V-36: a nearby Bash error must not be claimed by an unrelated Write."""
         mod = self._patch_state_file()
         state = mod._empty_state()
         state["tool_count"] = 10
         mod.record_error(state, "Bash", "some random error", "npm test")
-        state["tool_count"] = 12  # within MAX_FIX_DISTANCE
+        state["tool_count"] = 12  # would have matched under MAX_FIX_DISTANCE
         matched = mod.pop_matching_error(state, "/totally/unrelated.py")
-        assert matched is not None
+        assert matched is None
+        assert len(state["recent_errors"]) == 1
 
     def test_pop_matching_error_too_far(self):
         mod = self._patch_state_file()

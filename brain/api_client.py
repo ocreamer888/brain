@@ -122,8 +122,16 @@ def get_entities(memory_id: str) -> list[dict]:
 
 
 def link_entities(memory_id: str, entities: list[str]) -> int:
+    """Link entities onto a memory. Drops secret/junk-shaped names before POST."""
+    try:
+        from brain.ingest.entity_extractor import _clean_entities
+        cleaned = _clean_entities(list(entities or []))
+    except Exception:
+        cleaned = []
+    if not cleaned:
+        return 0
     return _request(
-        "POST", "/link-entities", {"memory_id": memory_id, "entities": entities}
+        "POST", "/link-entities", {"memory_id": memory_id, "entities": cleaned}
     ).get("linked", 0)
 
 
@@ -156,21 +164,70 @@ def _auto_entities_env_enabled() -> bool:
     }
 
 
-def _maybe_extract_entities(*, memory_type, content, entities, auto_entities):
-    if entities:
-        return entities
-    if not auto_entities or not _auto_entities_env_enabled():
-        return entities
+def _clean_supplied_entities(
+    entities: list[str] | None, *, memory_type: str
+) -> list[str] | None:
+    """Sanitize caller-supplied entity names (V-04)."""
+    if not entities:
+        return None
     try:
-        # D6: lazy import keeps api_client stdlib-only at import time.
-        # MUST be inside the try — in an environment without `requests` this
-        # raises ImportError, and an unguarded import would fail the save.
-        from brain.ingest.entity_extractor import extract_entities, DURABLE_MEMORY_TYPES
-        if memory_type not in DURABLE_MEMORY_TYPES:
-            return entities
-        return extract_entities(content) or None
+        from brain.ingest.entity_extractor import _clean_entities
+
+        cleaned = _clean_entities(list(entities), memory_type=memory_type)
+        return cleaned or None
     except Exception:
-        return entities
+        return None
+
+
+def _extract_entities_for_save(
+    *, memory_type: str, content: str, auto_entities: bool
+) -> list[str] | None:
+    """Cheap extractor for live saves — never called before POST /save (V-18)."""
+    if not auto_entities or not _auto_entities_env_enabled():
+        return None
+    try:
+        from brain.ingest.entity_extractor import DURABLE_MEMORY_TYPES, extract_entities
+
+        # "Solution" / "solution " used to skip extraction silently (V-35).
+        memory_type = (memory_type or "").strip().lower()
+        if memory_type not in DURABLE_MEMORY_TYPES:
+            return None
+        return extract_entities(content, memory_type=memory_type) or None
+    except Exception:
+        return None
+
+
+def _link_entities_after_save(
+    memory_id: str,
+    *,
+    deduped: bool,
+    memory_type: str,
+    content: str,
+    entities: list[str] | None,
+    auto_entities: bool,
+) -> None:
+    """Link entities only after a successful, non-deduped save (V-18)."""
+    if deduped or not memory_id:
+        return
+    if entities:
+        cleaned = _clean_supplied_entities(entities, memory_type=memory_type)
+        if cleaned:
+            link_entities(memory_id, cleaned)
+        return
+    extracted = _extract_entities_for_save(
+        memory_type=memory_type, content=content, auto_entities=auto_entities
+    )
+    if extracted:
+        link_entities(memory_id, extracted)
+
+
+def _maybe_extract_entities(*, memory_type, content, entities, auto_entities):
+    """Legacy pre-save helper — retained for tests that patch this symbol."""
+    if entities:
+        return _clean_supplied_entities(entities, memory_type=memory_type)
+    return _extract_entities_for_save(
+        memory_type=memory_type, content=content, auto_entities=auto_entities
+    )
 
 
 def save_memory(
@@ -215,15 +272,17 @@ def save_memory(
         payload["salience"] = salience
     if derived_from is not None:
         payload["derived_from"] = derived_from
-    entities = _maybe_extract_entities(
+    resp = _request("POST", "/save", payload)
+    mem_id = resp.get("id", "")
+    _link_entities_after_save(
+        mem_id,
+        deduped=bool(resp.get("deduped")),
         memory_type=memory_type,
         content=content,
         entities=entities,
         auto_entities=auto_entities,
     )
-    if entities:
-        payload["entities"] = entities
-    return _request("POST", "/save", payload).get("id", "")
+    return mem_id
 
 
 def save_memory_with_status(
@@ -257,17 +316,18 @@ def save_memory_with_status(
         payload["title"] = title
     if timestamp is not None:
         payload["timestamp"] = timestamp
-    entities = _maybe_extract_entities(
+    resp = _request("POST", "/save", payload)
+    mem_id = resp.get("id", "")
+    deduped = bool(resp.get("deduped"))
+    _link_entities_after_save(
+        mem_id,
+        deduped=deduped,
         memory_type=memory_type,
         content=content,
         entities=entities,
         auto_entities=auto_entities,
     )
-    if entities:
-        payload["entities"] = entities
-
-    mem_id = _request("POST", "/save", payload).get("id", "")
-    return {"status": "success", "id": mem_id, "payload": payload}
+    return {"status": "success", "id": mem_id, "payload": payload, "deduped": deduped}
 
 
 def save_memory_batch(items: list[dict], default_auto_entities: bool = False) -> dict:
@@ -302,7 +362,16 @@ def save_memory_batch(items: list[dict], default_auto_entities: bool = False) ->
         if item.get("timestamp") is not None:
             body["timestamp"] = item["timestamp"]
         if item.get("entities"):
-            body["entities"] = item["entities"]
+            try:
+                from brain.ingest.entity_extractor import _clean_entities
+                cleaned = _clean_entities(
+                    list(item["entities"]),
+                    memory_type=body["memory_type"],
+                )
+            except Exception:
+                cleaned = []
+            if cleaned:
+                body["entities"] = cleaned
         payload_items.append(body)
     return _request("POST", "/save-batch", {"items": payload_items}, timeout=120)
 

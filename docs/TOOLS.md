@@ -119,3 +119,7 @@ _(fail-closed acts 1–3, then recover act 4 — not green theater)_
 |  | `export_metrics_prom.py` | Export brain observability metrics in Prometheus text format. |
 |  | `feedback_digest.py` | Append new feedback_events to a markdown digest (Obsidian-style daily inbox). |
 |  | `refresh_obsidian_dashboard.sh` | (shell script — see file header) |
+
+## Verification queue
+
+Per-item status for V-01…V-38, including which entity and eval tools are safe to run: [`docs/superpowers/specs/2026-10-17-verification-queue-status.md`](superpowers/specs/2026-10-17-verification-queue-status.md). `backfill_entities.py` is still canary-first. The 2026-10-16 remeasure found 6,667 edgeless durable rows. Do not start that backfill from this catalog.

@@ -15,6 +15,36 @@ const ENTITY_NS: Uuid = Uuid::from_bytes([
     0xc8,
 ]);
 
+/// Credential-shaped names must not become graph nodes (V-04).
+/// Mirrors the Python `_SECRET_SHAPE_RE` shapes the client already drops.
+/// Direct `POST /link-entities` used to skip that filter.
+pub fn looks_like_secret(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    if lower.contains("sk-or-v1")
+        || lower.contains("sk-ant-")
+        || lower.contains("sk-proj-")
+        || lower.contains("sk-live-")
+        || lower.contains("ghp_")
+        || lower.contains("ghp/")
+        || lower.contains("github_pat_")
+        || lower.contains("github_pat/")
+    {
+        return true;
+    }
+    if let Some(idx) = lower.find("sk-or") {
+        let rest = &lower[idx + 5..];
+        if !rest.starts_with(|c: char| c.is_ascii_alphanumeric()) {
+            return true;
+        }
+    }
+    if name.contains("AKIA") {
+        return true;
+    }
+    ["xoxb-", "xoxa-", "xoxp-", "xoxr-", "xoxs-"]
+        .iter()
+        .any(|prefix| lower.contains(prefix))
+}
+
 pub fn normalize_entity_name(name: &str) -> Option<String> {
     let n = name
         .split_whitespace()
@@ -682,8 +712,12 @@ impl MetadataStore {
     }
 
     pub fn get_embeddings_for_index(&self) -> Result<Vec<(String, Vec<f32>)>, BrainError> {
+        // Skip superseded (incl. quarantine sentinels). Otherwise soft-deleted
+        // rows stay in the in-memory vector index and starve search overfetch.
         let mut stmt = self.conn.prepare(
-            "SELECT id, embedding FROM memories WHERE embedding IS NOT NULL"
+            "SELECT id, embedding FROM memories \
+             WHERE embedding IS NOT NULL \
+               AND (superseded_by IS NULL OR superseded_by = '')"
         ).map_err(|e| BrainError::Database(e.to_string()))?;
         let rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
@@ -948,7 +982,7 @@ impl MetadataStore {
         }
         let mut n = 0usize;
         for name in names {
-            if normalize_entity_name(name).is_none() {
+            if looks_like_secret(name) || normalize_entity_name(name).is_none() {
                 continue;
             }
             let eid = self.upsert_entity(name)?;
@@ -1405,6 +1439,39 @@ mod tests {
     }
 
     #[test]
+    fn link_memory_entities_drops_secret_shaped_names() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        let mem = Memory {
+            id: "m1".into(),
+            content: "keep".into(),
+            metadata: test_metadata(),
+            embedding: None,
+        };
+        store.upsert_memory(&mem).unwrap();
+        let n = store
+            .link_memory_entities(
+                "m1",
+                &[
+                    "React".into(),
+                    "sk-or-v1-deadkey".into(),
+                    "ghp/token".into(),
+                    "sk-order".into(),
+                ],
+            )
+            .unwrap();
+        assert_eq!(n, 2, "secret-shaped names must not be linked");
+        let names: Vec<String> = store
+            .entities_for_memory("m1")
+            .unwrap()
+            .into_iter()
+            .map(|(_, name)| name)
+            .collect();
+        assert!(names.contains(&"React".to_string()));
+        assert!(names.contains(&"sk-order".to_string()));
+        assert!(!names.iter().any(|n| n.contains("sk-or-v1") || n.contains("ghp")));
+    }
+
+    #[test]
     fn link_memory_entities_skips_nonexistent_memory() {
         // V-05 (second source): linking to a never-saved memory must create no
         // edges, or they orphan immediately.
@@ -1534,6 +1601,32 @@ mod tests {
         let pairs = store.get_embeddings_for_index().unwrap();
         assert_eq!(pairs.len(), 1);
         assert_eq!(pairs[0].0, "a");
+    }
+
+    #[test]
+    fn get_embeddings_for_index_skips_superseded() {
+        // Quarantine / soft-delete: superseded rows must not enter the vector index
+        // or search overfetch starves on ghosts (path-fragment fact flood).
+        let store = MetadataStore::open_in_memory().unwrap();
+        let active = Memory {
+            id: "active".into(),
+            content: "keep".into(),
+            metadata: test_metadata(),
+            embedding: Some(vec![1.0, 0.0]),
+        };
+        let mut meta = test_metadata();
+        meta.superseded_by = Some("quarantine:path_fragment_project".into());
+        let quarantined = Memory {
+            id: "ghost".into(),
+            content: "drop".into(),
+            metadata: meta,
+            embedding: Some(vec![0.0, 1.0]),
+        };
+        store.upsert_memory(&active).unwrap();
+        store.upsert_memory(&quarantined).unwrap();
+        let pairs = store.get_embeddings_for_index().unwrap();
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, "active");
     }
 
     #[test]

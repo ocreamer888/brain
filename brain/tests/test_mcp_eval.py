@@ -128,7 +128,8 @@ def test_all_gold_ids_dangling_returns_skipped(tmp_path: Path) -> None:
 
     result = run_mcp_eval(gold, search_fn=search_fn, corpus_ids={"some-other-id"})
     assert result["status"] == "skipped"
-    assert result["reason"] == "no queries completed"
+    assert result["n_skipped_dangling"] == 1
+    assert "dangling" in result["reason"]
 
 
 def test_corpus_ids_defaults_to_loading_from_db_path(tmp_path: Path) -> None:
@@ -174,3 +175,46 @@ def test_corpus_ids_load_failure_falls_back_to_no_filtering(tmp_path: Path) -> N
     assert result["status"] == "ok"
     assert result["n_queries"] == 1
     assert result["n_skipped_dangling"] == 0
+
+
+def test_superseded_gold_id_is_dangling(tmp_path: Path) -> None:
+    """V-31: a superseded row must not count as a present corpus id."""
+    import sqlite3
+
+    from brain.tools.mcp_eval import run_mcp_eval
+
+    db_path = tmp_path / "brain.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE memories (id TEXT PRIMARY KEY, superseded_by TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO memories (id, superseded_by) VALUES ('live-id', NULL)"
+    )
+    conn.execute(
+        "INSERT INTO memories (id, superseded_by) VALUES ('dead-id', 'quarantine:path_fragment_project')"
+    )
+    conn.commit()
+    conn.close()
+
+    gold = _gold_file(tmp_path, [
+        {"query": "q-live", "gold_memory_id": "live-id", "k": 3},
+        {"query": "q-dead", "gold_memory_id": "dead-id", "k": 3},
+    ])
+
+    def search_fn(query: str, k: int) -> list[dict]:
+        assert query == "q-live"
+        return [{"id": "live-id"}]
+
+    result = run_mcp_eval(gold, search_fn=search_fn, db_path=db_path)
+    assert result["status"] == "ok"
+    assert result["n_queries"] == 1
+    assert result["n_skipped_dangling"] == 1
+
+
+def test_stale_mcp_eval_module_is_the_live_function() -> None:
+    """V-30: brain/mcp_eval.py must not keep a divergent scorer."""
+    from brain.mcp_eval import run_mcp_eval as stale
+    from brain.tools.mcp_eval import run_mcp_eval as live
+
+    assert stale is live

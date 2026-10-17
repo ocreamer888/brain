@@ -114,6 +114,8 @@ struct SaveRequest {
 #[derive(Debug, Serialize)]
 struct SaveResponse {
     id: String,
+    #[serde(default)]
+    deduped: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -512,7 +514,7 @@ async fn save(
 
     let event_time = parse_rfc3339_opt(req.event_time.as_deref())
         .map_err(|e| bad_request(&format!("invalid event_time: {e}")))?;
-    let id = brain
+    let outcome = brain
         .save_memory(
             &req.content,
             memory_type,
@@ -530,14 +532,17 @@ async fn save(
         )
         .map_err(internal_err)?;
     if let Some(ref names) = req.entities {
-        if !names.is_empty() {
+        if !outcome.deduped && !names.is_empty() {
             // Fact is already persisted; linking failure must not fail the save.
-            if let Err(e) = brain.link_entities(&id, names) {
-                eprintln!("link_entities failed for {id}: {e}");
+            if let Err(e) = brain.link_entities(&outcome.id, names) {
+                eprintln!("link_entities failed for {}: {e}", outcome.id);
             }
         }
     }
-    let response = Json(SaveResponse { id });
+    let response = Json(SaveResponse {
+        id: outcome.id,
+        deduped: outcome.deduped,
+    });
     log_request("POST", "/save", StatusCode::OK, start);
     Ok(response)
 }
@@ -612,19 +617,19 @@ async fn save_batch(
             item.salience,
             item.derived_from.as_deref(),
         ) {
-            Ok(id) => {
+            Ok(outcome) => {
                 if let Some(ref names) = item.entities {
-                    if !names.is_empty() {
+                    if !outcome.deduped && !names.is_empty() {
                         // Fact is already persisted; linking failure must not fail the save.
-                        if let Err(e) = brain.link_entities(&id, names) {
-                            eprintln!("link_entities failed for {id}: {e}");
+                        if let Err(e) = brain.link_entities(&outcome.id, names) {
+                            eprintln!("link_entities failed for {}: {e}", outcome.id);
                         }
                     }
                 }
                 accepted += 1;
                 results.push(SaveBatchItemResult {
                     index: idx,
-                    id: Some(id),
+                    id: Some(outcome.id),
                     error: None,
                 });
             }

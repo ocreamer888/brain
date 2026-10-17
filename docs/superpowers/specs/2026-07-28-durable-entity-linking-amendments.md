@@ -156,6 +156,7 @@ Selection requires `EXISTS (SELECT 1 FROM edges WHERE src_memory_id = m.id)` —
 
 - **k=1:** structurally frozen. Neighbor score = `seed × 0.85` and the diversity rerank admits the top item unconditionally. Use `Δhit@1 == 0.0` as an **invariant check** — nonzero means a Rust ranking bug, stop and fix.
 - **k=3, k=5:** almost pure harm surface (neighbors enter at ranks ~2–6). **No-harm gates.**
+  Numbered criterion 8 gates `hit@3` and MRR only. `hit@5` stays descriptive; it is not a pass/fail input (V-27, confirmed 2026-10-16).
 - **k=10:** the only k where a gain can register. **Primary endpoint = `hit@10`**, usable only if the new set is unsaturated.
 
 ### Interfaces
@@ -1061,3 +1062,9 @@ Edit target is always this repo (git-tracked, canonical).
 | Displacement guard (A2.4 pre-registered) | next ship, gated on A1 | no |
 | Add explicit `graph_expand=False` to `eval_suite.py:185` — **only if** A1's gate passes and the default flips | follow-up on flip | no — see A1 |
 | `brain/eval/runs/` artifacts cited in `ENTITY_EDGE_GRAPH.md:220` are missing and unrecoverable | A9d deletes/annotates the citation | no |
+
+## Updates
+
+### 2026-10-17
+
+Section 4 is the original open list from the amendments. It is not the verification queue. Current status of V-01…V-38 is [`2026-10-17-verification-queue-status.md`](./2026-10-17-verification-queue-status.md). `graph_expand` stayed off after the August A/B. Criterion 8 gates `hit@3` and MRR; `hit@5` is descriptive (see the endpoint note above).

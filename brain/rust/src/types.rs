@@ -32,6 +32,13 @@ pub enum MemorySource {
     ObsidianBooks,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaveOutcome {
+    pub id: String,
+    /// True when save-time near-duplicate guard returned an existing memory id.
+    pub deduped: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryMetadata {
     #[serde(rename = "type")]

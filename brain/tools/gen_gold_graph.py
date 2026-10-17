@@ -60,8 +60,15 @@ EXCLUDED_TYPE = "episode"
 # rows of gold_semantic.jsonl is mean 0.224, max 0.455 with this tokenizer
 # (word tokens minus English stopwords). Rejecting > 0.45 reproduces the
 # hand-written distribution. Do not "tune" this without re-measuring.
+# 2026-10-16 remeasure of those 17 queries against live memory content:
+# mean 0.2356, max 0.4545. Threshold stays 0.45 (V-28).
 MAX_VOCAB_OVERLAP = 0.45
 MIN_CONTENT_CHARS = 200
+# V-14: refuse to start LLM generation when a stratum cannot absorb rejections.
+# At oversample=1.5, want=10 needs pool>=15 to even fill the ask; this slack
+# additionally guards overlap/LLM rejects so one rejection cannot INVALID_SET
+# the whole A/B after ~300 live searches.
+MIN_REJECTION_SLACK = 5
 
 # Ollama request budget. Query generation is a single short completion.
 _LLM_TIMEOUT = 120
@@ -252,6 +259,63 @@ def neighbor_degree(db_path: Path | str, memory_id: str) -> int:
     return int(row["deg"]) if row else 0
 
 
+def count_linked_candidates(
+    db_path: Path | str,
+    memory_type: str,
+    min_chars: int = MIN_CONTENT_CHARS,
+) -> int:
+    """How many active edge-linked memories of this type pass `min_chars`."""
+    if memory_type == EXCLUDED_TYPE:
+        raise ValueError(f"{EXCLUDED_TYPE!r} is excluded from the durable set (D2)")
+    conn = _ro_connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM memories m "
+            "WHERE m.type = ? "
+            "AND (m.superseded_by IS NULL OR m.superseded_by = '') "
+            "AND length(m.content) >= ? "
+            "AND EXISTS (SELECT 1 FROM edges WHERE src_memory_id = m.id)",
+            (_sql_type(memory_type), min_chars),
+        ).fetchone()
+    finally:
+        conn.close()
+    return int(row["c"]) if row else 0
+
+
+def check_stratum_capacity(
+    db_path: Path | str,
+    strata: dict[str, int],
+    *,
+    oversample: float = 1.5,
+    min_chars: int = MIN_CONTENT_CHARS,
+    min_slack: int = MIN_REJECTION_SLACK,
+) -> None:
+    """V-14: fail fast if any stratum lacks rejection slack (else INVALID_SET later)."""
+    _validate_strata(strata)
+    problems: list[str] = []
+    for memory_type, want in strata.items():
+        pool = count_linked_candidates(db_path, memory_type, min_chars=min_chars)
+        asked = int(math.ceil(want * oversample))
+        # Binding headroom is how many rejects fit inside the candidates we will
+        # actually try (min(pool, asked)), not pool−want alone (V-14 review).
+        rejection_headroom = min(pool, asked) - want
+        if pool < want:
+            problems.append(
+                f"{memory_type}: pool {pool} < want {want} (cannot fill stratum)"
+            )
+        elif rejection_headroom < min_slack:
+            problems.append(
+                f"{memory_type}: rejection headroom {rejection_headroom} "
+                f"< {min_slack} (pool={pool}, want={want}, asked={asked} at "
+                f"oversample={oversample}); lower want, raise --oversample, "
+                f"relax --min-chars, or link more {memory_type} memories first"
+            )
+    if problems:
+        raise ValueError(
+            "stratum capacity check failed (V-14):\n  - " + "\n  - ".join(problems)
+        )
+
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
@@ -274,12 +338,21 @@ def build_gold(
     dry_run: bool = False,
     model: str = OLLAMA_SUMMARIZE_MODEL,
     min_chars: int = MIN_CONTENT_CHARS,
+    min_slack: int = MIN_REJECTION_SLACK,
 ) -> dict[str, Any]:
     """Generate one gold row per accepted query, stratified by memory type."""
     _validate_strata(strata)
     db_path = Path(db_path)
     if not db_path.exists():
         raise FileNotFoundError(f"database not found: {db_path}")
+
+    check_stratum_capacity(
+        db_path,
+        strata,
+        oversample=oversample,
+        min_chars=min_chars,
+        min_slack=min_slack,
+    )
 
     rows: list[dict[str, Any]] = []
     stats: dict[str, Any] = {

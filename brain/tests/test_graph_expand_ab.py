@@ -53,9 +53,14 @@ def _make_db(tmp_path: Path, memories: list[tuple[str, str]], edges: list[tuple[
 
 
 def _passing_report() -> dict:
-    """A report that satisfies all ten criteria; tests perturb one field each."""
+    """A report that satisfies all ten criteria; tests perturb one field each.
+
+    Includes filters so criterion 9 is evaluated (V-09: unfiltered → INVALID_SET).
+    """
     return {
         "n_queries": 150,
+        "memory_type_filter": "solution",
+        "project_filter": "brain",
         "baseline": {"hit@1": 0.40, "hit@3": 0.60, "hit@5": 0.70, "hit@10": 0.80, "mrr@10": 0.50},
         "expanded": {"hit@1": 0.40, "hit@3": 0.60, "hit@5": 0.72, "hit@10": 0.85, "mrr@10": 0.505},
         "delta": {
@@ -82,6 +87,7 @@ def _passing_report() -> dict:
             "mean_neighbor_degree": 53.5,
             "injected_neighbors_median": 2,
             "filter_violations": 0,
+            "filter_criterion_status": "evaluated",
             "dangling_gold_ids": [],
             "n_unlinked_targets": 0,
             "n_episode_targets": 0,
@@ -107,6 +113,61 @@ def test_mcnemar_exact_no_discordant_pairs() -> None:
 
 def test_mcnemar_exact_is_symmetric() -> None:
     assert graph_expand_ab.mcnemar_exact(9, 2) == graph_expand_ab.mcnemar_exact(2, 9)
+
+
+def test_mcnemar_exact_does_not_overflow_at_1024() -> None:
+    """V-24: 2.0**n overflowed to inf at b+c >= 1024. Log-space stays finite."""
+    import math
+
+    p_small = graph_expand_ab.mcnemar_exact(1024, 0)
+    assert math.isfinite(p_small)
+    assert p_small < 1e-300
+    assert math.isfinite(graph_expand_ab.mcnemar_exact(2048, 0))
+    assert graph_expand_ab.mcnemar_exact(512, 512) == pytest.approx(1.0)
+    assert graph_expand_ab.mcnemar_exact(3, 0) == pytest.approx(0.25)
+
+
+def test_percentile_lower_tail_is_type1_not_truncation() -> None:
+    """V-23: int(0.025 * 40) == 1 biases the CI lower bound up one rank."""
+    values = list(range(40))
+    assert graph_expand_ab._percentile(values, 0.025) == 0
+    assert int(0.025 * 40) == 1
+
+
+def test_gate_null_p_value_is_invalid_not_typeerror() -> None:
+    """V-26: p_two_sided: null used to raise TypeError instead of INVALID_SET."""
+    report = _passing_report()
+    report["mcnemar"]["10"]["p_two_sided"] = None
+    verdict, reasons = graph_expand_ab.gate(report)
+    assert verdict == "INVALID_SET"
+    assert any("p_two_sided" in r and "null" in r for r in reasons)
+
+
+def test_zero_baseline_latency_omits_passing_ratio(tmp_path: Path) -> None:
+    """V-25: baseline p95 of 0 must not invent latency_ratio 0.0 (a silent pass)."""
+    db = _make_db(tmp_path, [("t", "solution")], [("t", "e1")])
+    gold = [{"query": "q", "gold_memory_id": "t", "memory_type": "solution", "neighbor_degree": 1}]
+    rows = [{
+        "query": "q",
+        "gold_memory_id": "t",
+        "off_ids": ["t"],
+        "on_ids": ["t"],
+        "off_results": [],
+        "on_results": [],
+        "off_rank": 1,
+        "on_rank": 1,
+        "off_ms": 0.0,
+        "on_ms": 1.0e7,
+        "injected_neighbors": 0,
+    }]
+    report = graph_expand_ab.build_report(
+        rows, gold, db, [1, 3, 10], "plain", gold_file="x.jsonl",
+        memory_type="solution", bootstrap_iters=1000,
+    )
+    assert "latency_ratio_p95" not in report["delta"]
+    verdict, reasons = graph_expand_ab.gate(report)
+    assert verdict == "INVALID_SET"
+    assert any("latency_ratio_p95" in r for r in reasons)
 
 
 def test_mcnemar_exact_does_not_need_scipy() -> None:
@@ -228,6 +289,106 @@ def test_filter_violations_counts_type_and_project_breaches() -> None:
     assert graph_expand_ab.filter_violations(rows, None, None) == 0
 
 
+def test_gate_invalidates_unfiltered_run_for_criterion_9() -> None:
+    """V-09: full PASS requires filters — unfiltered is INVALID_SET, not silent skip."""
+    report = _passing_report()
+    del report["memory_type_filter"]
+    del report["project_filter"]
+    report["diagnostics"]["filter_criterion_status"] = "skipped_unfiltered"
+    verdict, failed = graph_expand_ab.gate(report)
+    assert verdict == "INVALID_SET"
+    assert any(c.startswith("9:") and "unfiltered" in c for c in failed)
+
+
+def test_gate_unfiltered_still_invalid_even_with_nonzero_violations() -> None:
+    """Teeth: skip/vacuous revert would FAIL on 99; we must INVALID_SET for missing filter."""
+    report = _passing_report()
+    del report["memory_type_filter"]
+    del report["project_filter"]
+    report["diagnostics"]["filter_violations"] = 99
+    report["diagnostics"]["filter_criterion_status"] = "skipped_unfiltered"
+    verdict, failed = graph_expand_ab.gate(report)
+    assert verdict == "INVALID_SET"
+    assert any("unfiltered" in c for c in failed)
+
+
+def test_gate_lift_only_allows_unfiltered_pass() -> None:
+    report = _passing_report()
+    del report["memory_type_filter"]
+    del report["project_filter"]
+    report["diagnostics"]["filter_criterion_status"] = "skipped_unfiltered"
+    cfg = graph_expand_ab.GateConfig(allow_unfiltered_skip_criterion_9=True)
+    verdict, failed = graph_expand_ab.gate(report, cfg)
+    assert verdict == "PASS"
+    assert failed == []
+
+
+def test_gate_fails_criterion_9_when_filtered_run_has_violations() -> None:
+    report = _passing_report()
+    report["diagnostics"]["filter_violations"] = 3
+    verdict, failed = graph_expand_ab.gate(report)
+    assert verdict == "FAIL"
+    assert any(c.startswith("9:") for c in failed)
+
+
+def test_gate_passes_criterion_9_when_filtered_run_is_clean() -> None:
+    verdict, failed = graph_expand_ab.gate(_passing_report())
+    assert verdict == "PASS"
+    assert failed == []
+
+
+def test_main_rejects_low_bootstrap_iters(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """V-12 teeth: floor trips before gold load (not merely missing-file exit 2)."""
+    gold = tmp_path / "g.jsonl"
+    gold.write_text(
+        json.dumps({"query": "q", "gold_memory_id": "x", "k": 10}) + "\n",
+        encoding="utf-8",
+    )
+    code = graph_expand_ab.main([
+        "--gold", str(gold),
+        "--report", str(tmp_path / "out.json"),
+        "--bootstrap-iters", "1",
+    ])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "V-12" in err
+    assert "run aborted" not in err
+
+
+def test_check_stratum_capacity_rejects_zero_slack(tmp_path: Path) -> None:
+    """V-14: pool==want leaves no room for LLM/overlap rejects."""
+    db = _make_db(tmp_path, [("m0", "decision")], [("m0", "e1")])
+    with pytest.raises(ValueError, match="rejection headroom"):
+        gen_gold_graph.check_stratum_capacity(db, {"decision": 1}, min_slack=5)
+
+
+def test_check_stratum_capacity_rejects_low_oversample_headroom(tmp_path: Path) -> None:
+    """V-14: pool−want can look fine while asked−want is tiny."""
+    memories = [(f"m{i}", "decision") for i in range(16)]
+    edges = [(f"m{i}", "e1") for i in range(16)]
+    db = _make_db(tmp_path, memories, edges)
+    # want=10, oversample=1.1 → asked=11 → headroom=1 < 5
+    with pytest.raises(ValueError, match="rejection headroom"):
+        gen_gold_graph.check_stratum_capacity(
+            db, {"decision": 10}, oversample=1.1, min_slack=5
+        )
+
+
+def test_check_stratum_capacity_ok_with_slack(tmp_path: Path) -> None:
+    memories = [(f"m{i}", "decision") for i in range(20)]
+    edges = [(f"m{i}", "e1") for i in range(20)]
+    db = _make_db(tmp_path, memories, edges)
+    gen_gold_graph.check_stratum_capacity(db, {"decision": 10}, oversample=1.5, min_slack=5)
+
+
+def test_build_gold_invokes_default_capacity_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Teeth: build_gold must call capacity check at default min_slack (not only min_slack=0 tests)."""
+    db = _make_db(tmp_path, [("m0", "solution")], [("m0", "e1")])
+    monkeypatch.setattr(gen_gold_graph, "generate_query", lambda *a, **k: "novel probe")
+    with pytest.raises(ValueError, match="stratum capacity"):
+        gen_gold_graph.build_gold(db, {"solution": 1}, tmp_path / "g.jsonl")
+
+
 def test_bootstrap_delta_ci_brackets_a_real_gain() -> None:
     off = [0.0] * 100
     on = [1.0] * 20 + [0.0] * 80
@@ -330,7 +491,9 @@ def test_gate_fails_on_hit_at_one_invariant_breach() -> None:
         (lambda r: r["delta"].__setitem__("hit@3", -0.05), "8:"),
         (lambda r: r["delta"].__setitem__("mrr", -0.02), "8:"),
         (lambda r: r["ci"].__setitem__("delta_mrr", [-0.05, 0.02]), "8:"),
-        (lambda r: r["diagnostics"].__setitem__("filter_violations", 7), "9:"),
+        # V-09: criterion 9 only evaluates when a filter was requested
+        (lambda r: (r.__setitem__("memory_type_filter", "solution"),
+                    r["diagnostics"].__setitem__("filter_violations", 7)), "9:"),
         (lambda r: r["delta"].__setitem__("latency_ratio_p95", 1.9), "10:"),
     ],
 )
@@ -437,7 +600,7 @@ def test_build_report_shape_and_gate_roundtrip(tmp_path: Path) -> None:
 
     rows = graph_expand_ab.run_paired(gold, stub)
     report = graph_expand_ab.build_report(
-        rows, gold, db, [1, 3, 5, 10], "plain", gold_file="x.jsonl", bootstrap_iters=50
+        rows, gold, db, [1, 3, 5, 10], "plain", gold_file="x.jsonl", bootstrap_iters=1000
     )
 
     for key in ("run_id", "gold_file", "db_path", "corpus_size", "surface", "n_queries",
@@ -552,7 +715,7 @@ def test_build_gold_writes_expected_row_schema(tmp_path: Path, monkeypatch: pyte
     monkeypatch.setattr(gen_gold_graph, "generate_query", lambda content, model=None: "a wholly novel probe")
 
     out = tmp_path / "created" / "gold.jsonl"
-    stats = gen_gold_graph.build_gold(db, {"solution": 2}, out, oversample=2.0)
+    stats = gen_gold_graph.build_gold(db, {"solution": 2}, out, oversample=2.0, min_slack=0)
 
     assert stats["n_rows"] == 2
     rows = [json.loads(line) for line in out.read_text().splitlines()]
@@ -573,7 +736,9 @@ def test_build_gold_rejects_high_overlap_queries(tmp_path: Path, monkeypatch: py
         gen_gold_graph, "generate_query", lambda content, model=None: "supabase policy migration"
     )
 
-    stats = gen_gold_graph.build_gold(db, {"solution": 1}, tmp_path / "g.jsonl", dry_run=True)
+    stats = gen_gold_graph.build_gold(
+        db, {"solution": 1}, tmp_path / "g.jsonl", dry_run=True, min_slack=0
+    )
 
     assert stats["n_rows"] == 0
     assert stats["rejected_overlap"] == 1
@@ -585,7 +750,7 @@ def test_build_gold_dry_run_writes_nothing(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(gen_gold_graph, "generate_query", lambda content, model=None: "novel probe text")
     out = tmp_path / "gold.jsonl"
 
-    stats = gen_gold_graph.build_gold(db, {"solution": 1}, out, dry_run=True)
+    stats = gen_gold_graph.build_gold(db, {"solution": 1}, out, dry_run=True, min_slack=0)
 
     assert stats["n_rows"] == 1
     assert not out.exists()

@@ -14,13 +14,21 @@ def _run_save_session_summary(messages, project, session_id, ended_at):
 
 def test_save_session_summary_calls_save_memory():
     """save_session_summary must call save_memory with correct type and tag."""
-    fake_summary = {"summary": "Worked on brain.", "decisions": ["Use project_context"], "next_steps": []}
+    fake_summary = {
+        "summary": "Worked on brain session ingest and chose project_context for summaries.",
+        "decisions": ["Use project_context"],
+        "next_steps": [],
+    }
+    messages = [
+        {"role": "user", "content": "Store session summaries as project_context memories in brain."},
+        {"role": "assistant", "content": "Agreed — use project_context for session summaries."},
+    ]
 
     with patch("brain.core.session_ingest.summarize_session", return_value=fake_summary) as mock_sum, \
          patch("brain.core.session_ingest.save_memory_fn") as mock_save:
 
         _run_save_session_summary(
-            messages=[{"role": "user", "content": "hi"}],
+            messages=messages,
             project="AI",
             session_id="abc-123",
             ended_at="2026-04-11T10:00:00+00:00",
@@ -41,12 +49,16 @@ def test_save_session_summary_skips_trivial_sessions():
         "decisions": [],
         "next_steps": [],
     }
+    messages = [
+        {"role": "user", "content": "Just saying hello with no real coding work today."},
+        {"role": "assistant", "content": "Hello — nothing actionable to record for this session."},
+    ]
 
     with patch("brain.core.session_ingest.summarize_session", return_value=trivial), \
          patch("brain.core.session_ingest.save_memory_fn") as mock_save:
 
         _run_save_session_summary(
-            messages=[{"role": "user", "content": "hi"}],
+            messages=messages,
             project="AI",
             session_id="abc-999",
             ended_at="2026-04-20T10:00:00+00:00",
@@ -62,12 +74,22 @@ def test_save_session_summary_saves_when_only_next_steps_present():
         "decisions": [],
         "next_steps": ["Add reranker to search path"],
     }
+    messages = [
+        {
+            "role": "user",
+            "content": "Explore retrieval quality in the brain pipeline; maybe add a reranker.",
+        },
+        {
+            "role": "assistant",
+            "content": "Explored retrieval quality in the brain pipeline. Next: add reranker to search path.",
+        },
+    ]
 
     with patch("brain.core.session_ingest.summarize_session", return_value=summary), \
          patch("brain.core.session_ingest.save_memory_fn") as mock_save:
 
         _run_save_session_summary(
-            messages=[{"role": "user", "content": "hi"}],
+            messages=messages,
             project="AI",
             session_id="abc-777",
             ended_at="2026-04-20T10:00:00+00:00",

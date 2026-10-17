@@ -13,7 +13,12 @@ SUMMARIZE_MODEL = OLLAMA_SUMMARIZE_MODEL
 def _openrouter_chat(model: str, messages: list[dict], max_tokens: int) -> str:
     resp = requests.post(
         f"{OLLAMA_URL}/api/chat",
-        json={"model": model, "messages": messages, "stream": False, "options": {"num_predict": max_tokens}},
+        json={
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "options": {"num_predict": max_tokens, "temperature": 0.0},
+        },
         timeout=120,
     )
     resp.raise_for_status()
@@ -93,14 +98,7 @@ def _enforce_session_summary_caps(raw: dict) -> dict:
 
 def summarize_session(messages: list[dict]) -> dict:
     """Summarize a full session into a structured, size-capped dict."""
-    formatted_parts = []
-    for m in messages[:40]:
-        content = m.get("content", "")
-        if isinstance(content, list):
-            content = " ".join(p.get("text", "") for p in content if isinstance(p, dict))
-        role = m.get("role", m.get("type", "unknown"))
-        formatted_parts.append(f"{role}: {str(content)[:600]}")
-    formatted = "\n".join(formatted_parts) if formatted_parts else "(empty session)"
+    formatted = _format_transcript(messages)
 
     text = _openrouter_chat(SUMMARIZE_MODEL, [{
         "role": "user",
@@ -119,7 +117,8 @@ Return ONLY valid JSON with this exact shape:
 Rules:
 - summary must describe what the user and assistant actually did and concluded.
 - decisions: up to 3 concrete decisions made. Empty array if none.
-- next_steps: up to 3 specific next actions. Infer from the work if not stated, or use empty array.
+- next_steps: up to 3 next actions explicitly stated in the transcript. Empty array if none stated.
+- Do NOT invent work, errors, decisions, or next steps that are not in the transcript.
 - No code blocks, no markdown, no keys other than summary/decisions/next_steps.
 - All strings must be single-line (no newlines).
 
@@ -131,14 +130,8 @@ Transcript:
 
 
 def _format_transcript(messages: list[dict], max_msgs: int = 40, max_chars: int = 600) -> str:
-    parts = []
-    for m in messages[:max_msgs]:
-        content = m.get("content", "")
-        if isinstance(content, list):
-            content = " ".join(p.get("text", "") for p in content if isinstance(p, dict))
-        role = m.get("role", m.get("type", "unknown"))
-        parts.append(f"{role}: {str(content)[:max_chars]}")
-    return "\n".join(parts) if parts else "(empty session)"
+    from brain.ingest.transcript import format_transcript
+    return format_transcript(messages, max_msgs=max_msgs, max_chars=max_chars)
 
 
 def _enforce_list_caps(items: list, max_items: int, max_chars: int) -> list[dict]:

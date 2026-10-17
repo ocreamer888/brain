@@ -204,6 +204,7 @@ def run_suite(
                 mcp_result = run_mcp_eval(
                     gold_semantic_path,
                     baseline_offline_p1=baseline_offline_p1,
+                    db_path=db_path,
                 )
                 mcp_path_result = ModeResult(
                     status=mcp_result["status"],
