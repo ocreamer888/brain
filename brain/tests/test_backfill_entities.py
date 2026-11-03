@@ -152,6 +152,126 @@ def test_durable_types_are_json_quoted(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# select_superseded_true_layers (G9)
+# ---------------------------------------------------------------------------
+
+def _make_layers_test_db(path: Path) -> None:
+    conn = sqlite3.connect(str(path))
+    conn.executescript(
+        """
+        CREATE TABLE memories (
+            id TEXT PRIMARY KEY,
+            content TEXT NOT NULL,
+            type TEXT NOT NULL,
+            project TEXT NOT NULL DEFAULT 'general',
+            timestamp TEXT NOT NULL,
+            superseded_by TEXT
+        );
+        CREATE TABLE edges (
+            id TEXT PRIMARY KEY,
+            src_memory_id TEXT NOT NULL,
+            dst_entity_id TEXT NOT NULL,
+            relation_type TEXT NOT NULL
+        );
+        """
+    )
+    conn.executemany(
+        "INSERT INTO memories (id, content, type, project, timestamp, superseded_by) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            # Not superseded at all — must NOT be selected (that's select_edgeless_durable's job)
+            ("live", "Live fact", '"fact"', "brain", "2026-01-01T00:00:00Z", None),
+            # Real true layer: superseded_by points at an existing row — SHOULD be selected
+            ("old", "Old layer content", '"fact"', "brain", "2026-01-02T00:00:00Z", "new"),
+            ("new", "New layer content", '"fact"', "brain", "2026-01-03T00:00:00Z", None),
+            # Tag-string superseded_by, not a real memory id — must NOT be selected
+            ("hidden", "Hidden junk content", '"fact"', "brain", "2026-01-04T00:00:00Z", "hidden:no_traceable_project_2026-11-02"),
+            # Dangling: superseded_by points at an id that no longer exists — must NOT be selected
+            ("dangling", "Dangling content", '"fact"', "brain", "2026-01-05T00:00:00Z", "does-not-exist"),
+            # Real true layer but already has an edge — must NOT be selected
+            ("old-edged", "Old edged layer", '"fact"', "brain", "2026-01-06T00:00:00Z", "new"),
+            # Real true layer, non-fact durable type — SHOULD be selected
+            ("old-dec", "Old decision layer", '"decision"', "brain", "2026-01-07T00:00:00Z", "new"),
+            # Real true layer, episode type (non-durable) — must NOT be selected
+            ("old-ep", "Old episode layer", '"episode"', "brain", "2026-01-08T00:00:00Z", "new"),
+            # Real true layer, different project
+            ("old-other", "Old layer other project", '"fact"', "other", "2026-01-09T00:00:00Z", "new"),
+        ],
+    )
+    conn.executemany(
+        "INSERT INTO edges (id, src_memory_id, dst_entity_id, relation_type) VALUES (?, ?, ?, ?)",
+        [("e-1", "old-edged", "ent-1", "mentions")],
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_select_superseded_true_layers_includes_real_chain(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_layers_test_db(db_path)
+
+    ids = {r["id"] for r in backfill_entities.select_superseded_true_layers(db_path)}
+
+    assert "old" in ids
+    assert "old-dec" in ids
+
+
+def test_select_superseded_true_layers_excludes_non_superseded(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_layers_test_db(db_path)
+
+    ids = {r["id"] for r in backfill_entities.select_superseded_true_layers(db_path)}
+
+    assert "live" not in ids
+
+
+def test_select_superseded_true_layers_excludes_tag_strings(tmp_path: Path) -> None:
+    """superseded_by holding a quarantine/hidden tag, not a real memory id, must not be
+    mistaken for layer history (spec: two different things share this column)."""
+    db_path = tmp_path / "test_brain.db"
+    _make_layers_test_db(db_path)
+
+    ids = {r["id"] for r in backfill_entities.select_superseded_true_layers(db_path)}
+
+    assert "hidden" not in ids
+
+
+def test_select_superseded_true_layers_excludes_dangling_pointers(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_layers_test_db(db_path)
+
+    ids = {r["id"] for r in backfill_entities.select_superseded_true_layers(db_path)}
+
+    assert "dangling" not in ids
+
+
+def test_select_superseded_true_layers_excludes_rows_with_edges(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_layers_test_db(db_path)
+
+    ids = {r["id"] for r in backfill_entities.select_superseded_true_layers(db_path)}
+
+    assert "old-edged" not in ids
+
+
+def test_select_superseded_true_layers_excludes_non_durable_type(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_layers_test_db(db_path)
+
+    ids = {r["id"] for r in backfill_entities.select_superseded_true_layers(db_path)}
+
+    assert "old-ep" not in ids
+
+
+def test_select_superseded_true_layers_respects_project_filter(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_brain.db"
+    _make_layers_test_db(db_path)
+
+    ids = {r["id"] for r in backfill_entities.select_superseded_true_layers(db_path, project="other")}
+
+    assert ids == {"old-other"}
+
+
+# ---------------------------------------------------------------------------
 # run() — end-to-end wiring with mocked LLM + API client
 # ---------------------------------------------------------------------------
 
@@ -204,6 +324,32 @@ def test_run_links_edgeless_durable_and_writes_checkpoint(
     assert checkpoint_path.exists()
     saved = json.loads(checkpoint_path.read_text())
     assert set(saved["processed_ids"]) == _EXPECTED_IDS
+
+
+def test_run_superseded_layers_uses_the_layers_selector(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """G9: run(superseded_layers=True) must link old-layer rows, not the
+    live edge-less set -- the two selections should never be conflated."""
+    db_path = tmp_path / "test_brain.db"
+    _make_layers_test_db(db_path)
+    checkpoint_path = tmp_path / "checkpoint_layers.json"
+
+    monkeypatch.setattr(
+        backfill_entities.entity_extractor, "extract_entities", lambda *a, **kw: ["Entity"]
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        backfill_entities.api_client, "link_entities", lambda mid, ents: calls.append(mid) or len(ents)
+    )
+
+    result = backfill_entities.run(
+        db_path=db_path, checkpoint_path=checkpoint_path, superseded_layers=True
+    )
+
+    assert set(calls) == {"old", "old-dec", "old-other"}
+    assert "live" not in calls  # would have been linked by the default (non-layer) selector
+    assert result["facts_seen"] == 3
 
 
 def test_run_marks_processed_on_empty_extract(

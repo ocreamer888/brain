@@ -30,6 +30,7 @@ from brain.ingest import entity_extractor  # noqa: E402
 
 DB_PATH = _REPO_ROOT / "brain" / "rust" / "brain.db"
 CHECKPOINT_PATH = _REPO_ROOT / "brain" / "bootstrap" / "checkpoint_entity_backfill_durable.json"
+SUPERSEDED_CHECKPOINT_PATH = _REPO_ROOT / "brain" / "bootstrap" / "checkpoint_entity_backfill_superseded_layers.json"
 
 PROGRESS_EVERY = 25
 
@@ -69,6 +70,47 @@ def select_edgeless_durable(
             query += " AND project = ?"
             params.append(project)
         query += " ORDER BY timestamp DESC"
+        if limit:
+            query += " LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def select_superseded_true_layers(
+    db_path: Path,
+    limit: int | None = None,
+    project: str | None = None,
+) -> list[dict]:
+    """Older layers of a real supersede chain, with zero outgoing edges.
+
+    G9 (cognitive-architecture-spec.md): backfill_entities.py has always
+    skipped superseded rows outright, so old layers can't be traced or
+    stacked (0/1,780 at spec time). This selects exactly the superseded rows
+    that are real history -- `superseded_by` resolves to another *existing*
+    memory row -- not the `quarantine:*`/`hidden:*` tag strings also stored
+    in the same column, which aren't memory ids and must stay excluded (see
+    spec finding: two different things share the superseded_by column).
+    """
+    uri = f"file:{db_path}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True, timeout=30)
+    conn.row_factory = sqlite3.Row
+    try:
+        placeholders = ",".join("?" for _ in _DURABLE_TYPES)
+        query = (
+            "SELECT id, content, type, project, timestamp FROM memories m "
+            f"WHERE type IN ({placeholders}) "
+            "AND m.superseded_by IS NOT NULL AND m.superseded_by != '' "
+            "AND EXISTS (SELECT 1 FROM memories m2 WHERE m2.id = m.superseded_by) "
+            "AND m.id NOT IN (SELECT DISTINCT src_memory_id FROM edges)"
+        )
+        params: list = list(_DURABLE_TYPES)
+        if project:
+            query += " AND m.project = ?"
+            params.append(project)
+        query += " ORDER BY m.timestamp DESC"
         if limit:
             query += " LIMIT ?"
             params.append(limit)
@@ -153,6 +195,7 @@ def run(
     db_path: Path = DB_PATH,
     checkpoint_path: Path = CHECKPOINT_PATH,
     checkpoint_every: int = PROGRESS_EVERY,
+    superseded_layers: bool = False,
 ) -> dict:
     if reset_checkpoint and checkpoint_path.exists():
         checkpoint_path.unlink()
@@ -164,6 +207,8 @@ def run(
     work_set: list[str] | None = checkpoint.get("work_set")
     flush_every = max(1, int(checkpoint_every))
 
+    select = select_superseded_true_layers if superseded_layers else select_edgeless_durable
+
     # Bounded (--limit) jobs freeze their selected id set into the checkpoint so a
     # crash+resume processes exactly those ids. Without this, resume re-queries the
     # edgeless set, which shifts as we add edges, over-running the nominal limit.
@@ -172,7 +217,7 @@ def run(
         if work_set:
             memories = select_by_ids(db_path, work_set)
         else:
-            memories = select_edgeless_durable(db_path, limit=limit, project=project)
+            memories = select(db_path, limit=limit, project=project)
             work_set = [m["id"] for m in memories]
             # Persist the frozen set immediately: a crash before the first flush
             # must still resume against the same window.
@@ -181,13 +226,14 @@ def run(
                 checkpoint_path,
             )
     else:
-        memories = select_edgeless_durable(db_path, limit=limit, project=project)
+        memories = select(db_path, limit=limit, project=project)
 
     total = len(memories)
     start = time.time()
 
+    kind = "superseded true-layer" if superseded_layers else "edge-less durable"
     print(
-        f"[backfill/entities] {total} edge-less durable memories selected (dry_run={dry_run})",
+        f"[backfill/entities] {total} {kind} memories selected (dry_run={dry_run})",
         file=sys.stderr,
     )
 
@@ -255,8 +301,9 @@ def main() -> int:
     p.add_argument(
         "--checkpoint",
         type=Path,
-        default=CHECKPOINT_PATH,
-        help="Checkpoint JSON path (Forge jobs should use a dedicated file)",
+        default=None,
+        help="Checkpoint JSON path (default: a dedicated file per --superseded-layers "
+        "setting, so the two selections never share resume state)",
     )
     p.add_argument(
         "--checkpoint-every",
@@ -264,19 +311,28 @@ def main() -> int:
         default=PROGRESS_EVERY,
         help="Flush checkpoint every N processed memories (use 1 for crash-resume drills)",
     )
+    p.add_argument(
+        "--superseded-layers",
+        action="store_true",
+        help="G9: backfill older (superseded) rows of a real supersede chain instead of "
+        "live edge-less durable memories.",
+    )
     args = p.parse_args()
+
+    checkpoint_path = args.checkpoint
+    if checkpoint_path is None:
+        checkpoint_path = SUPERSEDED_CHECKPOINT_PATH if args.superseded_layers else CHECKPOINT_PATH
+    elif not checkpoint_path.is_absolute():
+        checkpoint_path = _REPO_ROOT / checkpoint_path
 
     run(
         limit=args.limit,
         project=args.project,
         dry_run=args.dry_run,
         reset_checkpoint=args.reset_checkpoint,
-        checkpoint_path=(
-            args.checkpoint
-            if args.checkpoint.is_absolute()
-            else _REPO_ROOT / args.checkpoint
-        ),
+        checkpoint_path=checkpoint_path,
         checkpoint_every=args.checkpoint_every,
+        superseded_layers=args.superseded_layers,
     )
     return 0
 
