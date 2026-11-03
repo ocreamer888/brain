@@ -1,0 +1,77 @@
+{
+  "UPDATE": {
+    "n": 164,
+    "sim_pctiles": {
+      "5": 0.79,
+      "25": 0.825,
+      "50": 0.856,
+      "75": 0.887,
+      "95": 0.915
+    },
+    "sim>=0.7": 1.0,
+    "sim>=0.75": 1.0,
+    "sim>=0.8": 0.902,
+    "sim>=0.85": 0.549,
+    "sim>=0.9": 0.128,
+    "sim>=0.95": 0.0,
+    "same_project": 0.957,
+    "same_file_path": 0,
+    "second_has_entities": 102,
+    "entity_df<=5": 0.225,
+    "entity_df<=20": 0.48,
+    "entity_df<=50": 0.637,
+    "entity_df<=200": 0.745,
+    "entity_df<=inf": 0.873,
+    "ingest_newer": 1.0
+  },
+  "MERGE": {
+    "n": 1503,
+    "sim_pctiles": {
+      "5": 0.837,
+      "25": 0.901,
+      "50": 0.94,
+      "75": 0.966,
+      "95": 0.987
+    },
+    "sim>=0.7": 1.0,
+    "sim>=0.75": 1.0,
+    "sim>=0.8": 0.987,
+    "sim>=0.85": 0.929,
+    "sim>=0.9": 0.758,
+    "sim>=0.95": 0.415,
+    "same_project": 0.97,
+    "same_file_path": 0,
+    "second_has_entities": 1018,
+    "entity_df<=5": 0.417,
+    "entity_df<=20": 0.669,
+    "entity_df<=50": 0.784,
+    "entity_df<=200": 0.863,
+    "entity_df<=inf": 0.931,
+    "ingest_newer": 1.0
+  },
+  "unknown": {
+    "n": 113,
+    "sim_pctiles": {
+      "5": 0.49,
+      "25": 0.756,
+      "50": 0.865,
+      "75": 0.915,
+      "95": 0.954
+    },
+    "sim>=0.7": 0.841,
+    "sim>=0.75": 0.761,
+    "sim>=0.8": 0.628,
+    "sim>=0.85": 0.531,
+    "sim>=0.9": 0.336,
+    "sim>=0.95": 0.071,
+    "same_project": 1.0,
+    "same_file_path": 42,
+    "second_has_entities": 0,
+    "entity_df<=5": 0.0,
+    "entity_df<=20": 0.0,
+    "entity_df<=50": 0.0,
+    "entity_df<=200": 0.0,
+    "entity_df<=inf": 0.0,
+    "ingest_newer": 0.442
+  }
+}

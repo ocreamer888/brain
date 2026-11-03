@@ -1,0 +1,61 @@
+{
+  "real": {
+    "n": 1780,
+    "sim_pctiles": {
+      "5": 0.806,
+      "25": 0.886,
+      "50": 0.929,
+      "75": 0.962,
+      "95": 0.986
+    },
+    "sim>=0.7": 0.99,
+    "sim>=0.75": 0.985,
+    "sim>=0.8": 0.957,
+    "sim>=0.85": 0.869,
+    "sim>=0.9": 0.673,
+    "sim>=0.95": 0.355,
+    "same_project": 0.971,
+    "same_file_path": 42,
+    "second_has_entities": 1120,
+    "entity_df<=5": 0.399,
+    "entity_df<=20": 0.652,
+    "entity_df<=50": 0.771,
+    "entity_df<=200": 0.853,
+    "entity_df<=inf": 0.926
+  },
+  "baseline": {
+    "n": 529,
+    "sim_pctiles": {
+      "5": -0.01,
+      "25": 0.083,
+      "50": 0.179,
+      "75": 0.306,
+      "95": 0.49
+    },
+    "sim>=0.7": 0.006,
+    "sim>=0.75": 0.002,
+    "sim>=0.8": 0.002,
+    "sim>=0.85": 0.0,
+    "sim>=0.9": 0.0,
+    "sim>=0.95": 0.0,
+    "same_project": 1.0,
+    "same_file_path": 5,
+    "second_has_entities": 304,
+    "entity_df<=5": 0.013,
+    "entity_df<=20": 0.023,
+    "entity_df<=50": 0.033,
+    "entity_df<=200": 0.105,
+    "entity_df<=inf": 0.112
+  },
+  "time_order": {
+    "newer": 72,
+    "old_has_event_time": 1667,
+    "new_has_event_time": 1667,
+    "OLDER": 70,
+    "same": 1638
+  },
+  "type_mix": {
+    "\"fact\"": 1667,
+    "\"knowledge\"": 113
+  }
+}
