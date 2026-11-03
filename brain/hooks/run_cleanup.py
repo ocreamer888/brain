@@ -71,6 +71,57 @@ def run_title_dedup() -> None:
         _log("title_dedup: clean (0 title duplicates)")
 
 
+def run_episodic_leak_check(db_path: Path | None = None) -> None:
+    """Regression watch: post_tool_use.py must save raw Write/Agent-dispatch
+    traces as `episode`, never any other type.
+
+    Structural, not wording-based: the Write/Agent branches of
+    classify_action() (post_tool_use.py) always tag their save with
+    tool_name.lower() via with_ingest_tag([tool_name.lower(), project]) --
+    "write" or "agent" -- and always set source="claude_code_hook",
+    regardless of what the content/title says. So a row from that source
+    tagged "write" or "agent" that isn't type=episode is the leak, no matter
+    how its content is phrased. (The original check matched the exact
+    fingerprints recategorize_episodic_traces.py fixed on 2026-10-21 --
+    1,489 Created-path + 79 Dispatched-agent rows -- which only catches a
+    repeat of that one incident's exact wording, not a new instance of the
+    same bug class with different phrasing.)
+
+    The source constraint is load-bearing, not decorative: "write"/"agent"
+    tags also occur from an unrelated older "claw_code" tool and from
+    Perplexity threads whose content literally contains the word "agent"
+    (auto-tag-scraped) -- verified directly against the live DB before this
+    constraint was added; without it the check flags ~150 unrelated rows.
+    """
+    import sqlite3
+
+    if db_path is None:
+        db_path = Path(__file__).resolve().parents[1] / "rust" / "brain.db"
+    if not db_path.exists():
+        return
+
+    conn = sqlite3.connect(str(db_path))
+    rows = conn.execute(
+        """SELECT type, COUNT(*) FROM memories
+           WHERE type != '"episode"'
+             AND source = '"claude_code_hook"'
+             AND (
+               (',' || tags || ',') LIKE '%,write,%'
+               OR (',' || tags || ',') LIKE '%,agent,%'
+             )
+           GROUP BY type"""
+    ).fetchall()
+    conn.close()
+
+    leaked = sum(n for _, n in rows)
+    if leaked:
+        detail = ", ".join(f"{t}={n}" for t, n in rows)
+        _log(f"REGRESSION episodic_leak: {leaked} rows miscategorized ({detail}) — "
+             f"check post_tool_use.py still saves Write/Agent as type=episode")
+    else:
+        _log("episodic_leak_check: clean (0 miscategorized)")
+
+
 def run_bvh_dedup() -> None:
     """BVH dedup: find and delete exact-copy duplicates."""
     from brain.tools.bvh_dedup import run as bvh_run
@@ -164,19 +215,21 @@ def run_eval_check() -> None:
         _log(f"eval_check failed: {e}")
 
 
-try:
-    counter = _load_counter()
-    counter += 1
-    _save_counter(counter)
+if __name__ == "__main__":
+    try:
+        counter = _load_counter()
+        counter += 1
+        _save_counter(counter)
 
-    # Title dedup + BVH dedup every session
-    run_title_dedup()
-    run_bvh_dedup()
+        # Title dedup + BVH dedup + episodic-leak regression check every session
+        run_title_dedup()
+        run_bvh_dedup()
+        run_episodic_leak_check()
 
-    # Noise detection + eval check every N sessions
-    if counter % NOISE_EVERY_N == 0:
-        run_noise_detect()
-        run_eval_check()
+        # Noise detection + eval check every N sessions
+        if counter % NOISE_EVERY_N == 0:
+            run_noise_detect()
+            run_eval_check()
 
-except Exception as e:
-    _log(f"cleanup failed: {e}")
+    except Exception as e:
+        _log(f"cleanup failed: {e}")

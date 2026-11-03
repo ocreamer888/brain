@@ -144,7 +144,8 @@ fn parse_metadata(v: &Value) -> Result<MemoryMetadata, BrainError> {
     let title = get_opt_string(obj.get("title"));
     let parent_id = get_opt_string(obj.get("parent_id"));
     let superseded_by = get_opt_string(obj.get("superseded_by"));
-    let derived_from = get_opt_string(obj.get("derived_from"));
+    let extracted_by = get_opt_string(obj.get("extracted_by"))
+        .or_else(|| get_opt_string(obj.get("derived_from")));
     let salience = match obj.get("salience") {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(0.5),
         Some(Value::String(s)) => s.parse::<f64>().unwrap_or(0.5),
@@ -175,7 +176,7 @@ fn parse_metadata(v: &Value) -> Result<MemoryMetadata, BrainError> {
         event_time,
         salience,
         superseded_by,
-        derived_from,
+        extracted_by,
     })
 }
 
@@ -204,6 +205,7 @@ fn parse_memory_source(v: Option<&Value>) -> MemorySource {
         Some("perplexity") => MemorySource::Perplexity,
         Some("obsidian") => MemorySource::Obsidian,
         Some("obsidian_books") => MemorySource::ObsidianBooks,
+        Some("hermes") => MemorySource::Hermes,
         _ => MemorySource::CursorHistory,
     }
 }
