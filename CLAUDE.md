@@ -120,7 +120,7 @@ Focus on:
 
 ## Brain (Persistent Memory)
 
-You have a persistent brain with 17,700+ memories (auto-maintained via BVH dedup + noise detection): decisions, solutions, patterns, facts, project context.
+You have a persistent brain on the `brain` MCP server, the same one Cursor uses. Saves happen only when you call `save_memory_tool`. Do not run session hooks, transcript summarizers, or dedup cleanup.
 
 ### Quick Start
 
@@ -130,11 +130,14 @@ You have a persistent brain with 17,700+ memories (auto-maintained via BVH dedup
 - Need latest context → `get_stats_tool()` → `search_index(...)` → `timeline_tool(anchor_id)`
 - Topic context at start → `get_context_tool(topic="...", project="...")`
 
-**Save when:**
+**Save every exchange.** This matches Cursor.
 
-- Non-obvious decision → `save_memory_tool(content, memory_type="pattern|project_context", tags="...")`
-- Tricky bug solved → `save_memory_tool(content, memory_type="solution", tags="...")`
-- Fact discovered → `save_memory_tool(content, memory_type="fact")`
+- On session start, call `get_context_tool` with the current project/topic before responding.
+- After every response, call `save_memory_tool` with a dense 2-5 sentence summary: what the user asked, what you did or decided, and any key facts. Use `memory_type="conversation"` and set `project` to the current project name.
+- Do not skip short answers or clarifications.
+- If the user corrects something, call `record_feedback` with `event_type="edited"`.
+- If a retrieved memory was useful, call `record_feedback` with `event_type="accepted"`.
+- Do not call `reflect_tool` or any cleanup script as part of normal work.
 
 
 
