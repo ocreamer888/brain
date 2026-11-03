@@ -36,11 +36,9 @@ def _run_hook(tool_name: str, tool_input: dict, tool_response: str = "") -> list
          patch("brain.api_client.save_memory_with_status", side_effect=fake_save), \
          patch("brain.api_client.template_search", return_value=[]), \
          patch("brain.core.summarizer._openrouter_chat", side_effect=fake_llm), \
-         patch("brain.hooks.corpus_barrier.should_save", return_value=True), \
          patch("brain.hooks.action_state.load_state", side_effect=lambda *a, **k: _empty_state()), \
          patch("brain.hooks.action_state.save_state", return_value=None), \
          patch("brain.hooks.action_state.flush_edit_groups", return_value=[]), \
-         patch("brain.hooks.action_state.get_cached_corpus_size", return_value=1000), \
          patch("brain.hooks.spool.enqueue_memory"), \
          patch("brain.hooks.spool.replay_once", return_value=MagicMock(replayed=0, remaining=0, moved_to_dlq=0)), \
          patch("brain.hooks.spool.metrics", return_value={"queue_size": 0, "oldest_age_sec": 0}):
@@ -69,15 +67,30 @@ def test_edit_does_not_save():
 
 
 def test_write_saves_with_filename_title():
-    """Write saves as solution with a title containing the filename."""
+    """Write saves as episode (raw audit trail, not curated) with a title containing the filename."""
     saved = _run_hook("Write", {"file_path": "/Users/user/project/foo/bar.py", "content": "..."})
     assert len(saved) == 1
     assert "bar.py" in saved[0]["title"]
-    assert saved[0]["memory_type"] == "solution"
+    assert saved[0]["memory_type"] == "episode"
 
 
 def test_agent_saves_with_description_title():
-    """Agent dispatches save as decision with description in title."""
+    """Agent dispatches save as episode (raw audit trail) with description in title."""
     saved = _run_hook("Agent", {"description": "Run retrieval eval"})
     assert len(saved) == 1
-    assert saved[0]["memory_type"] == "decision"
+    assert saved[0]["memory_type"] == "episode"
+
+
+def test_write_save_captures_file_path():
+    """G10: the hook already knows the file path (tool_input) — it must be
+    threaded through to the save payload, not dropped on the floor."""
+    saved = _run_hook("Write", {"file_path": "/Users/user/project/foo/bar.py", "content": "..."})
+    assert len(saved) == 1
+    assert saved[0]["file_path"] == "/Users/user/project/foo/bar.py"
+
+
+def test_agent_save_has_no_file_path():
+    """Agent dispatches have no associated file — must stay None, not guessed."""
+    saved = _run_hook("Agent", {"description": "Run retrieval eval"})
+    assert len(saved) == 1
+    assert saved[0]["file_path"] is None

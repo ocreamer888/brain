@@ -80,8 +80,7 @@ def test_save_session_extracted_drops_ungrounded_error_and_decision():
         "next_steps": [],
     }
 
-    with patch("brain.hooks.corpus_barrier.should_save", return_value=True), \
-         patch("brain.core.summarizer.extract_error_fix_pairs", return_value=hallucinated_pairs), \
+    with patch("brain.core.summarizer.extract_error_fix_pairs", return_value=hallucinated_pairs), \
          patch("brain.core.summarizer.extract_decisions", return_value=hallucinated_decisions), \
          patch("brain.core.session_ingest.summarize_session", return_value=real_summary), \
          patch("brain.core.session_ingest.save_memory_fn") as mock_save:

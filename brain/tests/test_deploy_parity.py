@@ -55,7 +55,6 @@ SYNC_SET_REASONS: dict[str, str] = {
     "brain/hooks/post_tool_use.py": "PostToolUse entry point; the main golden-path save site",
     "brain/hooks/background.py": "spawn_background guard imported by session_end (V-08)",
     "brain/hooks/action_state.py": "PostToolUse error/edit pairing state; without it action capture regresses",
-    "brain/hooks/corpus_barrier.py": "confidence barrier gate before hook saves",
     "brain/hooks/session_start.py": "detect_project + PROJECT_DIR_MAP used on every hook save",
     "brain/core/db.py": "python-backend SQLite path imported by brain.core.memory",
     "brain/core/embedder.py": "python-backend embed path imported by brain.core.memory",

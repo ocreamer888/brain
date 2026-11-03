@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import time
 from pathlib import Path
 
 SPOOL_DIR = Path(__file__).parent / "spool"
@@ -158,6 +157,28 @@ def record_edit(state: dict, file_path: str, old_str: str, new_str: str) -> None
         changes.append(f"- {old_preview} → {new_preview}")
 
 
+def llm_json_title_summary(prompt: str) -> tuple[str, str] | None:
+    """Call the summarizer LLM expecting {"title": ..., "summary": ...} JSON.
+
+    Shared by every hook-side summarizer (edit groups, new-file writes) so
+    the LLM-call/parse/markdown-fence-stripping logic lives in one place.
+    Returns None only when the call/parse itself fails -- callers own their
+    own fallback text and should apply it per-field (e.g. `title or
+    fallback_title`), so a response with one field missing doesn't discard
+    the other field that did come back usable.
+    """
+    try:
+        from brain.core.summarizer import _openrouter_chat, SUMMARIZE_MODEL
+        raw = _openrouter_chat(SUMMARIZE_MODEL, [{"role": "user", "content": prompt}], max_tokens=256)
+        import json as _json
+        parsed = _json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+        title = str(parsed.get("title", ""))[:80]
+        summary = str(parsed.get("summary", ""))[:300]
+        return title, summary
+    except Exception:
+        return None
+
+
 def _summarize_edit_group(file_path: str, changes: list[str]) -> tuple[str, str]:
     """LLM call to produce a meaningful title and summary for grouped edits."""
     name = Path(file_path).name
@@ -166,11 +187,7 @@ def _summarize_edit_group(file_path: str, changes: list[str]) -> tuple[str, str]
     fallback_title = f"{n} edit{'s' if n > 1 else ''} to {name}"
     fallback_content = f"Edited {file_path} ({n} change{'s' if n > 1 else ''}):\n{changes_text}"
 
-    try:
-        from brain.core.summarizer import _openrouter_chat, SUMMARIZE_MODEL
-        raw = _openrouter_chat(SUMMARIZE_MODEL, [{
-            "role": "user",
-            "content": f"""You are summarizing code edits to a file for a memory system.
+    result = llm_json_title_summary(f"""You are summarizing code edits to a file for a memory system.
 
 File: {file_path}
 Changes ({n}):
@@ -185,17 +202,14 @@ Return ONLY valid JSON:
 Rules:
 - Title should describe the PURPOSE, not just "edited X" (e.g. "Added cubic barrier for corpus self-regulation" not "3 edits to corpus_barrier.py")
 - Summary should explain WHY this change matters
-- Both must be single-line strings, no newlines"""
-        }], max_tokens=256)
+- Both must be single-line strings, no newlines""")
 
-        import json as _json
-        parsed = _json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
-        title = str(parsed.get("title", fallback_title))[:80]
-        summary = str(parsed.get("summary", ""))[:300]
-        content = f"{summary}\n\nFile: {file_path}\nChanges:\n{changes_text}"
-        return title, content
-    except Exception:
+    if result is None:
         return fallback_title, fallback_content
+    title, summary = result
+    title = title or fallback_title
+    content = f"{summary}\n\nFile: {file_path}\nChanges:\n{changes_text}" if summary else fallback_content
+    return title, content
 
 
 def flush_edit_groups(state: dict) -> list[tuple[str, str, str]]:
@@ -238,14 +252,3 @@ def flush_all_edit_groups(state: dict) -> list[tuple[str, str, str]]:
     return result
 
 
-def get_cached_corpus_size(state: dict) -> int:
-    cache = state.get("stats_cache", {"n": 0, "ts": 0.0})
-    if time.time() - cache["ts"] < 60.0:
-        return cache["n"]
-    try:
-        from brain.api_client import get_stats
-        n = get_stats().get("total_memories", 0)
-    except Exception:
-        n = 0
-    state["stats_cache"] = {"n": n, "ts": time.time()}
-    return n

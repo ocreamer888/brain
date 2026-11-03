@@ -82,8 +82,6 @@ def _is_trivial_summary(summary_text: str, decisions: list, next_steps: list) ->
 
 def save_session_extracted(*, messages: list, project: str, session_id: str, ended_at: str):
     """3-pass recycling extraction: error-fix pairs, decisions, then lean summary."""
-    from brain.hooks.corpus_barrier import should_save
-    from brain.hooks.action_state import ACTION_CONFIDENCE
 
     # Skip recycling entirely if no messages — saves 3 LLM calls + prevents thin output
     if not messages:
@@ -113,8 +111,6 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
             extract_error_fix_pairs(normalized), corpus, key="error"
         )
         for pair in pairs:
-            if not should_save(ACTION_CONFIDENCE["session_error_fix"]):
-                continue
             content = f"Error: {pair.get('error', '?')}\nCause: {pair.get('cause', '?')}\nFix: {pair.get('fix', '?')}"
             files = pair.get("files", [])
             if isinstance(files, list) and files:
@@ -145,8 +141,6 @@ def save_session_extracted(*, messages: list, project: str, session_id: str, end
             extract_decisions(normalized), corpus, key="decision"
         )
         for dec in decisions:
-            if not should_save(ACTION_CONFIDENCE["session_decision"]):
-                continue
             content = str(dec.get("decision", "?"))
             ctx = dec.get("context", "")
             if ctx:
@@ -285,14 +279,11 @@ def ingest_session(*, messages: list, project: str, session_id: str, ended_at: s
 
     # Flush any remaining edit groups before clearing state
     try:
-        from brain.hooks.action_state import load_state, flush_all_edit_groups, ACTION_CONFIDENCE, clear_state
-        from brain.hooks.corpus_barrier import should_save as barrier_check
+        from brain.hooks.action_state import load_state, flush_all_edit_groups, clear_state
 
         ptu_state = load_state()
         remaining_edits = flush_all_edit_groups(ptu_state)
         for fp, content_text, group_title in remaining_edits:
-            if not barrier_check(ACTION_CONFIDENCE["edit_group"]):
-                continue
             try:
                 save_memory_fn(
                     content=content_text,

@@ -1,4 +1,10 @@
-"""Tests for Phase 10 Smart Action Capture: corpus barrier, action state, classification."""
+"""Tests for Phase 10 Smart Action Capture: action state, classification.
+
+The corpus barrier (confidence gate that blocked saves as the corpus grew)
+was removed 2026-11-02: it contradicted the append-only cognitive-architecture
+design (docs/architecture/cognitive-architecture-spec.md) and was silently
+blocking every Write/Edit hook save once the corpus passed ~18k memories.
+"""
 from __future__ import annotations
 
 import json
@@ -7,59 +13,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-
-# --- Corpus Barrier ---
-
-class TestBarrierForce:
-    def test_below_target_is_zero(self):
-        from brain.hooks.corpus_barrier import barrier_force
-        assert barrier_force(0) == 0.0
-        assert barrier_force(17_000) == 0.0
-        assert barrier_force(18_000) == 0.0
-
-    def test_at_max_is_k(self):
-        from brain.hooks.corpus_barrier import barrier_force, K
-        assert abs(barrier_force(25_000) - K) < 1e-6
-
-    def test_above_max_capped(self):
-        from brain.hooks.corpus_barrier import barrier_force, K
-        assert abs(barrier_force(30_000) - K) < 1e-6
-
-    def test_midpoint(self):
-        from brain.hooks.corpus_barrier import barrier_force, K
-        mid = 18_000 + (25_000 - 18_000) // 2  # 21500
-        ratio = (mid - 18_000) / (25_000 - 18_000)
-        expected = K * ratio ** 3
-        assert abs(barrier_force(mid) - expected) < 1e-6
-
-    def test_monotonically_increasing(self):
-        from brain.hooks.corpus_barrier import barrier_force
-        prev = 0.0
-        for n in range(18_000, 26_000, 500):
-            val = barrier_force(n)
-            assert val >= prev
-            prev = val
-
-
-class TestShouldSave:
-    def test_high_confidence_always_saves_below_target(self):
-        from brain.hooks.corpus_barrier import should_save
-        assert should_save(0.9, n=10_000) is True
-
-    def test_low_confidence_fails_below_target(self):
-        from brain.hooks.corpus_barrier import should_save
-        assert should_save(0.1, n=10_000) is False
-
-    def test_hard_cap_at_max(self):
-        from brain.hooks.corpus_barrier import should_save
-        assert should_save(0.99, n=25_000) is False
-        assert should_save(1.0, n=25_000) is True
-
-    def test_fail_open_on_api_error(self):
-        from brain.hooks.corpus_barrier import should_save
-        with patch("brain.api_client.get_stats", side_effect=Exception("down")):
-            assert should_save(0.5) is True  # n=0 fallback
 
 
 # --- Action State ---
@@ -150,6 +103,14 @@ class TestActionState:
 
 
 class TestEditGrouping:
+    # 2026-11-03: these two didn't mock the LLM call, unlike every other test
+    # in this file -- under full-suite load the real _openrouter_chat call
+    # can take long enough to look like a hang (confirmed via pytest-timeout:
+    # a genuine >20s blocking socket read, not test-code contention). Neither
+    # test is actually testing LLM output (fallback title/content generation
+    # is TestLLMTitleFallback's job below) -- they're testing the grouping/
+    # flush-threshold logic, so a fast, deterministic fake is strictly more
+    # correct here, not just faster.
     def test_record_and_flush(self):
         from brain.hooks.action_state import _empty_state, record_edit, flush_edit_groups, EDIT_FLUSH_THRESHOLD
 
@@ -166,7 +127,8 @@ class TestEditGrouping:
 
         # Idle past threshold — should flush
         state["tool_count"] = 1 + 2 + EDIT_FLUSH_THRESHOLD + 1
-        flushed = flush_edit_groups(state)
+        with patch("brain.core.summarizer._openrouter_chat", side_effect=Exception("no network in tests")):
+            flushed = flush_edit_groups(state)
         assert len(flushed) == 1
         fp, content, title = flushed[0]
         assert "foo.py" in fp
@@ -182,7 +144,8 @@ class TestEditGrouping:
         record_edit(state, "/a.py", "x", "y")
         record_edit(state, "/b.py", "p", "q")
 
-        flushed = flush_all_edit_groups(state)
+        with patch("brain.core.summarizer._openrouter_chat", side_effect=Exception("no network in tests")):
+            flushed = flush_all_edit_groups(state)
         assert len(flushed) == 2
         assert state["edit_groups"] == {}
 
@@ -211,6 +174,40 @@ class TestLLMTitleFallback:
         from brain.hooks.action_state import _summarize_edit_group
         with patch("brain.core.summarizer._openrouter_chat", side_effect=Exception("API down")):
             title, content = _summarize_edit_group("/project/foo.py", ["- old → new"])
+            assert "foo.py" in title
+            assert "foo.py" in content
+
+    def test_summarize_write_synthesizes_purpose_not_raw_dump(self):
+        """2026-11-02: Write saves must get real synthesis (why, not just what),
+        same as edit_group -- not a mechanical 'Created X, preview: ...' dump."""
+        from brain.hooks.post_tool_use import _summarize_write
+
+        def fake_llm(model, messages, *args, **kwargs):
+            return '{"title": "Added recency gold set", "summary": "Builds pairwise recency eval data from curator UPDATE pairs."}'
+
+        with patch("brain.core.summarizer._openrouter_chat", side_effect=fake_llm):
+            title, content = _summarize_write("/project/brain/eval/gold_recency.jsonl", "[...]")
+            assert title == "Added recency gold set"
+            assert "Builds pairwise recency eval data" in content
+            assert "gold_recency.jsonl" in content
+
+    def test_summarize_write_uses_summary_even_when_title_missing(self):
+        """Regression: a valid JSON response missing only `title` must not
+        discard the usable `summary` and fall back to the raw dump."""
+        from brain.hooks.post_tool_use import _summarize_write
+
+        def fake_llm(model, messages, *args, **kwargs):
+            return '{"summary": "Builds pairwise recency eval data from curator UPDATE pairs."}'
+
+        with patch("brain.core.summarizer._openrouter_chat", side_effect=fake_llm):
+            title, content = _summarize_write("/project/brain/eval/gold_recency.jsonl", "[...]")
+            assert "gold_recency.jsonl" in title  # fell back to filename-based title
+            assert "Builds pairwise recency eval data" in content  # kept the real summary
+
+    def test_summarize_write_fallback_on_api_error(self):
+        from brain.hooks.post_tool_use import _summarize_write
+        with patch("brain.core.summarizer._openrouter_chat", side_effect=Exception("API down")):
+            title, content = _summarize_write("/project/foo.py", "print('hi')")
             assert "foo.py" in title
             assert "foo.py" in content
 

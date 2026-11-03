@@ -25,9 +25,7 @@ from brain.hooks.action_state import (
     is_skip_bash,
     is_skip_file,
     is_test_pass,
-    get_cached_corpus_size,
 )
-from brain.hooks.corpus_barrier import should_save
 
 
 def _llm_title(context: str) -> str:
@@ -48,8 +46,45 @@ Event:
         return context[:80]
 
 
+def _summarize_write(file_path: str, content_preview: str) -> tuple[str, str]:
+    """LLM call to produce a meaningful title and summary for a new file.
+
+    Mirrors action_state._summarize_edit_group's pattern: lead with WHAT the
+    file is for and WHY it was created, not a raw content dump. Falls back to
+    the raw preview on any failure so a save is never silently dropped.
+    """
+    from brain.hooks.action_state import llm_json_title_summary
+
+    name = Path(file_path).name
+    fallback_title = f"Created {name}"
+    fallback_content = f"Created {file_path}\nContent preview: {content_preview}"
+
+    result = llm_json_title_summary(f"""You are summarizing a newly created file for a memory system.
+
+File: {file_path}
+Content preview:
+{content_preview}
+
+Return ONLY valid JSON:
+{{
+  "title": "concise description of what this file does and why it was created (max 80 chars)",
+  "summary": "1-2 sentence explanation of the file's purpose and role (max 300 chars)"
+}}
+
+Rules:
+- Title and summary should describe PURPOSE, not just "Created {name}"
+- Both must be single-line strings, no newlines""")
+
+    if result is None:
+        return fallback_title, fallback_content
+    title, summary = result
+    title = title or fallback_title
+    content = f"{summary}\n\nFile: {file_path}\nContent preview: {content_preview}" if summary else fallback_content
+    return title, content
+
+
 def classify_action(tool_name, tool_input, tool_response, state):
-    """Classify a tool call. Returns (memory_type, content, title, confidence) or None to skip."""
+    """Classify a tool call. Returns (memory_type, content, title, confidence, file_path) or None to skip."""
     response_str = str(tool_response or "")[:2000]
     project = detect_project(os.getcwd()) or Path(os.getcwd()).name
 
@@ -66,6 +101,7 @@ def classify_action(tool_name, tool_input, tool_response, state):
                 f"Tests passing after fix: {command[:200]}",
                 f"Tests pass — {project}",
                 ACTION_CONFIDENCE["test_pass"],
+                None,
             )
 
         if is_error_response(response_str):
@@ -109,17 +145,18 @@ def classify_action(tool_name, tool_input, tool_response, state):
                 content,
                 title,
                 ACTION_CONFIDENCE["error_fix"],
+                file_path,
             )
 
         if tool_name == "Write":
             content_preview = str(tool_input.get("content", ""))[:500]
-            content = f"Created {file_path}\nContent preview: {content_preview}"
-            title = _llm_title(content)
+            title, content = _summarize_write(file_path, content_preview)
             return (
-                "solution",
+                "episode",
                 content,
                 title,
                 ACTION_CONFIDENCE["write_source"],
+                file_path,
             )
 
         if tool_name == "Edit":
@@ -138,10 +175,11 @@ def classify_action(tool_name, tool_input, tool_response, state):
     if tool_name == "Agent":
         agent_desc = str(tool_input.get("description", ""))[:200]
         return (
-            "decision",
+            "episode",
             f"Dispatched agent: {agent_desc}",
             agent_desc[:100] or f"Agent — {project}",
             ACTION_CONFIDENCE["agent"],
+            None,
         )
 
     return None
@@ -171,13 +209,10 @@ try:
         from brain.ingest.payloads import with_ingest_tag
         from brain.hooks.spool import enqueue_memory
 
-        n = get_cached_corpus_size(state)
         save_state(state)
         project = detect_project(os.getcwd()) or Path(os.getcwd()).name
         for fp, content_text, group_title in flushed:
             conf = ACTION_CONFIDENCE["edit_group"]
-            if not should_save(conf, n):
-                continue
             payload = {
                 "content": content_text,
                 "memory_type": "solution",
@@ -185,6 +220,7 @@ try:
                 "project": project,
                 "source": "claude_code_hook",
                 "title": group_title,
+                "file_path": fp,
             }
             try:
                 save_memory_with_status(**payload)
@@ -195,18 +231,10 @@ try:
     if result is None:
         sys.exit(0)
 
-    memory_type, content, title, confidence = result
+    memory_type, content, title, confidence, hook_file_path = result
     from brain.ingest.payloads import forbid_knowledge_type
     memory_type = forbid_knowledge_type(memory_type, "post_tool_use")
-    n = get_cached_corpus_size(state)
     save_state(state)
-
-    if not should_save(confidence, n):
-        print(
-            f"[BRAIN] action=barrier_blocked tool={tool_name} confidence={confidence:.2f} n={n}",
-            file=sys.stderr,
-        )
-        sys.exit(0)
 
     from brain.api_client import backend_mode, save_memory_with_status
     from brain.ingest.payloads import with_ingest_tag
@@ -234,6 +262,7 @@ try:
             "project": project,
             "source": "claude_code_hook",
             "title": title,
+            "file_path": hook_file_path,
         }
         try:
             res = save_memory_with_status(**payload)

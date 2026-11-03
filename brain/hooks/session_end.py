@@ -205,14 +205,11 @@ try:
         )
         # Flush any remaining edit groups before clearing state
         try:
-            from brain.hooks.action_state import load_state, flush_all_edit_groups, ACTION_CONFIDENCE
-            from brain.hooks.corpus_barrier import should_save as barrier_check
+            from brain.hooks.action_state import load_state, flush_all_edit_groups
 
             ptu_state = load_state()
             remaining_edits = flush_all_edit_groups(ptu_state)
             for fp, content_text, group_title in remaining_edits:
-                if not barrier_check(ACTION_CONFIDENCE["edit_group"]):
-                    continue
                 try:
                     save_memory_fn(
                         content=content_text,
