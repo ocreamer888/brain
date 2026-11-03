@@ -47,6 +47,12 @@ fn user_prompt_submit_hook_hits_brain_api_and_prints_context_header() {
 
     let _api = KillChild(
         Command::new(env!("CARGO_BIN_EXE_brain_api"))
+            // Start from a clean environment: a developer's shell exports
+            // BRAIN_* (DB path, LLM provider, API key), and the instance
+            // registry at $HOME/.brain/instances.json decides which database
+            // opens. Inheriting either would point the test at the real brain.
+            .env_clear()
+            .env("HOME", dir.path())
             .env("BRAIN_DB_PATH", db_path.to_string_lossy().as_ref())
             .env("BRAIN_EMBEDDER", "mock")
             .env("BRAIN_API_BIND", &bind)
@@ -86,6 +92,8 @@ fn user_prompt_submit_hook_hits_brain_api_and_prints_context_header() {
     });
 
     let out = Command::new(env!("CARGO_BIN_EXE_brain_user_prompt_submit"))
+        .env_clear()
+        .env("HOME", dir.path())
         .env("BRAIN_API_URL", &base)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

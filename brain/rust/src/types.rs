@@ -30,6 +30,8 @@ pub enum MemorySource {
     Perplexity,
     Obsidian,
     ObsidianBooks,
+    /// Hermes agent (any profile/platform — see metadata.tags for which one).
+    Hermes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,8 +80,9 @@ pub struct MemoryMetadata {
 
     /// Extractor model + prompt version tag (e.g. "openrouter/claude-sonnet-4-5/v1").
     /// Used to track extraction quality across prompt iterations.
-    #[serde(default)]
-    pub derived_from: Option<String>,
+    /// Wire name: `extracted_by`. Legacy input alias: `derived_from`.
+    #[serde(default, alias = "derived_from")]
+    pub extracted_by: Option<String>,
 }
 
 fn default_importance() -> f64 {
@@ -119,6 +122,11 @@ pub struct SearchFilter {
     /// When true, expand the ranked candidate list with 1-hop graph neighbors
     /// (shared entities) before the final truncate. Default off (Phase C, Task 7).
     pub graph_expand: bool,
+    /// Episode rows (raw PostToolUse/session traces) are audit trail, not
+    /// curated knowledge — excluded from untyped search by default so they
+    /// never crowd context-injection. An explicit `memory_type` filter (or
+    /// `get_episode` by id) still reaches them. Default true.
+    pub exclude_episodes_by_default: bool,
 }
 
 impl Default for SearchFilter {
@@ -129,6 +137,7 @@ impl Default for SearchFilter {
             exclude_superseded: true,
             alpha: None,
             graph_expand: false,
+            exclude_episodes_by_default: true,
         }
     }
 }
@@ -257,6 +266,13 @@ mod tests {
     }
 
     #[test]
+    fn memory_metadata_accepts_legacy_derived_from_alias() {
+        let json = r#"{"type":"fact","project":"brain","tags":"","timestamp":"2026-10-16T00:00:00Z","source":"claude_code_session","derived_from":"ollama/test/v1"}"#;
+        let meta: MemoryMetadata = serde_json::from_str(json).unwrap();
+        assert_eq!(meta.extracted_by.as_deref(), Some("ollama/test/v1"));
+    }
+
+    #[test]
     fn feedback_event_type_round_trip() {
         assert_eq!(
             FeedbackEventType::from_str("accepted"),
@@ -311,7 +327,7 @@ mod tests {
             event_time: None,
             salience: 0.5,
             superseded_by: None,
-            derived_from: None,
+            extracted_by: None,
         };
         let json = serde_json::to_string(&meta).unwrap();
         let deserialized: MemoryMetadata = serde_json::from_str(&json).unwrap();

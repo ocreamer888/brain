@@ -120,11 +120,24 @@ struct SaveRequest {
     #[serde(default)]
     salience: Option<f64>,
     /// Extractor model + prompt version tag (e.g. "openrouter/claude-sonnet-4-5/v1").
+    /// Wire name: `extracted_by`. `derived_from` is its own field, not a serde
+    /// `alias`, because `alias` makes serde error on "duplicate field" if a
+    /// caller's JSON has both keys -- see `extracted_by()` below for the merge.
     #[serde(default)]
-    derived_from: Option<String>,
+    extracted_by: Option<String>,
+    #[serde(default, rename = "derived_from")]
+    derived_from_legacy: Option<String>,
     /// Optional entity names to link (fact → entity "mentions" edges).
     #[serde(default)]
     entities: Option<Vec<String>>,
+}
+
+impl SaveRequest {
+    /// `extracted_by` if present, else the legacy `derived_from` name. If a
+    /// caller sends both, `extracted_by` (the current wire name) wins.
+    fn extracted_by(&self) -> Option<&str> {
+        self.extracted_by.as_deref().or(self.derived_from_legacy.as_deref())
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -392,7 +405,15 @@ async fn main() {
     // index, and create the embedder/LLM client a single time. Shared across
     // all requests via Arc<Mutex<Brain>>.
     let boot = Instant::now();
-    let brain = open_brain_at(&active_path, &memory_tx).expect("failed to open Brain at startup");
+    // Off the async runtime, like the instance-switch path: opening a Brain
+    // does blocking work (SQLite, embeddings, and a blocking HTTP client for
+    // Ollama), which must not run inside an async context.
+    let boot_path = active_path.clone();
+    let boot_tx = memory_tx.clone();
+    let brain = tokio::task::spawn_blocking(move || open_brain_at(&boot_path, &boot_tx))
+        .await
+        .expect("Brain open task panicked")
+        .expect("failed to open Brain at startup");
     eprintln!(
         "[BRAIN API] Brain ready ({} memories indexed) in {:.0} ms",
         brain.get_stats().map(|s| s.total_memories).unwrap_or(0),
@@ -441,6 +462,7 @@ async fn main() {
         }
     });
 
+    spawn_atlas_auto_rebuild(state.clone());
     let app = build_router(state);
 
     let addr: SocketAddr = bind.parse().expect("invalid BRAIN_API_BIND");
@@ -469,6 +491,13 @@ fn build_router(state: AppState) -> Router {
         .route("/v1/stream", get(stream_handler))
         .route("/get-episode", get(get_episode_handler))
         .route("/entities", get(entities_handler))
+        .route("/entities/top", get(top_entities_handler))
+        .route("/v1/atlas/:id", get(atlas_meta_handler))
+        .route("/v1/memory-atlas/:id", get(memory_atlas_handler))
+        .route("/v1/memory-atlas/:id/rebuild", post(memory_atlas_rebuild_handler))
+        .route("/v1/memory-atlas/:id/status", get(memory_atlas_status_handler))
+        .route("/v1/atlas/:id/geometry", get(atlas_geometry_handler))
+        .route("/v1/atlas/:id/labels", get(atlas_labels_handler))
         .route("/link-entities", post(link_entities_handler))
         .route("/neighbors", get(neighbors_handler))
         .route("/linked", get(linked_handler))
@@ -601,7 +630,7 @@ async fn save(
             req.parent_id.as_deref(),
             event_time,
             req.salience,
-            req.derived_from.as_deref(),
+            req.extracted_by(),
         )
         .map_err(internal_err)?;
     if let Some(ref names) = req.entities {
@@ -689,7 +718,7 @@ async fn save_batch(
             item.parent_id.as_deref(),
             item_event_time,
             item.salience,
-            item.derived_from.as_deref(),
+            item.extracted_by(),
         ) {
             Ok(outcome) => {
                 if let Some(ref names) = item.entities {
@@ -821,6 +850,24 @@ struct EntitiesQuery {
     memory_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct TopEntitiesQuery {
+    #[serde(default = "default_top_entities")]
+    limit: usize,
+}
+
+fn default_top_entities() -> usize {
+    12
+}
+
+/// Cap so this stays a small, cheap read; the full catalog lives on /linked.
+const TOP_ENTITIES_MAX: usize = 100;
+
+#[derive(Debug, Serialize)]
+struct TopEntitiesResponse {
+    entities: Vec<LinkedEntityStat>,
+}
+
 #[derive(Debug, Serialize)]
 struct EntityRow {
     id: String,
@@ -912,6 +959,230 @@ async fn entities_handler(
         .collect();
     log_request("GET", "/entities", StatusCode::OK, start);
     Ok(Json(EntitiesResponse { entities }))
+}
+
+fn brain_db_path(state: &AppState, id: &str) -> Result<String, (StatusCode, Json<ApiError>)> {
+    let reg = state.registry.lock().unwrap_or_else(|p| p.into_inner());
+    brain::instances::get(&reg, id)
+        .map(|r| r.db_path.clone())
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError { error: format!("no brain with id '{id}'") })))
+}
+
+/// Brains with a memory-atlas rebuild in flight (one at a time per brain).
+fn atlas_rebuilds() -> &'static Mutex<std::collections::HashSet<String>> {
+    static SET: std::sync::OnceLock<Mutex<std::collections::HashSet<String>>> = std::sync::OnceLock::new();
+    SET.get_or_init(Default::default)
+}
+
+/// A brain's memory atlas, live: stored positions + current memories and links.
+async fn memory_atlas_handler(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    let path = brain_db_path(&state, &id)?;
+    let res = tokio::task::spawn_blocking(move || -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+        let conn = brain::atlas::open_read(&path).map_err(internal_err)?;
+        // Changes when the layout, the live memories, or the links change.
+        let run = brain::memory_atlas::current_run(&conn).map_err(internal_err)?.map(|r| r.0).unwrap_or_default();
+        let (count, latest): (i64, Option<String>) = conn
+            .query_row("SELECT COUNT(*), MAX(timestamp) FROM memories WHERE superseded_by IS NULL", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(internal_err)?;
+        let links: i64 = conn.query_row("SELECT COUNT(*) FROM edges", [], |r| r.get(0)).map_err(internal_err)?;
+        let etag = format!("\"{id}:{run}:{count}:{}:{links}\"", latest.unwrap_or_default());
+        if let Some(r) = atlas_not_modified(&headers, &etag) {
+            return Ok(r);
+        }
+        let body = brain::memory_atlas::read(&conn).map_err(internal_err)?.to_string();
+        Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ETAG, etag)
+            .header(header::CACHE_CONTROL, "no-cache")
+            .body(Body::from(body))
+            .unwrap())
+    })
+    .await
+    .map_err(internal_err)??;
+    log_request("GET", "/v1/memory-atlas/:id", res.status(), start);
+    Ok(res)
+}
+
+/// Start a layout rebuild in the background; poll /status. Single-flight per brain.
+async fn memory_atlas_rebuild_handler(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
+    let path = brain_db_path(&state, &id)?;
+    let started = start_atlas_rebuild(id, path);
+    log_request("POST", "/v1/memory-atlas/:id/rebuild", StatusCode::ACCEPTED, start);
+    Ok((StatusCode::ACCEPTED, Json(serde_json::json!({ "started": started, "running": true }))))
+}
+
+/// Run a layout rebuild for one brain in the background. False if one is already running.
+fn start_atlas_rebuild(id: String, path: String) -> bool {
+    if !atlas_rebuilds().lock().unwrap_or_else(|p| p.into_inner()).insert(id.clone()) {
+        return false;
+    }
+    tokio::task::spawn_blocking(move || {
+        let outcome = rusqlite::Connection::open(&path).map_err(|e| e.to_string()).and_then(|mut conn| {
+            conn.busy_timeout(Duration::from_secs(15)).ok();
+            brain::memory_atlas::rebuild(&mut conn).map_err(|e| e.to_string())
+        });
+        if let Err(e) = outcome {
+            eprintln!("[BRAIN API] memory atlas rebuild failed for {id}: {e}");
+        }
+        atlas_rebuilds().lock().unwrap_or_else(|p| p.into_inner()).remove(&id);
+    });
+    true
+}
+
+/// Automatic rebuilds: every `BRAIN_ATLAS_AUTO_CHECK_SECS` (default 600) the active
+/// brain is checked; once `BRAIN_ATLAS_AUTO_REBUILD` (default 200, 0 = off) or more
+/// memories were saved since its layout, it is rebuilt in the background (warm start,
+/// so familiar regions stay put). Brains never built are left alone.
+fn atlas_auto_settings() -> (u64, i64) {
+    let every = std::env::var("BRAIN_ATLAS_AUTO_CHECK_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(600);
+    let after = std::env::var("BRAIN_ATLAS_AUTO_REBUILD").ok().and_then(|v| v.parse().ok()).unwrap_or(200);
+    (every.max(5), after)
+}
+
+fn spawn_atlas_auto_rebuild(state: AppState) {
+    let (every, after) = atlas_auto_settings();
+    if after <= 0 {
+        eprintln!("[BRAIN API] memory atlas auto-rebuild off");
+        return;
+    }
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(every)).await;
+            let id = state.registry.lock().unwrap_or_else(|p| p.into_inner()).active_id.clone();
+            let Ok(path) = brain_db_path(&state, &id) else { continue };
+            let check = path.clone();
+            let due = tokio::task::spawn_blocking(move || {
+                brain::atlas::open_read(&check).and_then(|c| brain::memory_atlas::new_since_layout(&c)).ok().flatten()
+            })
+            .await
+            .ok()
+            .flatten();
+            if let Some(n) = due.filter(|n| *n >= after) {
+                if start_atlas_rebuild(id.clone(), path) {
+                    eprintln!("[BRAIN API] memory atlas auto-rebuild for {id}: {n} new memories since the layout");
+                }
+            }
+        }
+    });
+}
+
+async fn memory_atlas_status_handler(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    let path = brain_db_path(&state, &id)?;
+    let running = atlas_rebuilds().lock().unwrap_or_else(|p| p.into_inner()).contains(&id);
+    let last = tokio::task::spawn_blocking(move || {
+        brain::atlas::open_read(&path).and_then(|c| brain::memory_atlas::status(&c))
+    })
+    .await
+    .map_err(internal_err)?
+    .map_err(internal_err)?;
+    let (_, after) = atlas_auto_settings();
+    Ok(Json(serde_json::json!({ "running": running, "last": last, "auto_rebuild_after": if after > 0 { Some(after) } else { None } })))
+}
+
+/// Any brain's stored atlas, read-only, without switching brains.
+/// Returns the connection and its version (for the ETag), or 404 if unknown.
+fn atlas_source(state: &AppState, id: &str) -> Result<(rusqlite::Connection, String), (StatusCode, Json<ApiError>)> {
+    let db_path = brain_db_path(state, id)?;
+    let conn = brain::atlas::open_read(&db_path).map_err(internal_err)?;
+    let version = brain::atlas::version(&conn).map_err(internal_err)?.unwrap_or_else(|| "none".into());
+    Ok((conn, version))
+}
+
+/// `304` when the client already has this atlas version, else `None`.
+fn atlas_not_modified(headers: &HeaderMap, etag: &str) -> Option<Response<Body>> {
+    let fresh = headers.get(header::IF_NONE_MATCH).and_then(|v| v.to_str().ok()) == Some(etag);
+    fresh.then(|| Response::builder().status(StatusCode::NOT_MODIFIED).header(header::ETAG, etag).body(Body::empty()).unwrap())
+}
+
+#[derive(Clone, Copy)]
+enum AtlasPart {
+    Meta,
+    Geometry,
+    Labels,
+}
+
+async fn atlas_part(state: AppState, headers: HeaderMap, id: String, part: AtlasPart, route: &'static str) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    let result = tokio::task::spawn_blocking(move || -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+        let (conn, version) = atlas_source(&state, &id)?;
+        let etag = format!("\"{id}:{version}:{}\"", part as u8);
+        if let Some(r) = atlas_not_modified(&headers, &etag) {
+            return Ok(r);
+        }
+        let a = brain::atlas::read_columns(&conn).map_err(internal_err)?;
+        let (body, kind) = match part {
+            AtlasPart::Meta => (
+                serde_json::json!({
+                    "instance": id,
+                    "config": a.config,
+                    "imported_at": a.imported_at,
+                    "points": a.id.len(),
+                    "links": a.link_count,
+                    "categories": a.categories,
+                    "category_counts": a.category_counts,
+                })
+                .to_string()
+                .into_bytes(),
+                "application/json",
+            ),
+            AtlasPart::Geometry => (brain::atlas::geometry_bytes(&a), "application/octet-stream"),
+            AtlasPart::Labels => (serde_json::json!({ "id": a.id, "label": a.label }).to_string().into_bytes(), "application/json"),
+        };
+        Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, kind)
+            .header(header::ETAG, etag)
+            .header(header::CACHE_CONTROL, "no-cache")
+            .body(Body::from(body))
+            .unwrap())
+    })
+    .await
+    .map_err(internal_err)??;
+    log_request("GET", route, result.status(), start);
+    Ok(result)
+}
+
+async fn atlas_meta_handler(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    atlas_part(state, headers, id, AtlasPart::Meta, "/v1/atlas/:id").await
+}
+
+async fn atlas_geometry_handler(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    atlas_part(state, headers, id, AtlasPart::Geometry, "/v1/atlas/:id/geometry").await
+}
+
+async fn atlas_labels_handler(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    atlas_part(state, headers, id, AtlasPart::Labels, "/v1/atlas/:id/labels").await
+}
+
+async fn top_entities_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TopEntitiesQuery>,
+) -> Result<Json<TopEntitiesResponse>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    reject_if_switching(&state)?;
+    let limit = q.limit.min(TOP_ENTITIES_MAX);
+    let brain = lock_brain(&state);
+    let entities = brain
+        .top_entities(limit)
+        .map_err(brain_err)?
+        .into_iter()
+        .map(|(id, name, memory_count)| LinkedEntityStat {
+            id,
+            name,
+            memory_count,
+        })
+        .collect();
+    log_request("GET", "/entities/top", StatusCode::OK, start);
+    Ok(Json(TopEntitiesResponse { entities }))
 }
 
 async fn link_entities_handler(
@@ -1689,6 +1960,7 @@ fn memory_source_as_str(s: &MemorySource) -> &'static str {
         MemorySource::Perplexity => "perplexity",
         MemorySource::Obsidian => "obsidian",
         MemorySource::ObsidianBooks => "obsidian_books",
+        MemorySource::Hermes => "hermes",
     }
 }
 
@@ -1739,6 +2011,7 @@ fn parse_memory_source(s: &str) -> Option<MemorySource> {
         "perplexity" => Some(MemorySource::Perplexity),
         "obsidian" => Some(MemorySource::Obsidian),
         "obsidian_books" => Some(MemorySource::ObsidianBooks),
+        "hermes" => Some(MemorySource::Hermes),
         _ => None,
     }
 }
@@ -1838,6 +2111,43 @@ mod tests {
         let json = serde_json::to_string(&row).unwrap();
         assert!(json.len() < 300, "row too large: {}", json.len());
         assert!(!json.contains("\"content\""));
+    }
+
+    // extracted_by/derived_from used to be a single field with #[serde(alias =
+    // "derived_from")], which makes serde error on "duplicate field" if a
+    // request sends both keys. Split into two fields + a merge method instead.
+    #[test]
+    fn save_request_extracted_by_only() {
+        let req: SaveRequest = serde_json::from_str(
+            r#"{"content":"x","memory_type":"fact","extracted_by":"model-a"}"#,
+        )
+        .unwrap();
+        assert_eq!(req.extracted_by(), Some("model-a"));
+    }
+
+    #[test]
+    fn save_request_derived_from_only_legacy() {
+        let req: SaveRequest = serde_json::from_str(
+            r#"{"content":"x","memory_type":"fact","derived_from":"model-b"}"#,
+        )
+        .unwrap();
+        assert_eq!(req.extracted_by(), Some("model-b"));
+    }
+
+    #[test]
+    fn save_request_both_present_does_not_error_and_prefers_extracted_by() {
+        let req: SaveRequest = serde_json::from_str(
+            r#"{"content":"x","memory_type":"fact","extracted_by":"model-a","derived_from":"model-b"}"#,
+        )
+        .unwrap();
+        assert_eq!(req.extracted_by(), Some("model-a"));
+    }
+
+    #[test]
+    fn save_request_neither_present() {
+        let req: SaveRequest =
+            serde_json::from_str(r#"{"content":"x","memory_type":"fact"}"#).unwrap();
+        assert_eq!(req.extracted_by(), None);
     }
 
     fn test_state() -> (AppState, std::sync::MutexGuard<'static, ()>) {

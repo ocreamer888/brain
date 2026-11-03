@@ -1,3 +1,4 @@
+pub mod atlas;
 pub mod brain;
 pub mod config;
 pub mod title;
@@ -6,6 +7,7 @@ pub mod error;
 pub mod index;
 pub mod ingest;
 pub mod instances;
+pub mod memory_atlas;
 pub mod migrate;
 pub mod privacy;
 pub mod store;

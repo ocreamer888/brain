@@ -135,11 +135,24 @@ impl MetadataStore {
         let _ = self.conn.execute_batch("ALTER TABLE memories ADD COLUMN salience REAL NOT NULL DEFAULT 0.5;");
         let _ = self.conn.execute_batch("ALTER TABLE memories ADD COLUMN superseded_by TEXT;");
         let _ = self.conn.execute_batch("ALTER TABLE memories ADD COLUMN derived_from TEXT;");
+        // Stage 1 memory contract (G1): extracted_by replaces derived_from as the
+        // extractor-provenance field. Add the new column and backfill it from the
+        // old one once; derived_from is left in place (unused going forward) rather
+        // than dropped, per the plan's "add + copy, leave old column" fallback.
+        let _ = self.conn.execute_batch("ALTER TABLE memories ADD COLUMN extracted_by TEXT;");
+        let _ = self.conn.execute_batch(
+            "UPDATE memories SET extracted_by = derived_from WHERE derived_from IS NOT NULL AND extracted_by IS NULL;",
+        );
         let _ = self.conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_memories_parent ON memories(parent_id) WHERE parent_id IS NOT NULL;",
         );
         let _ = self.conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_memories_superseded ON memories(superseded_by) WHERE superseded_by IS NOT NULL;",
+        );
+        // G10: file_path is the most reliable layer-stacking signal (§8.6 finding 6)
+        // but had no index; Tier 1 same-subject lookups at query time need one.
+        let _ = self.conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_memories_file_path ON memories(file_path) WHERE file_path IS NOT NULL;",
         );
 
         // FTS5 index for BM25 hybrid search
@@ -187,6 +200,8 @@ impl MetadataStore {
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
         self.ensure_queue_schema()?;
+        crate::atlas::create_schema(&self.conn)?;
+        crate::memory_atlas::create_schema(&self.conn)?;
         self.conn
             .execute_batch(
                 "CREATE TABLE IF NOT EXISTS curation_events (
@@ -336,7 +351,7 @@ impl MetadataStore {
                 "INSERT INTO memories
                     (id, content, type, project, tags, timestamp, source, session_id, importance,
                      file_path, thread_id, title, embedding,
-                     parent_id, event_time, salience, superseded_by, derived_from)
+                     parent_id, event_time, salience, superseded_by, extracted_by)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
                          ?14, ?15, ?16, ?17, ?18)
                  ON CONFLICT(id) DO UPDATE SET
@@ -356,7 +371,7 @@ impl MetadataStore {
                     event_time = excluded.event_time,
                     salience = excluded.salience,
                     superseded_by = excluded.superseded_by,
-                    derived_from = excluded.derived_from",
+                    extracted_by = excluded.extracted_by",
                 params![
                     memory.id,
                     memory.content,
@@ -377,7 +392,7 @@ impl MetadataStore {
                     event_time_str,
                     meta.salience,
                     meta.superseded_by,
-                    meta.derived_from,
+                    meta.extracted_by,
                 ],
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
@@ -401,7 +416,7 @@ impl MetadataStore {
         let result = self.conn.query_row(
             "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                     file_path, thread_id, title, embedding,
-                    parent_id, event_time, salience, superseded_by, derived_from
+                    parent_id, event_time, salience, superseded_by, extracted_by
              FROM memories WHERE id = ?1",
             params![id],
             |row| memory_from_row(row),
@@ -446,7 +461,7 @@ impl MetadataStore {
             .prepare(
                 "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                         file_path, thread_id, title, embedding,
-                        parent_id, event_time, salience, superseded_by, derived_from
+                        parent_id, event_time, salience, superseded_by, extracted_by
                  FROM memories WHERE timestamp < ?1 ORDER BY timestamp DESC LIMIT ?2",
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
@@ -467,7 +482,7 @@ impl MetadataStore {
             .prepare(
                 "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                         file_path, thread_id, title, embedding,
-                        parent_id, event_time, salience, superseded_by, derived_from
+                        parent_id, event_time, salience, superseded_by, extracted_by
                  FROM memories WHERE timestamp > ?1 ORDER BY timestamp ASC LIMIT ?2",
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
@@ -696,7 +711,7 @@ impl MetadataStore {
         let mut stmt = self.conn.prepare(
             "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                     file_path, thread_id, title, embedding,
-                    parent_id, event_time, salience, superseded_by, derived_from
+                    parent_id, event_time, salience, superseded_by, extracted_by
              FROM memories ORDER BY timestamp DESC",
         ).map_err(|e| BrainError::Database(e.to_string()))?;
 
@@ -779,7 +794,7 @@ impl MetadataStore {
         let mut stmt = self.conn.prepare(
             "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                     file_path, thread_id, title, embedding,
-                    parent_id, event_time, salience, superseded_by, derived_from
+                    parent_id, event_time, salience, superseded_by, extracted_by
              FROM memories
              WHERE parent_id = ?1 AND type = '\"fact\"' AND superseded_by IS NULL
              ORDER BY salience DESC, timestamp ASC",
@@ -1069,6 +1084,17 @@ impl MetadataStore {
 
     /// Distinct entities that have at least one edge, with memory counts.
     pub fn list_entities_with_counts(&self) -> Result<Vec<(String, String, usize)>, BrainError> {
+        // SQLite treats a negative LIMIT as "no limit".
+        self.entities_with_counts(-1)
+    }
+
+    /// The `limit` most-linked entities, same order as `list_entities_with_counts`.
+    /// Lets a caller show the top of the catalog without loading all of it.
+    pub fn list_top_entities(&self, limit: usize) -> Result<Vec<(String, String, usize)>, BrainError> {
+        self.entities_with_counts(i64::try_from(limit).unwrap_or(i64::MAX))
+    }
+
+    fn entities_with_counts(&self, limit: i64) -> Result<Vec<(String, String, usize)>, BrainError> {
         let mut stmt = self
             .conn
             .prepare(
@@ -1076,11 +1102,12 @@ impl MetadataStore {
                  FROM entities e
                  JOIN edges x ON x.dst_entity_id = e.id
                  GROUP BY e.id
-                 ORDER BY n DESC, e.name_normalized",
+                 ORDER BY n DESC, e.name_normalized
+                 LIMIT ?1",
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
         let rows = stmt
-            .query_map([], |r| {
+            .query_map(params![limit], |r| {
                 Ok((
                     r.get::<_, String>(0)?,
                     r.get::<_, String>(1)?,
@@ -1195,7 +1222,7 @@ fn memory_from_row(row: &rusqlite::Row<'_>) -> Result<Memory, rusqlite::Error> {
     let event_time_str: Option<String> = row.get(14)?;
     let salience: f64 = row.get::<_, Option<f64>>(15)?.unwrap_or(0.5);
     let superseded_by: Option<String> = row.get(16)?;
-    let derived_from: Option<String> = row.get(17)?;
+    let extracted_by: Option<String> = row.get(17)?;
 
     let memory_type: MemoryType = serde_json::from_str(&type_str).map_err(|e| {
         rusqlite::Error::FromSqlConversionFailure(
@@ -1244,7 +1271,7 @@ fn memory_from_row(row: &rusqlite::Row<'_>) -> Result<Memory, rusqlite::Error> {
             event_time,
             salience,
             superseded_by,
-            derived_from,
+            extracted_by,
         },
         embedding: emb_bytes.map(|b| bytes_to_embedding(&b)),
     })
@@ -1301,7 +1328,7 @@ mod tests {
             event_time: None,
             salience: 0.5,
             superseded_by: None,
-            derived_from: None,
+            extracted_by: None,
         }
     }
 
@@ -1684,7 +1711,7 @@ mod tests {
             event_time: None,
             salience: 0.8,
             superseded_by: None,
-            derived_from: Some("openrouter/claude-sonnet-4-5/v1".into()),
+            extracted_by: Some("openrouter/claude-sonnet-4-5/v1".into()),
         }
     }
 
@@ -1704,7 +1731,7 @@ mod tests {
         assert!((fetched.metadata.salience - 0.8).abs() < 1e-6);
         assert_eq!(fetched.metadata.superseded_by, None);
         assert_eq!(
-            fetched.metadata.derived_from.as_deref(),
+            fetched.metadata.extracted_by.as_deref(),
             Some("openrouter/claude-sonnet-4-5/v1")
         );
     }
@@ -1980,6 +2007,25 @@ mod tests {
             .unwrap();
         let names: Vec<String> = entities.iter().map(|s| (*s).to_string()).collect();
         store.link_memory_entities(id, &names).unwrap();
+    }
+
+    #[test]
+    fn list_top_entities_ranks_by_memory_count_and_honors_limit() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        seed_linked(&store, "m1", 1, "one", &["Alpha", "Beta"]);
+        seed_linked(&store, "m2", 2, "two", &["Alpha"]);
+        seed_linked(&store, "m3", 3, "three", &["Alpha", "Gamma"]);
+
+        let top = store.list_top_entities(2).unwrap();
+        let names: Vec<(&str, usize)> = top.iter().map(|(_, n, c)| (n.as_str(), *c)).collect();
+        // Alpha leads; Beta and Gamma tie at 1 and break by normalized name.
+        assert_eq!(names, vec![("Alpha", 3), ("Beta", 1)]);
+
+        // Same ranking as the full catalog, just cut.
+        let all = store.list_entities_with_counts().unwrap();
+        assert_eq!(all.len(), 3);
+        assert_eq!(&all[..2], &top[..]);
+        assert!(store.list_top_entities(0).unwrap().is_empty());
     }
 
     #[test]

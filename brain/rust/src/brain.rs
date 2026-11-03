@@ -82,6 +82,7 @@ pub struct MemoryEvent {
     pub content_snippet: String,
     pub timestamp: String,
     pub memory_type: String,
+    pub project: String,
 }
 
 /// Configuration for opening a Brain instance.
@@ -195,7 +196,7 @@ impl Brain {
         parent_id: Option<&str>,
         event_time: Option<DateTime<Utc>>,
         salience: Option<f64>,
-        derived_from: Option<&str>,
+        extracted_by: Option<&str>,
     ) -> Result<SaveOutcome, BrainError> {
         let content = crate::privacy::strip_private_blocks(content);
         let resolved_title = title
@@ -225,6 +226,7 @@ impl Brain {
                     content_snippet: snippet,
                     timestamp: Utc::now().to_rfc3339(),
                     memory_type: mt,
+                    project: project.to_string(),
                 });
             }
             return Ok(SaveOutcome {
@@ -251,7 +253,7 @@ impl Brain {
                 event_time,
                 salience: salience.unwrap_or(0.5),
                 superseded_by: None,
-                derived_from: derived_from.map(String::from),
+                extracted_by: extracted_by.map(String::from),
             },
             embedding: Some(embedding.clone()),
         };
@@ -273,6 +275,7 @@ impl Brain {
                 content_snippet: snippet,
                 timestamp: memory.metadata.timestamp.to_rfc3339(),
                 memory_type,
+                project: memory.metadata.project.clone(),
             };
             let _ = tx.send(evt);
         }
@@ -381,6 +384,21 @@ impl Brain {
             let Some(memory) = self.store.get_memory(id)? else {
                 continue;
             };
+            // Evaluated regardless of whether a filter object was passed at all —
+            // a missing filter must behave like SearchFilter::default(), not like
+            // "no exclusions."
+            let type_filter = filter.as_ref().and_then(|f| f.memory_type.as_ref());
+            let exclude_episodes = filter
+                .as_ref()
+                .map(|f| f.exclude_episodes_by_default)
+                .unwrap_or(true);
+            if exclude_episodes
+                && type_filter.is_none()
+                && memory.metadata.memory_type == MemoryType::Episode
+            {
+                continue;
+            }
+
             if let Some(ref f) = filter {
                 if let Some(ref mt) = f.memory_type {
                     if &memory.metadata.memory_type != mt {
@@ -838,6 +856,11 @@ impl Brain {
             .neighbor_memory_ids(memory_ids, exclude_superseded, None, None)
     }
 
+    /// The `limit` most-linked entities with their memory counts (Dashboard "what it knows about").
+    pub fn top_entities(&self, limit: usize) -> Result<Vec<(String, String, usize)>, BrainError> {
+        self.store.list_top_entities(limit)
+    }
+
     /// Memories with entity links + entity catalog for the Linked graph UI.
     pub fn list_linked_graph(
         &self,
@@ -931,6 +954,10 @@ mod tests {
             .expect("recv");
         assert_eq!(evt.id, id);
         assert!(evt.content_snippet.contains("stream test"));
+        // 2026-11-03: the SSE live feed needs project to show a badge on
+        // memories that arrive while the dashboard is open, same as the
+        // initial /list-seeded path already provides.
+        assert_eq!(evt.project, "proj");
     }
 
     #[test]
@@ -1488,6 +1515,29 @@ mod tests {
     }
 
     #[test]
+    fn search_excludes_episodes_by_default_but_explicit_filter_reaches_them() {
+        let brain = test_brain();
+        let sol_id = brain.save_memory("async await IO pattern solution", MemoryType::Solution, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None).unwrap().id;
+        let ep_id = brain.save_memory("async await IO pattern episode", MemoryType::Episode, &[], "p", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None).unwrap().id;
+
+        // Untyped search (no explicit memory_type filter): episode must not appear.
+        let results = brain.search("async await IO pattern", 10, None).unwrap();
+        assert!(results.iter().any(|r| r.id == sol_id));
+        assert!(
+            !results.iter().any(|r| r.id == ep_id),
+            "episode row leaked into untyped search: {results:?}"
+        );
+
+        // Explicit memory_type=episode filter: episode must be reachable.
+        let filter = SearchFilter {
+            memory_type: Some(MemoryType::Episode),
+            ..SearchFilter::default()
+        };
+        let results = brain.search("async await IO pattern", 10, Some(filter)).unwrap();
+        assert!(results.iter().any(|r| r.id == ep_id));
+    }
+
+    #[test]
     fn get_context_filters_by_project() {
         let brain = test_brain();
         brain.save_memory("AI project context", MemoryType::ProjectContext, &[], "AI", None, MemorySource::ClaudeCodeSession, None, None, None, None, None, None, None).unwrap();
@@ -1672,7 +1722,7 @@ mod tests {
             event_time: None,
             salience: 0.5,
             superseded_by: None,
-            derived_from: None,
+            extracted_by: None,
         };
         let m1 = Memory { id: "m1".into(), content: "c1".into(), metadata: meta1.clone(), embedding: None };
         brain.store.upsert_memory(&m1).unwrap();
