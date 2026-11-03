@@ -40,7 +40,7 @@ def test_run_eval_with_mock_search(tmp_path):
         encoding="utf-8",
     )
 
-    def fake_search(query: str, n: int) -> list[dict]:
+    def fake_search(query: str, n: int, project: str | None = None, memory_type: str | None = None) -> list[dict]:
         return [
             {"metadata": {"file_path": "vault/other.md"}, "content": "no", "distance": 0.5},
             {"metadata": {"file_path": "vault/a.md"}, "content": "yes", "distance": 0.3},
@@ -96,7 +96,7 @@ def test_run_eval_matches_by_gold_ids(tmp_path):
         encoding="utf-8",
     )
 
-    def fake_search(query: str, n: int) -> list[dict]:
+    def fake_search(query: str, n: int, project: str | None = None, memory_type: str | None = None) -> list[dict]:
         return [
             {"id": "mem-999", "metadata": {}, "content": "no", "distance": 0.5},
             {"id": "mem-456", "metadata": {}, "content": "yes", "distance": 0.3},

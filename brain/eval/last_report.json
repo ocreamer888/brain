@@ -1,8 +1,8 @@
 {
-  "gold_file": "/Users/abundancia888/Documents/AI/brain/eval/gold.jsonl",
+  "gold_file": "/Users/abundancia888/Documents/Code/brain/brain/eval/gold.jsonl",
   "n_queries": 6,
   "mean_recall": 1.0,
-  "mean_mrr": 0.7738,
+  "mean_mrr": 0.7833,
   "per_query": [
     {
       "query": "MedDeFi medical tourism market analysis",
@@ -63,8 +63,8 @@
       "query": "brain cross-domain opportunities synergies across algorithm domains",
       "k": 10,
       "recall_at_k": 1,
-      "first_correct_rank": 7,
-      "mrr": 0.1429,
+      "first_correct_rank": 5,
+      "mrr": 0.2,
       "gold_ids": [
         "b6e60ada-69c1-438c-8a51-3655516d6b42"
       ]

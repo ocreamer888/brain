@@ -1,0 +1,208 @@
+{
+  "overall": {
+    "n": 1000,
+    "mrr": 0.5443,
+    "precision@1": 0.386,
+    "precision@3": 0.613,
+    "precision@5": 0.782,
+    "precision@10": 0.911,
+    "median_rank": 2
+  },
+  "by_type": {
+    "\"conversation\"": {
+      "n": 108,
+      "mrr": 0.7094,
+      "precision@1": 0.6204,
+      "precision@3": 0.7685,
+      "precision@5": 0.8056,
+      "precision@10": 0.8519
+    },
+    "\"decision\"": {
+      "n": 6,
+      "mrr": 0.9167,
+      "precision@1": 0.8333,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"episode\"": {
+      "n": 65,
+      "mrr": 0.4715,
+      "precision@1": 0.3231,
+      "precision@3": 0.5385,
+      "precision@5": 0.6769,
+      "precision@10": 0.7692
+    },
+    "\"error_lesson\"": {
+      "n": 7,
+      "mrr": 0.7619,
+      "precision@1": 0.5714,
+      "precision@3": 1.0,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"fact\"": {
+      "n": 657,
+      "mrr": 0.5267,
+      "precision@1": 0.3425,
+      "precision@3": 0.5936,
+      "precision@5": 0.8128,
+      "precision@10": 0.9833
+    },
+    "\"knowledge\"": {
+      "n": 5,
+      "mrr": 0.3833,
+      "precision@1": 0.2,
+      "precision@3": 0.4,
+      "precision@5": 0.8,
+      "precision@10": 0.8
+    },
+    "\"pattern\"": {
+      "n": 11,
+      "mrr": 0.5985,
+      "precision@1": 0.3636,
+      "precision@3": 0.9091,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "\"project_context\"": {
+      "n": 22,
+      "mrr": 0.5297,
+      "precision@1": 0.4091,
+      "precision@3": 0.6364,
+      "precision@5": 0.7273,
+      "precision@10": 0.7727
+    },
+    "\"solution\"": {
+      "n": 119,
+      "mrr": 0.5039,
+      "precision@1": 0.4202,
+      "precision@3": 0.5546,
+      "precision@5": 0.6134,
+      "precision@10": 0.6555
+    }
+  },
+  "by_project": {
+    "cursor": {
+      "n": 227,
+      "mrr": 0.3737,
+      "precision@1": 0.141,
+      "precision@3": 0.4273,
+      "precision@5": 0.7577,
+      "precision@10": 0.9824
+    },
+    "sicop-health": {
+      "n": 121,
+      "mrr": 0.6631,
+      "precision@1": 0.5785,
+      "precision@3": 0.7107,
+      "precision@5": 0.7686,
+      "precision@10": 0.8099
+    },
+    "src": {
+      "n": 75,
+      "mrr": 0.3438,
+      "precision@1": 0.1067,
+      "precision@3": 0.4,
+      "precision@5": 0.7867,
+      "precision@10": 1.0
+    },
+    "perplexity": {
+      "n": 72,
+      "mrr": 0.7557,
+      "precision@1": 0.5972,
+      "precision@3": 0.9028,
+      "precision@5": 0.9861,
+      "precision@10": 1.0
+    },
+    "ppf-contact-solver": {
+      "n": 50,
+      "mrr": 0.895,
+      "precision@1": 0.86,
+      "precision@3": 0.92,
+      "precision@5": 0.92,
+      "precision@10": 0.92
+    },
+    "ocreamer": {
+      "n": 41,
+      "mrr": 0.6667,
+      "precision@1": 0.5366,
+      "precision@3": 0.7073,
+      "precision@5": 0.9024,
+      "precision@10": 1.0
+    },
+    "intelli-ehr": {
+      "n": 39,
+      "mrr": 0.1411,
+      "precision@1": 0.0256,
+      "precision@3": 0.1282,
+      "precision@5": 0.2821,
+      "precision@10": 0.4615
+    },
+    "AI": {
+      "n": 36,
+      "mrr": 0.7227,
+      "precision@1": 0.5833,
+      "precision@3": 0.8333,
+      "precision@5": 0.8889,
+      "precision@10": 0.9167
+    },
+    "owelign": {
+      "n": 34,
+      "mrr": 0.8343,
+      "precision@1": 0.7059,
+      "precision@3": 0.9706,
+      "precision@5": 1.0,
+      "precision@10": 1.0
+    },
+    "sicop": {
+      "n": 31,
+      "mrr": 0.8076,
+      "precision@1": 0.7742,
+      "precision@3": 0.7742,
+      "precision@5": 0.8065,
+      "precision@10": 0.9677
+    },
+    "frontend": {
+      "n": 30,
+      "mrr": 0.422,
+      "precision@1": 0.2333,
+      "precision@3": 0.4667,
+      "precision@5": 0.7667,
+      "precision@10": 1.0
+    },
+    "general": {
+      "n": 30,
+      "mrr": 0.7236,
+      "precision@1": 0.5667,
+      "precision@3": 0.8667,
+      "precision@5": 0.9667,
+      "precision@10": 1.0
+    },
+    "landingpage": {
+      "n": 29,
+      "mrr": 0.3744,
+      "precision@1": 0.1724,
+      "precision@3": 0.4828,
+      "precision@5": 0.5862,
+      "precision@10": 0.9655
+    },
+    "brain": {
+      "n": 20,
+      "mrr": 0.6193,
+      "precision@1": 0.5,
+      "precision@3": 0.75,
+      "precision@5": 0.85,
+      "precision@10": 0.9
+    },
+    "meddefi": {
+      "n": 20,
+      "mrr": 0.3801,
+      "precision@1": 0.15,
+      "precision@3": 0.45,
+      "precision@5": 0.65,
+      "precision@10": 1.0
+    }
+  },
+  "salience_applied": true
+}

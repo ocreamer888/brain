@@ -1,0 +1,229 @@
+{
+  "gold_file": "/Users/abundancia888/Documents/Code/brain/brain/eval/gold_mined.jsonl",
+  "n_queries": 20,
+  "mean_recall": 1.0,
+  "mean_mrr": 0.6705,
+  "per_query": [
+    {
+      "query": "cognitive architecture brain design",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 2,
+      "mrr": 0.5,
+      "gold_ids": [
+        "0b063ba8-e5e6-45ff-9cb3-32b1212f573b",
+        "60f0cb1d-e8f4-4a0a-9d62-bbbead247460",
+        "d3a218d4-03e1-4400-bc17-40bc7e7d5ebd",
+        "fdcfabd7-667a-4321-b430-f5d01be35af8"
+      ]
+    },
+    {
+      "query": "vision doc memory contract loop roadmap advisory routing",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "1ac577e8-8df2-4484-ba89-562d68807338",
+        "ee1256db-8485-405d-ba96-1f126b52dd0d"
+      ]
+    },
+    {
+      "query": "forge constitution gate runner",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "96d68fb3-9f66-456a-be4a-903da3dc662f"
+      ]
+    },
+    {
+      "query": "advisory routing roadmap trustworthy memory contract",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 4,
+      "mrr": 0.25,
+      "gold_ids": [
+        "66917ca1-8838-488b-a560-d83813807dd9"
+      ]
+    },
+    {
+      "query": "redact openrouter keys residual junk entities recategorize quarantine",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 7,
+      "mrr": 0.1429,
+      "gold_ids": [
+        "57bdf5e5-de97-460f-b50e-75fd472fc3b4"
+      ]
+    },
+    {
+      "query": "kfold retrieval eval rrf sample1k",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "9253bc41-0317-45d3-8071-d856455396d9",
+        "a4f7b8e1-a1dc-4c1e-a139-0326fe55cec7",
+        "fdbe2594-8e74-4343-9f45-e39d93523a1c"
+      ]
+    },
+    {
+      "query": "2026-11-01 2026-11-02 brain session",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 8,
+      "mrr": 0.125,
+      "gold_ids": [
+        "5e800b79-8396-4c73-8d1e-e1a276930efe"
+      ]
+    },
+    {
+      "query": "brain cognitive plan pending next steps roadmap",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 3,
+      "mrr": 0.3333,
+      "gold_ids": [
+        "83e06cc8-6016-448b-b8ca-2c50e241c9f5"
+      ]
+    },
+    {
+      "query": "forge harness gate runner constitution advisory routing durable entity linking",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 7,
+      "mrr": 0.1429,
+      "gold_ids": [
+        "96d68fb3-9f66-456a-be4a-903da3dc662f"
+      ]
+    },
+    {
+      "query": "cognitive-architecture-spec temporal layers confidence experiment read-only",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "60f0cb1d-e8f4-4a0a-9d62-bbbead247460"
+      ]
+    },
+    {
+      "query": "layer-detection experiment results spec 8.7 next steps roadmap advisory routing",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "1ac577e8-8df2-4484-ba89-562d68807338",
+        "b6ea9c42-306e-4e7a-b17f-bbd53d8f2f0a",
+        "cfdd4c0a-8e10-44a3-a0ad-d6fadc55f136",
+        "d157efe5-3d39-4c6d-9886-26af97cff6fc"
+      ]
+    },
+    {
+      "query": "grok atlas preview cosmograph linked graph",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 2,
+      "mrr": 0.5,
+      "gold_ids": [
+        "7ce513e4-9025-46c9-93cd-07e05a052823",
+        "a6b5544b-ff9b-4c87-afcc-2cd9011cd828",
+        "b6bca4a3-ffdd-4622-8307-8ed3ab03d8c1",
+        "d93b3fb6-34e8-413b-8791-a80530158f23",
+        "f30d37fe-1cde-47c7-84cc-515458e75993",
+        "f8e6ccf3-1eaf-41a0-9b03-10bf6eb60d5b"
+      ]
+    },
+    {
+      "query": "atlas-preview build_graph.py main.js",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "70787e6f-c884-449c-b4b9-89ce9be66877",
+        "a6b5544b-ff9b-4c87-afcc-2cd9011cd828",
+        "d93b3fb6-34e8-413b-8791-a80530158f23",
+        "f30d37fe-1cde-47c7-84cc-515458e75993"
+      ]
+    },
+    {
+      "query": "Grok model agent session linked 3D atlas",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 6,
+      "mrr": 0.1667,
+      "gold_ids": [
+        "ccad7ef5-dcd7-4ce6-9f4a-64b3d9010320"
+      ]
+    },
+    {
+      "query": "User said yes to dropping the circle project centers 3D similarity projection settle",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "baaec14a-7d8f-46d3-8154-4d09ad05cb64"
+      ]
+    },
+    {
+      "query": "AI Model Atlas flower separate glowing organs fixed 3D cloud per project",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "b76ab0ec-d3d4-4ad5-9636-764376a8971d",
+        "baaec14a-7d8f-46d3-8154-4d09ad05cb64"
+      ]
+    },
+    {
+      "query": "local model writing brain memories Stop hook session_end summarizer",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "f13d9d27-ba44-4635-a5be-541c3647f4cc"
+      ]
+    },
+    {
+      "query": "scrubbed textbook hallucination memories fingerprints",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "bdd21a67-fe92-4ef2-bcf2-a15b063cab4e"
+      ]
+    },
+    {
+      "query": "audited latest 1000 memories live brain.db all claude_code_session extracts",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 1,
+      "mrr": 1.0,
+      "gold_ids": [
+        "308fddff-e414-4502-9d5a-d1a1ffed050d"
+      ]
+    },
+    {
+      "query": "raw crawler price_bank_fetcher mpf-vademecum",
+      "k": 10,
+      "recall_at_k": 1,
+      "first_correct_rank": 4,
+      "mrr": 0.25,
+      "gold_ids": [
+        "01949a9d-3bce-44aa-a7b1-cbe3a175c7fa",
+        "5a3a162a-1101-435e-b76c-7a3c29630957",
+        "cdb65262-88aa-4063-a5f5-6e421f7c8579",
+        "fe57ceca-9970-484d-8a6e-7f6893d12362"
+      ]
+    }
+  ]
+}

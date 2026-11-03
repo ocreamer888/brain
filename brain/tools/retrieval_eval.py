@@ -56,11 +56,13 @@ def load_gold(path: Path) -> list[dict[str, Any]]:
 def score_one(
     case: dict[str, Any],
     k: int,
-    search_fn: Callable[[str, int], list[dict[str, Any]]],
+    search_fn: Callable[[str, int, str | None, str | None], list[dict[str, Any]]],
 ) -> dict[str, Any]:
     q = str(case["query"])
     line_k = int(case.get("k", k))
-    results = search_fn(q, line_k)
+    project = case.get("project")
+    memory_type = case.get("memory_type")
+    results = search_fn(q, line_k, project, memory_type)
 
     # Prefer id-based matching (stable, resilient to file_path/tag changes);
     # fall back to vault-path matching for legacy gold entries.
@@ -97,7 +99,7 @@ def score_one(
 def run_eval(
     gold_path: Path,
     k: int,
-    search_fn: Callable[[str, int], list[dict[str, Any]]],
+    search_fn: Callable[[str, int, str | None, str | None], list[dict[str, Any]]],
 ) -> dict[str, Any]:
     cases = load_gold(gold_path)
     per_query = [score_one(c, k, search_fn) for c in cases]
@@ -129,8 +131,10 @@ def main(argv: list[str] | None = None) -> int:
     gold_path = args.gold if args.gold.is_absolute() else _REPO_ROOT / args.gold
     report_path = args.report if args.report.is_absolute() else _REPO_ROOT / args.report
 
-    def search_fn(query: str, n: int) -> list[dict[str, Any]]:
-        return api_search(query=query, n=n)
+    def search_fn(
+        query: str, n: int, project: str | None, memory_type: str | None
+    ) -> list[dict[str, Any]]:
+        return api_search(query=query, n=n, project=project, memory_type=memory_type)
 
     try:
         report = run_eval(gold_path, args.k, search_fn)

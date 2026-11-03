@@ -1,0 +1,514 @@
+{
+  "gold_file": "/Users/abundancia888/Documents/Code/brain/brain/eval/gold_recency.jsonl",
+  "n_pairs": 63,
+  "new_in_topk_rate": 0.1746,
+  "new_outranks_old_rate": 0.6667,
+  "n_judged": 15,
+  "neither_surfaced": 48,
+  "per_pair": [
+    {
+      "query": "What is the current state of continual-learning-index.json?",
+      "subject": "continual-learning-index.json",
+      "new_rank": 4,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of brain/bootstrap/07_ingest_claude_code.py?",
+      "subject": "brain/bootstrap/07_ingest_claude_code.py",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of cartel_files?",
+      "subject": "cartel_files",
+      "new_rank": null,
+      "old_rank": 6,
+      "new_in_topk": false,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of feat/source-field-ledger-guard?",
+      "subject": "feat/source-field-ledger-guard",
+      "new_rank": 8,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of source-field ledger guard?",
+      "subject": "source-field ledger guard",
+      "new_rank": null,
+      "old_rank": 4,
+      "new_in_topk": false,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of Tendrium Agent OS?",
+      "subject": "Tendrium Agent OS",
+      "new_rank": 1,
+      "old_rank": 6,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of feat/held-bid-line-exposure?",
+      "subject": "feat/held-bid-line-exposure",
+      "new_rank": null,
+      "old_rank": 2,
+      "new_in_topk": false,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of solution?",
+      "subject": "solution",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of CPHI Shenzhen?",
+      "subject": "CPHI Shenzhen",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of profiles?",
+      "subject": "profiles",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of shard 0?",
+      "subject": "shard 0",
+      "new_rank": 7,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of docs/superpowers/specs/2026-10-10-source-field-ledger-design.md?",
+      "subject": "docs/superpowers/specs/2026-10-10-source-field-ledger-design.md",
+      "new_rank": null,
+      "old_rank": 1,
+      "new_in_topk": false,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of Artifacts?",
+      "subject": "Artifacts",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of test_molecule_layer_b_rollup.py?",
+      "subject": "test_molecule_layer_b_rollup.py",
+      "new_rank": 2,
+      "old_rank": 1,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of Scalable Health?",
+      "subject": "Scalable Health",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of hydrate?",
+      "subject": "hydrate",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of .cursor/mcp.json?",
+      "subject": ".cursor/mcp.json",
+      "new_rank": 2,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of continual-learning-index.json?",
+      "subject": "continual-learning-index.json",
+      "new_rank": 1,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of alertas_config?",
+      "subject": "alertas_config",
+      "new_rank": 1,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of meddefi_landingpage?",
+      "subject": "meddefi_landingpage",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of BookDemoModal.tsx?",
+      "subject": "BookDemoModal.tsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of rootMargin?",
+      "subject": "rootMargin",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of cartelNo?",
+      "subject": "cartelNo",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of AnimatedRocketSection.tsx?",
+      "subject": "AnimatedRocketSection.tsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of HeroTitleDoc?",
+      "subject": "HeroTitleDoc",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of Law 9634?",
+      "subject": "Law 9634",
+      "new_rank": 2,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of src/lib/structured-data.ts?",
+      "subject": "src/lib/structured-data.ts",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of Features.jsx?",
+      "subject": "Features.jsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of Hero3?",
+      "subject": "Hero3",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of title?",
+      "subject": "title",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of next/font/google?",
+      "subject": "next/font/google",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of backdrop-blur?",
+      "subject": "backdrop-blur",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of order_items?",
+      "subject": "order_items",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of localePrefix?",
+      "subject": "localePrefix",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of Google Fonts?",
+      "subject": "Google Fonts",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of SUPABASE_SERVICE_ROLE_KEY?",
+      "subject": "SUPABASE_SERVICE_ROLE_KEY",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of AnimatedRocketSection.tsx?",
+      "subject": "AnimatedRocketSection.tsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of @iconify/react?",
+      "subject": "@iconify/react",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of HomePage.tsx?",
+      "subject": "HomePage.tsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of ModelSwitcher.jsx?",
+      "subject": "ModelSwitcher.jsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of FeatureSectionDoctor.tsx?",
+      "subject": "FeatureSectionDoctor.tsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of NEXT_PUBLIC_SITE_URL?",
+      "subject": "NEXT_PUBLIC_SITE_URL",
+      "new_rank": 1,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of Sorteo Colombia Tour?",
+      "subject": "Sorteo Colombia Tour",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of min-h-[200px]?",
+      "subject": "min-h-[200px]",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of frontend/src/app/layout.tsx?",
+      "subject": "frontend/src/app/layout.tsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of unicorn studio?",
+      "subject": "unicorn studio",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of buttonVisibility?",
+      "subject": "buttonVisibility",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of childVariants?",
+      "subject": "childVariants",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of HeroMobileLayout?",
+      "subject": "HeroMobileLayout",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of title?",
+      "subject": "title",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of contact_messages?",
+      "subject": "contact_messages",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of cleanup-pending-tickets?",
+      "subject": "cleanup-pending-tickets",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of ocreamerstudio?",
+      "subject": "ocreamerstudio",
+      "new_rank": 3,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of 19.1.0?",
+      "subject": "19.1.0",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of hamburger button?",
+      "subject": "hamburger button",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of ExperimentalGrid?",
+      "subject": "ExperimentalGrid",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of ProductViewer.jsx?",
+      "subject": "ProductViewer.jsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of HealthcarePaymentEscrow.sol?",
+      "subject": "HealthcarePaymentEscrow.sol",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of HealthcarePaymentEscrow.sol?",
+      "subject": "HealthcarePaymentEscrow.sol",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of WaitlistModal.tsx?",
+      "subject": "WaitlistModal.tsx",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of aria-modal?",
+      "subject": "aria-modal",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of /doctors?",
+      "subject": "/doctors",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of tailwindcss?",
+      "subject": "tailwindcss",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    }
+  ]
+}
