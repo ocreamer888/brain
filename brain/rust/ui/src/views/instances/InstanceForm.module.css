@@ -1,0 +1,31 @@
+.fields {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+.label {
+  color: var(--fg-secondary);
+}
+.input {
+  height: 2.75rem;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-inner);
+  background: var(--bg-sunken);
+  font-size: 0.875rem;
+  color: var(--fg-primary);
+}
+.input:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.input[aria-invalid='true'] {
+  border-color: var(--sig-fail-fg);
+}
+.hint {
+  color: var(--fg-secondary);
+}

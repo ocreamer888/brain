@@ -1,0 +1,56 @@
+/* Ranked bar list (dataviz: >7 classes, skewed values → table + chart).
+ * One hue: the chip beside each bar carries identity, so color never does. */
+
+.list {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 8.5rem 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.25rem 0.375rem;
+  border-radius: var(--radius-mini);
+}
+.row:hover,
+.row:focus-visible {
+  background: var(--bg-raised);
+}
+
+.track {
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+.row:hover .track {
+  background: var(--bg-surface);
+}
+
+/* Bars grow from the baseline; a minimum keeps a 3-item type visible as a dot. */
+.bar {
+  height: 100%;
+  min-width: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.value {
+  min-width: 4.5rem;
+  text-align: right;
+  color: var(--fg-primary);
+}
+.share {
+  margin-left: 0.375rem;
+  color: var(--fg-secondary);
+}
+
+/* Plain-text label (projects): one line, cut with an ellipsis. */
+.name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--fg-primary);
+}

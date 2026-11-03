@@ -56,6 +56,11 @@ export function getEntities(memoryId) {
   return api(`/entities?memory_id=${encodeURIComponent(memoryId)}`)
 }
 
+/** The most-linked entities with memory counts (small; the full catalog is /linked). */
+export function getTopEntities(limit = 12) {
+  return api(`/entities/top?limit=${limit}`)
+}
+
 export function getTimeline(anchorId, before = 3, after = 3) {
   return api('/v1/timeline', {
     method: 'POST',
@@ -63,12 +68,28 @@ export function getTimeline(anchorId, before = 3, after = 3) {
   })
 }
 
+/** Change a memory's stored fields (today the API accepts `salience` only). */
+export function patchMemory(id, body) {
+  return api(`/memories/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) })
+}
+
+/** Record a feedback event (accepted / rejected / edited …) about a memory. */
+export function sendFeedback(body) {
+  return api('/feedback', { method: 'POST', body: JSON.stringify(body) })
+}
+
+/** The source episode a derived memory (e.g. a fact) was extracted from. */
+export function getEpisode(id) {
+  return api(`/get-episode?id=${encodeURIComponent(id)}`)
+}
+
 export function getLinked() {
   return api('/linked')
 }
 
-export function listMemories(limit = 30) {
-  return api(`/list?limit=${limit}`)
+export function listMemories(limit = 30, { memoryType } = {}) {
+  const type = memoryType ? `&memory_type=${encodeURIComponent(memoryType)}` : ''
+  return api(`/list?limit=${limit}${type}`)
 }
 
 export function listInstances(includeArchived = false) {

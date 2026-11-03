@@ -1,0 +1,210 @@
+/* Linked = the memory atlas: full-bleed canvas, glass chrome floating over it.
+ * Pinned dark: an immersive data canvas (HIG allows dark-only for media-like views). */
+
+.root {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  /* The AI Model Atlas's background (sampled: #192129). Saturated links need a
+   * mid slate, not black, to read as coloured filaments. */
+  background: #192129;
+
+  color: var(--fg-body);
+}
+
+.card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  color: var(--fg-body);
+  /* Over a busy canvas, glass needs the denser variant (HIG): keep text legible. */
+  background: color-mix(in srgb, #141a21 86%, transparent) !important;
+}
+/* Left column: atlas card, then the finder; the reading pane takes the right. */
+.stack {
+  position: absolute;
+  z-index: 2;
+  top: var(--space-5);
+  left: var(--space-5);
+  bottom: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(22rem, calc(100% - 2.5rem));
+  pointer-events: none;
+}
+.stack > * {
+  pointer-events: auto;
+}
+.finder {
+  min-height: 0;
+  overflow: hidden;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.title { color: var(--fg-primary); }
+.secondary { color: var(--fg-secondary); }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0;
+}
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--fg-body);
+}
+.swatch i {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+}
+.modeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.entityHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.suggest,
+.list {
+  display: grid;
+  /* minmax(0, 1fr): grid rows otherwise refuse to shrink below their longest label */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.125rem;
+}
+.list {
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 22rem;
+  margin: 0 calc(-1 * var(--space-2));
+  padding: 0 var(--space-2);
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 2.25rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-mini);
+  text-align: left;
+  color: var(--fg-primary);
+}
+.item:hover {
+  background: var(--glass-bg-active);
+}
+.itemText {
+  flex: 1;
+  min-width: 0; /* let long labels shrink and ellipsize instead of widening the row */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--fg-body);
+}
+.count {
+  margin-left: auto;
+  color: var(--fg-secondary);
+}
+
+.tip {
+  /* Like the atlas's hover label: white on #333841. */
+  background: #333841 !important;
+  position: fixed;
+  z-index: 5;
+  display: grid;
+  gap: 0.125rem;
+  max-width: 26rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-inner);
+  pointer-events: none;
+  color: var(--fg-primary);
+}
+.tipLabel {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The reading pane floats on the right, under the finder's column (ui/0238). */
+.reading {
+  position: absolute;
+  z-index: 3;
+  top: var(--space-5);
+  right: var(--space-5);
+  bottom: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  width: min(30rem, calc(100% - 2.5rem));
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--bg-surface) 86%, transparent);
+}
+.readingHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--line);
+}
+.readingBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+
+.center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  color: var(--fg-secondary);
+}
+.notBuilt {
+  gap: var(--space-3);
+  color: var(--fg-body);
+}
+
+/* The memory atlas fills the root; the source switch floats top-centre. */
+.fill {
+  position: absolute;
+  inset: 0;
+}
+.sourceBar > div {
+  background: color-mix(in srgb, #141a21 86%, transparent) !important;
+}
+.sourceBar {
+  position: absolute;
+  z-index: 4;
+  top: var(--space-5);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.rebuild {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.errorText {
+  color: var(--sig-fail-fg);
+}
+.notBuilt > div {
+  display: flex;
+  justify-content: center;
+}

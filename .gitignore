@@ -68,6 +68,9 @@ brain/eval/jobs/
 
 # UI deps (commit package.json + lock only)
 brain/rust/ui/node_modules/
+brain/rust/ui/atlas-preview/node_modules/
+# Generated memory snippets for the local atlas preview. Do not commit.
+brain/rust/ui/atlas-preview/public/graph.json
 
 # Large / generated local artifacts
 *.onnx

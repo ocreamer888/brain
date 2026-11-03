@@ -1,7 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+/* App root sizing. Everything else: styles/tokens.css, styles/base.css, and each component's module. */
 html,
 body,
 #root {

@@ -1,0 +1,63 @@
+/* Tile (ui/0239, ui/0234): icon circle + title, optional ↗, one idea inside. */
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--material-line);
+  border-radius: var(--radius-card);
+  background: var(--material-tile);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+}
+
+/* Cream accent tile (ui/0224 "2999", ui/0236 "375"): one per screen at most.
+ * Its contents switch to the light scheme, so every role, chip, and bar inside
+ * resolves to the already-validated light values on cream. */
+.lamp {
+  color-scheme: light;
+  border-color: transparent;
+  background: var(--lumen-100);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    0 12px 32px rgb(30 25 16 / 0.18);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--fg-secondary);
+}
+
+.titles {
+  flex: 1;
+  min-width: 0;
+}
+.title {
+  color: var(--fg-primary);
+}
+.sub {
+  color: var(--fg-secondary);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.body > * {
+  flex-shrink: 0;
+}

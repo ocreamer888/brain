@@ -1,0 +1,3 @@
+/* Plain CSS only: tokens, then the global layer. No Tailwind in new code. */
+@import '../styles/tokens.css';
+@import '../styles/base.css';

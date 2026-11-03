@@ -1,0 +1,42 @@
+/* Tick-ring gauge (ui/0246, 0224): a ratio as a ring of ticks, the number inside. */
+
+.ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.svg {
+  position: absolute;
+  inset: 0;
+}
+
+.on {
+  stroke: var(--accent);
+}
+.off {
+  stroke: var(--line-strong);
+}
+/* Failure fills in the fail signal, never just a different shade of blue. */
+.ring[data-tone='fail'] .on {
+  stroke: var(--sig-fail-fg);
+}
+
+.center {
+  display: grid;
+  justify-items: center;
+  gap: 0.125rem;
+  text-align: center;
+}
+.value {
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-primary);
+}
+.caption {
+  color: var(--fg-secondary);
+}

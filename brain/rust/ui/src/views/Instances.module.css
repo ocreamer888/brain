@@ -1,0 +1,87 @@
+/* Instances (brand book §13 "Card grid"): the active brain is the one glow,
+ * others are solid cards. */
+
+.page {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-7) var(--space-7);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.status {
+  margin-left: auto;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--material-tile);
+  color: var(--fg-body);
+}
+.status[data-tone='ok'] { color: var(--accent-text); }
+.status[data-tone='error'] { color: var(--sig-fail-fg); }
+
+.grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-areas: 'active' 'about' 'others';
+}
+@media (min-width: 64rem) {
+  .grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-areas:
+      'active active active active active active active about about about about about'
+      'others others others others others others others others others others others others';
+  }
+}
+.active { grid-area: active; display: grid; }
+.about { grid-area: about; }
+.empty,
+.cards { grid-area: others; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: var(--space-4);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg-secondary);
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 1.5rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  color: var(--fg-secondary);
+}
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.secondary { color: var(--fg-secondary); }
+.note { margin-top: var(--space-3); }
+.path {
+  margin-top: var(--space-3);
+  overflow-wrap: anywhere;
+  color: var(--fg-secondary);
+}
+.error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--sig-fail-fg);
+}

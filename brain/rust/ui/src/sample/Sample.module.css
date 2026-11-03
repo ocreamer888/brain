@@ -1,0 +1,312 @@
+/* Brand sample page layout. Page-only; components carry their own modules. */
+
+.page {
+  min-height: 100vh;
+  background: var(--bg-ground);
+  color: var(--fg-body);
+  
+}
+
+.top,
+.main {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding-inline: var(--space-6);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-8);
+}
+
+.wordmark {
+  font-size: 1.125rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--fg-primary);
+}
+
+.modes {
+  display: flex;
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+}
+.mode {
+  height: 2rem;
+  padding: 0 0.875rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-transform: capitalize;
+  color: var(--fg-secondary);
+}
+.mode:hover {
+  color: var(--fg-primary);
+}
+.mode[aria-pressed='true'] {
+  background: var(--lamp);
+  color: var(--on-lamp);
+}
+
+.main {
+  display: grid;
+  gap: var(--space-16);
+  padding-block: var(--space-10);
+}
+
+.title {
+  color: var(--fg-primary);
+}
+.note {
+  max-width: 68ch;
+  margin-top: var(--space-1);
+  color: var(--fg-secondary);
+}
+.body {
+  margin-top: var(--space-6);
+}
+
+/* Solid panel used by every specimen block. */
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  scrollbar-width: none;
+}
+.padded {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-6);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Shell preview */
+.shell {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-shell);
+  background: var(--bg-sunken);
+}
+.dockSlot {
+  padding-top: var(--space-2);
+}
+.scroller {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 54rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-shell);
+  background: var(--bg-ground);
+}
+/* Glass header: content scrolls under it, which is the only place glass reads. */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-7);
+  border-width: 0 0 1px;
+  border-radius: var(--radius-shell) var(--radius-shell) 0 0;
+}
+.heading {
+  display: grid;
+  gap: 0.125rem;
+}
+.tools {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 18rem;
+}
+.tools > label {
+  max-width: 20rem;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2.75rem;
+  padding: 0 var(--space-4) 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  color: var(--fg-primary);
+  white-space: nowrap;
+}
+.monogram {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--lamp);
+  color: var(--on-lamp);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Bento (ui/0225, ui/0179): glow + one tile on top, the list and eval below. */
+.bento {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-7) var(--space-7);
+  grid-template-areas: 'hero' 'mix' 'list' 'eval';
+}
+@media (min-width: 64rem) {
+  .bento {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-areas:
+      'hero hero hero hero hero hero hero mix mix mix mix mix'
+      'list list list list list list list list eval eval eval eval';
+    align-items: start;
+  }
+}
+.areaHero { grid-area: hero; align-self: stretch; display: grid; }
+.areaMix { grid-area: mix; align-self: stretch; }
+.areaList { grid-area: list; }
+.areaEval { grid-area: eval; }
+
+.listHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-5) 0;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+}
+/* Rows as soft capsules (ui/0225), spaced, not ruled. */
+.rows {
+  display: grid;
+  gap: var(--space-1);
+  padding: 0 var(--space-2) var(--space-2);
+}
+.rows > li > * {
+  background: color-mix(in srgb, var(--bg-raised) 45%, transparent);
+}
+.rows > li > :is(button):hover {
+  background: var(--bg-raised);
+}
+.empty {
+  padding: var(--space-8) var(--space-5);
+  color: var(--fg-secondary);
+}
+
+.evalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--fg-primary);
+}
+.unit {
+  margin-left: 0.125rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--fg-secondary);
+}
+.evalStrip {
+  margin-top: var(--space-8);
+}
+
+/* Color roles table */
+.tableWrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  text-align: left;
+}
+.table th {
+  padding: var(--space-3) var(--space-5);
+  font-weight: 500;
+  color: var(--fg-secondary);
+}
+.table td {
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line);
+}
+.roleName {
+  color: var(--fg-primary);
+}
+.secondary {
+  color: var(--fg-secondary);
+}
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-mini);
+}
+.aa {
+  font-weight: 500;
+}
+.below {
+  margin-left: var(--space-2);
+  color: var(--sig-fail-fg);
+}
+
+/* Type specimens */
+.specimen {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+}
+.specimen + .specimen {
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 48rem) {
+  .specimen {
+    grid-template-columns: 12rem 1fr;
+    align-items: baseline;
+  }
+}
+.specimenText {
+  max-width: 68ch;
+  color: var(--fg-primary);
+}
+
+/* Signals */
+.gain {
+  color: var(--accent-text);
+}
+.regression {
+  color: var(--sig-lesson-fg);
+}
+
+/* Icons */
+.icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  color: var(--fg-secondary);
+}
+.icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 4rem;
+  text-align: center;
+}

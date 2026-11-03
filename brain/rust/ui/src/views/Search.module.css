@@ -1,0 +1,107 @@
+/* Search (brand book §10 "List" + "Reading"): results left, the open memory
+ * right, each scrolling on its own like a mail client. */
+
+.layout {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 64rem) {
+  .layout {
+    grid-template-columns: minmax(22rem, 0.95fr) minmax(0, 1.05fr);
+  }
+}
+
+.listPane,
+.readPane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.listPane {
+  border-right: 1px solid var(--line);
+}
+
+.controls {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+.controls > label {
+  max-width: none;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-3) var(--space-6);
+}
+.readScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-7) var(--space-10);
+}
+
+.status {
+  padding: var(--space-1) var(--space-3) var(--space-3);
+  color: var(--fg-secondary);
+}
+.rows {
+  display: grid;
+  gap: var(--space-1);
+}
+.more {
+  padding: var(--space-4) var(--space-3) 0;
+}
+
+.empty {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 34ch;
+  padding: var(--space-10) var(--space-4);
+}
+.emptyTitle {
+  color: var(--fg-primary);
+}
+.secondary {
+  color: var(--fg-secondary);
+}
+.error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--sig-fail-fg);
+}
+
+.back {
+  display: none;
+}
+
+/* Narrow: one pane at a time. Opening a memory replaces the list; Back returns. */
+@media (max-width: 63.99rem) {
+  .layout[data-reading='true'] .listPane {
+    display: none;
+  }
+  .layout[data-reading='false'] .readPane {
+    display: none;
+  }
+  .listPane {
+    border-right: 0;
+  }
+  .back {
+    display: block;
+    padding: var(--space-4) var(--space-7) 0;
+  }
+}

@@ -1,0 +1,120 @@
+/* Dashboard bento (brand book §10, ui/0225 · 0179 · 0239). */
+
+.bento {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-7) var(--space-7);
+  grid-template-areas: 'hero' 'mix' 'entities' 'sources' 'activity' 'facts' 'eval' 'list' 'side';
+}
+@media (min-width: 64rem) {
+  .bento {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-areas:
+      'hero hero hero hero hero hero hero mix mix mix mix mix'
+      'entities entities entities entities entities entities entities entities sources sources sources sources'
+      'activity activity activity activity activity activity facts facts facts eval eval eval'
+      'list list list list list list list list side side side side';
+    align-items: stretch;
+  }
+}
+.hero { grid-area: hero; align-self: stretch; display: grid; }
+.mix { grid-area: mix; align-self: stretch; }
+.list { grid-area: list; }
+.eval { grid-area: eval; }
+.activity { grid-area: activity; }
+.facts { grid-area: facts; }
+/* Number on top, the action on the tile's floor (same rhythm as Eval). */
+.factsBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.factsAction {
+  margin-top: auto;
+  padding-top: var(--space-6);
+}
+.entities { grid-area: entities; }
+.sources { grid-area: sources; }
+.side {
+  grid-area: side;
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+.panel {
+  border: 1px solid var(--material-line);
+  border-radius: var(--radius-card);
+  background: var(--material-tile);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+}
+
+.listHead {
+  padding: var(--space-5) var(--space-5) 0;
+}
+.title {
+  color: var(--fg-primary);
+}
+.secondary {
+  color: var(--fg-secondary);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+}
+/* Rows as soft capsules (ui/0225), spaced, not ruled. */
+.rows {
+  display: grid;
+  gap: var(--space-1);
+  padding: 0 var(--space-2) var(--space-2);
+}
+.rows > li > * {
+  background: color-mix(in srgb, var(--bg-raised) 45%, transparent);
+}
+.more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) var(--space-5) var(--space-4);
+}
+
+.note {
+  padding: var(--space-6) var(--space-5);
+  color: var(--fg-secondary);
+}
+.error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--sig-fail-fg);
+}
+
+.evalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--fg-primary);
+}
+.unit {
+  margin-left: 0.125rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--fg-secondary);
+}
+/* In a stretched row the strip sits on the tile's floor, like a chart baseline. */
+.evalBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  height: 100%;
+}
+.evalStrip {
+  margin-top: auto;
+  padding-top: var(--space-8);
+}

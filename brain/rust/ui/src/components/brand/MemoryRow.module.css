@@ -1,0 +1,42 @@
+/* Memory row (ui/0178, ui/0237): solid surface, never glass under text. */
+
+.row {
+  width: 100%;
+  padding: 0.875rem var(--space-4);
+  border-radius: var(--radius-inner);
+}
+.interactive:hover {
+  background: var(--bg-raised);
+}
+/* Selected = dusk (§5.5): the row you are reading. */
+.row[aria-current='true'] {
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) 0.625rem;
+}
+
+/* Meta text is the secondary tier: tertiary is icons-only (§5.8). */
+.project,
+.date,
+.id {
+  color: var(--fg-secondary);
+}
+.id {
+  margin-left: auto;
+}
+
+.snippet {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-width: 68ch;
+  margin-top: var(--space-2);
+  color: var(--fg-body);
+}

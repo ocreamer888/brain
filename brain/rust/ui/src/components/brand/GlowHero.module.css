@@ -1,0 +1,160 @@
+/*
+ * Level-4 glow, Split mesh (brand book §6.5). Structure ported from
+ * sicop-health ds/mesh.module.css: a blurred, oversized blob layer (.bg),
+ * milk + vignette + rim (::before), white grain over everything (::after).
+ * Recipe measured from IMG_0240. One per screen.
+ */
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 22rem;
+  padding: var(--space-7);
+  border-radius: var(--radius-shell);
+  background: var(--g-umber);
+}
+
+@supports (corner-shape: squircle) {
+  .hero {
+    border-radius: 48px;
+    corner-shape: squircle;
+  }
+}
+
+.bg {
+  position: absolute;
+  inset: -25%;
+  z-index: -2;
+  filter: blur(42px) saturate(1.2);
+  transition: transform 1.8s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Positions are in the oversized layer: the card shows 17%–83% of it
+   * (visible v% = layer 17 + 0.667v). IMG_0240 is not bands: a dark cap in
+   * the upper-left with the ember wrapping its edge as a ring, cool mist
+   * beside it top-right, cream everywhere else. Order = top to bottom. */
+  background:
+    radial-gradient(20% 23% at 78% 22%, var(--g-mist) 0%, var(--g-mist) 40%, transparent 100%),
+    radial-gradient(
+      48% 38% at 42% 20%,
+      var(--g-night) 0%,
+      var(--g-night) 38%,
+      var(--g-umber) 56%,
+      var(--g-ember-deep) 69%,
+      var(--g-ember) 80%,
+      var(--g-honey) 89%,
+      transparent 100%
+    ),
+    radial-gradient(16% 12% at 76% 54%, var(--g-peach) 0%, transparent 72%),
+    radial-gradient(30% 12% at 50% 76%, var(--g-core) 0%, transparent 72%),
+    linear-gradient(
+      to bottom,
+      var(--g-mist-warm) 17%,
+      var(--g-peach) 45%,
+      var(--g-cream) 60%,
+      var(--g-cream-light) 75%,
+      var(--g-cream) 83%
+    );
+}
+
+.hero:hover > .bg {
+  transform: scale(1.07) translate(2%, -2%) rotate(-2deg);
+}
+
+/* milk + edge vignette + rim */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  corner-shape: inherit;
+  background:
+    radial-gradient(50% 40% at 60% 70%, var(--mesh-milk) 0%, transparent 70%),
+    radial-gradient(130% 110% at 50% 35%, transparent 58%, var(--mesh-vignette) 100%);
+  box-shadow:
+    inset 0 0 0 1px var(--mesh-rim),
+    inset 0 1.5px 0 var(--mesh-rim-top),
+    inset 0 -30px 60px rgb(255 255 255 / 0.05);
+}
+
+/* grain */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: inherit;
+  corner-shape: inherit;
+  background-image: var(--texture-grain);
+  background-size: 140px;
+  opacity: 0.22;
+  mix-blend-mode: soft-light;
+}
+
+.label {
+  color: var(--fg-secondary);
+}
+
+.value {
+  margin-top: var(--space-4);
+  color: var(--fg-primary);
+}
+
+/* Bottom half sits in the lamp: ink in both appearances (≥ 7.7:1 measured). */
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  /* The foot always sits on cream, so controls in it use the light scheme. */
+  color-scheme: light;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.caption {
+  max-width: 32ch;
+  font-weight: 500;
+  color: var(--on-glow-soft);
+}
+
+/* Stat strip (ui/0225): a few numbers in the lamp, divided by hairlines. */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+.stat + .stat {
+  padding-left: var(--space-5);
+  border-left: 1px solid rgb(30 25 16 / 0.16);
+}
+.statValue {
+  font-size: 1.375rem;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-glow);
+}
+.statLabel {
+  margin-top: 0.125rem;
+  color: var(--on-glow-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg {
+    transition: none;
+  }
+  .hero:hover > .bg {
+    transform: none;
+  }
+}

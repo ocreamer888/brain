@@ -1,0 +1,63 @@
+/* A fact under review: capsule row, actions below the text. */
+
+.row {
+  padding: var(--space-4);
+  border-radius: var(--radius-inner);
+  background: color-mix(in srgb, var(--bg-raised) 45%, transparent);
+}
+/* Reviewed rows step back, but stay readable (state is also in the chip). */
+.row[data-state='rejected'] .text {
+  color: var(--fg-secondary);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) 0.625rem;
+  color: var(--fg-secondary);
+}
+.id {
+  margin-left: auto;
+}
+.text {
+  max-width: 72ch;
+  margin-top: var(--space-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--fg-body);
+}
+.text[data-clamped='true'] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+.more {
+  margin-top: var(--space-1);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+.more:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.source {
+  flex-basis: 100%;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-mini);
+  background: var(--bg-sunken);
+  white-space: pre-wrap;
+  color: var(--fg-body);
+}
+.quiet { color: var(--fg-secondary); }
+.error { color: var(--sig-fail-fg); }

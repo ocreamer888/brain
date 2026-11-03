@@ -1,0 +1,224 @@
+/*
+ * Brain design tokens. Source of truth: src/docs/ui-inspo/brain-brand-book.md.
+ * Two layers: raw ramps (never used by components directly) and roles.
+ * Roles use light-dark() so each is declared once and follows the system
+ * appearance; a subtree can be pinned with [data-theme] (sample page only).
+ */
+
+@font-face {
+  font-family: 'Geist';
+  src: url('../assets/fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../assets/fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light dark;
+  /* Raw: lumen, hue 86 (the lamp) */
+  --lumen-950: #1e1910;
+  --lumen-900: #2d2719;
+  --lumen-800: #483e28;
+  --lumen-700: #655635;
+  --lumen-600: #857043;
+  --lumen-500: #a18a57;
+  --lumen-400: #baa372;
+  --lumen-300: #d9c79f; /* glow mid-tone only: matches Tendrium gold */
+  --lumen-200: #e4d6b9;
+  --lumen-100: #eee5d2;
+  --lumen-50: #f6f1e7;
+
+  /* Raw: dusk, hue 248 (brand lead) */
+  --dusk-950: #0d1823;
+  --dusk-900: #172737;
+  --dusk-800: #294158;
+  --dusk-700: #395d7d;
+  --dusk-600: #4d7aa3;
+  --dusk-500: #6295c4;
+  --dusk-400: #7facd8;
+  --dusk-300: #a0c4e7;
+  --dusk-200: #bdd7f1;
+  --dusk-100: #d9e9f9;
+  --dusk-50: #edf5fe;
+
+  /* Raw: neutrals, hue 250, chroma 0.008 */
+  --night: #080808;
+  --neutral-950: #0d1014;
+  --neutral-900: #171a1e;
+  --neutral-800: #25282b;
+  --neutral-700: #373a3e;
+  --neutral-600: #4f5256;
+  --neutral-500: #696c71;
+  --neutral-400: #898d92;
+  --neutral-300: #aaaeb3;
+  --neutral-200: #ccd1d5;
+  --neutral-100: #e5eaee;
+  --paper: #f7f4ee;
+  --paper-sunken: #efece7;
+  --paper-raised: #ebe9e5;
+
+  /* Roles: light value first, dark second. Ratios in the brand book §5.8. */
+  --bg-ground: light-dark(var(--paper), var(--night));
+  --bg-sunken: light-dark(var(--paper-sunken), var(--neutral-950));
+  --bg-surface: light-dark(#ffffff, var(--neutral-900));
+  --bg-raised: light-dark(var(--paper-raised), var(--neutral-800));
+
+  --fg-primary: light-dark(var(--neutral-900), var(--paper));
+  --fg-body: light-dark(var(--neutral-800), var(--neutral-200));
+  --fg-secondary: light-dark(var(--neutral-600), var(--neutral-300));
+  --fg-tertiary: light-dark(var(--neutral-500), var(--neutral-400)); /* icons, placeholder */
+  --fg-disabled: light-dark(var(--neutral-400), var(--neutral-600));
+
+  --line: light-dark(rgb(23 26 30 / 0.1), rgb(247 244 238 / 0.07));
+  --line-strong: light-dark(rgb(23 26 30 / 0.18), rgb(247 244 238 / 0.14));
+
+  --accent: light-dark(var(--dusk-600), var(--dusk-500)); /* fills: live dot, selection */
+  --accent-text: light-dark(var(--dusk-700), var(--dusk-400)); /* links, active icon */
+  --focus: light-dark(var(--dusk-600), var(--dusk-400));
+
+  /* The lamp inverts: cream on dark, warm ink on light. */
+  --lamp: light-dark(var(--lumen-950), var(--lumen-100));
+  --on-lamp: light-dark(var(--paper), var(--lumen-950));
+  --lamp-text: light-dark(var(--lumen-700), var(--lumen-400));
+
+  /* Materials (ui/0224 · 0225 · 0236): the app floats one frosted panel over an
+   * ambient backdrop; tiles are lighter translucent layers on that panel
+   * (HIG standard materials for the content layer). Glass stays for chrome. */
+  --material-panel: light-dark(rgb(240 237 231 / 0.66), rgb(38 40 44 / 0.6));
+  --material-header: light-dark(rgb(244 241 236 / 0.86), rgb(34 36 40 / 0.86));
+  --material-tile: light-dark(rgb(255 255 255 / 0.82), rgb(247 244 238 / 0.075));
+  --material-line: light-dark(rgb(255 255 255 / 0.9), rgb(247 244 238 / 0.09));
+  --material-shadow: light-dark(0 30px 80px rgb(60 40 20 / 0.12), 0 40px 100px rgb(0 0 0 / 0.55));
+  --ambient-a: light-dark(rgb(250 206 169 / 0.55), rgb(203 114 41 / 0.28));
+  --ambient-b: light-dark(rgb(217 235 247 / 0.7), rgb(134 149 153 / 0.22));
+  --ambient-c: light-dark(rgb(252 229 187 / 0.6), rgb(52 21 9 / 0.6));
+
+  /* Glass (chrome only) */
+  --glass-bg: light-dark(rgb(255 255 255 / 0.62), rgb(247 244 238 / 0.06));
+  --glass-bg-active: light-dark(rgb(255 255 255 / 0.95), rgb(247 244 238 / 0.14));
+  --glass-line: light-dark(rgb(23 26 30 / 0.08), rgb(247 244 238 / 0.1));
+  --glass-highlight: light-dark(rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.08));
+  --glass-blur: 20px;
+
+  /* Gradient-only tones: inside mesh surfaces, never as flat UI color.
+   * Sampled from IMG_0240 (aurō): warm black top, an orange ember band,
+   * cream filling the lower half, one faint cool mist corner (dusk-tinted
+   * so it stays Brain). Light mode is the same room with the lights on. */
+  --g-night: light-dark(#fcfaf6, #1c100e);
+  --g-umber: light-dark(#fcf1e9, #341509);
+  --g-ember-deep: light-dark(#fce2d4, #672510);
+  --g-ember: light-dark(#fcd1b0, #c36d27);
+  --g-honey: light-dark(#ffdbaa, #eab76c);
+  --g-mist: light-dark(#e1eef1, #869599);
+  --g-mist-warm: light-dark(#f5ede4, #bcab96);
+  --g-cream: light-dark(#fce5bb, #f5d69e);
+  --g-cream-light: light-dark(#fdedcd, #f7deae);
+  --g-peach: light-dark(#fce8cf, #f7d8b3);
+  --g-core: light-dark(#fef6e4, #f7e6c3);
+  /* Text that sits in the lamp (Split mesh): ink in both appearances. */
+  --on-glow: #1e1910;
+  --on-glow-soft: #483e28;
+  --mesh-vignette: light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.2));
+  /* Milk: white on light; on dark a white wash reads as grey haze, so it is warm and faint. */
+  --mesh-milk: light-dark(rgb(255 255 255 / 0.1), rgb(255 236 200 / 0.05));
+  --mesh-rim: light-dark(rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.14));
+  --mesh-rim-top: light-dark(rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.3));
+  --texture-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+
+  /* Memory signals (brand book §5.6): fg on bg */
+  --sig-rely-fg: light-dark(#625334, var(--lumen-100));
+  --sig-rely-bg: light-dark(#f4e3bf, var(--lumen-800));
+  --sig-use-fg: light-dark(#2e597f, var(--dusk-300));
+  --sig-use-bg: light-dark(#dceeff, var(--dusk-900));
+  --sig-notice-fg: light-dark(#714e04, #d1a662);
+  --sig-notice-bg: light-dark(#fae9ce, #362913);
+  --sig-lesson-fg: light-dark(#843d30, #e99989);
+  --sig-lesson-bg: light-dark(#ffe4df, #402621);
+  --sig-fail-fg: light-dark(#9b1e22, #f97770);
+  --sig-fail-bg: light-dark(#ffe4e1, #3f1917);
+  --sig-spoken-fg: light-dark(var(--neutral-800), var(--neutral-200));
+  --sig-spoken-bg: light-dark(var(--paper-raised), var(--neutral-800));
+  --sig-frame-fg: light-dark(var(--neutral-600), var(--neutral-300));
+  --sig-frame-bg: light-dark(var(--paper-raised), var(--neutral-800));
+  --sig-raw-fg: light-dark(var(--neutral-600), var(--neutral-300));
+  --sig-raw-bg: transparent;
+
+  /* Type families (brand book §4) */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Radius ladder (§6.2): inner = outer − padding, so nested corners stay parallel. */
+  --radius-pill: 999px;
+  --radius-panel: 40px;
+  --radius-shell: 28px;
+  --radius-card: 24px;
+  --radius-inner: 14px;
+  --radius-mini: 8px;
+
+  /* Spacing: 4px base (§10). */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-16: 4rem;
+
+  /* Chart series (validated 2026-10-19 with the dataviz palette script: lightness
+   * band, chroma ≥ 0.10, CVD ΔE ≥ 20 vs each other, ≥ 3:1 on the tile surface).
+   * Series 2 is also dashed, so identity never rests on color alone. */
+  --chart-1: light-dark(#2d6da5, #5291cc);
+  --chart-2: light-dark(#a2650a, #bf8532);
+
+  /* Motion (brand book §11) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-press: 140ms;
+  --dur-pop: 220ms;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+/* Increase Contrast: solid chrome, stronger lines, no faint text tier. */
+@media (prefers-contrast: more) {
+  :root {
+    --line: light-dark(rgb(23 26 30 / 0.3), rgb(247 244 238 / 0.3));
+    --line-strong: light-dark(rgb(23 26 30 / 0.45), rgb(247 244 238 / 0.45));
+    --fg-secondary: light-dark(var(--neutral-800), var(--neutral-200));
+    --fg-tertiary: light-dark(var(--neutral-700), var(--neutral-300));
+    --glass-bg: var(--bg-surface);
+    --glass-line: var(--line-strong);
+    --material-panel: var(--bg-sunken);
+    --material-header: var(--bg-sunken);
+    --material-tile: var(--bg-surface);
+    --material-line: var(--line-strong);
+  }
+}
+
+/* Reduce Transparency: glass becomes a solid raised surface. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-bg: var(--bg-raised);
+    --glass-bg-active: var(--bg-surface);
+    --glass-blur: 0px;
+    --material-panel: var(--bg-sunken);
+    --material-header: var(--bg-sunken);
+    --material-tile: var(--bg-surface);
+  }
+}

@@ -1,5 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+// Order matters: tokens, then the global layer, then root sizing.
+import './styles/tokens.css'
+import './styles/base.css'
 import './index.css'
 import App from './App'
 

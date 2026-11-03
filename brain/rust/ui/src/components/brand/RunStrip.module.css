@@ -1,0 +1,54 @@
+/* Eval runs as status cells, oldest → newest. Status = icon + word, never color alone. */
+
+.wrap {
+  position: relative;
+}
+
+.strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0.25rem;
+}
+
+/* Cell is the hit target (≥ 28px tall); the visible mark is the capsule inside. */
+.cell {
+  display: grid;
+  place-items: end center;
+  height: 2.5rem;
+  padding: 0;
+  border-radius: var(--radius-mini);
+}
+.cell:hover,
+.cell:focus-visible {
+  background: var(--bg-raised);
+}
+.mark {
+  width: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--sig-use-fg);
+}
+.cell[data-pass='false'] .mark {
+  background: var(--sig-fail-fg);
+}
+
+.tip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  transform: translateX(-50%);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-inner);
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--fg-primary);
+}
+.tipMeta {
+  color: var(--fg-secondary);
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-1);
+  color: var(--fg-secondary);
+}

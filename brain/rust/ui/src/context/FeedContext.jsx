@@ -17,6 +17,7 @@ export function FeedProvider({ children }) {
           content_snippet: (m.content || '').slice(0, 200),
           timestamp: m.timestamp,
           memory_type: m.memory_type,
+          project: m.project,
           _seeded: true,
         }))
         for (const it of items) seen.current.add(it.id)

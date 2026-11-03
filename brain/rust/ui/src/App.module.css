@@ -1,0 +1,175 @@
+/* App shell (brand book §10): a floating panel on the ground, the glass dock
+ * beside it, a glass header that the view scrolls under. */
+
+.app {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  gap: var(--space-4);
+  height: 100%;
+  min-height: 0;
+  padding: var(--space-6);
+  background: var(--bg-ground);
+  color: var(--fg-body);
+}
+
+/* Ambient backdrop (ui/0225, 0224): the lamp's light behind the panel, so the
+ * frosted panel has something to frost. Fixed, blurred, and never behind text
+ * without the panel in between. */
+.app::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(45% 55% at 12% 88%, var(--ambient-a) 0%, transparent 70%),
+    radial-gradient(40% 45% at 88% 8%, var(--ambient-b) 0%, transparent 70%),
+    radial-gradient(60% 50% at 60% 60%, var(--ambient-c) 0%, transparent 75%);
+  filter: blur(40px);
+}
+.app::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--texture-grain);
+  background-size: 140px;
+  opacity: 0.08;
+  mix-blend-mode: soft-light;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.wordmarkContainer {
+  position: relative;
+  top: 0;
+}
+
+.wordmark {
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--fg-primary); 
+}
+
+.dockContainer {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.panel {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--material-line);
+  border-radius: var(--radius-panel);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  backdrop-filter: blur(40px) saturate(150%);
+}
+
+/* scroll: content passes under the header. fill: the view owns its own layout (Linked). */
+.scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  scollbar-color: var(--material-line) var(--material-panel);
+}
+.fill {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.header {
+  position: relative;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8) var(--space-5);
+}
+/* Headline scale (ui/0224, 0239): the screen title is the biggest words on it. */
+.headline {
+  font-size: clamp(1.75rem, 2.6vw, 2.5rem);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+.heading {
+  display: grid;
+  gap: 0.125rem;
+}
+.title {
+  color: var(--fg-primary);
+}
+.secondary {
+  color: var(--fg-secondary);
+}
+.tools {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 16rem;
+}
+.tools > label {
+  max-width: 20rem;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2.75rem;
+  padding: 0 var(--space-4) 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  color: var(--fg-primary);
+  white-space: nowrap;
+}
+.monogram {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--lamp);
+  color: var(--on-lamp);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Views not yet rebuilt keep their dark Tailwind styling; pin them dark so
+ * they never sit on a light ground. Removed view by view as each migrates. */
+.legacy {
+  flex: 1 0 auto;
+  min-height: 0;
+  margin: var(--space-4);
+  border-radius: var(--radius-shell);
+  background: rgb(8 8 8 / 0.86);
+  color: var(--fg-body);
+}

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Brain atlas</title>
+    <style>
+      html, body, #graph { margin: 0; height: 100%; background: #121820; overflow: hidden; }
+      body { color: #e7eef6; font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; }
+      #summary, #legend { position: fixed; z-index: 2; pointer-events: none; }
+      #summary { top: 16px; left: 18px; color: #9aabbd; max-width: 520px; }
+      #pill {
+        position: fixed; z-index: 3; left: 50%; top: 46%; transform: translate(-50%, -50%);
+        display: none; pointer-events: none;
+        background: rgba(18, 24, 32, 0.88); color: #f4f7fb;
+        border: 1px solid rgba(244, 247, 251, 0.18);
+        border-radius: 8px; padding: 4px 8px; font-size: 12px; max-width: 420px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      #legend span { display: inline-flex; align-items: center; gap: 5px; }
+      #legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    </style>
+  </head>
+  <body>
+    <div id="graph"></div>
+    <p id="summary">Loading memories…</p>
+    <div id="legend">
+      <span><i style="background:#f5c542"></i>fact</span>
+      <span><i style="background:#3d8bff"></i>decision</span>
+      <span><i style="background:#2ec4b6"></i>solution</span>
+      <span><i style="background:#e85d04"></i>pattern</span>
+      <span><i style="background:#e63946"></i>lesson</span>
+      <span><i style="background:#9b5de5"></i>conversation</span>
+    </div>
+    <div id="pill"></div>
+    <script type="module" src="/main.js?v=25"></script>
+  </body>
+</html>

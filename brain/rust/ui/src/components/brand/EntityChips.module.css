@@ -1,0 +1,38 @@
+/* Entity chips (ui/0179, 0224 chip rows): name + count, each opens Linked. */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2.25rem;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--fg-primary);
+}
+.chip:hover {
+  background: var(--bg-raised);
+}
+
+/* Count sits in its own small pill so the number never reads as part of the name. */
+.count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.75rem;
+  height: 1.5rem;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-secondary);
+}

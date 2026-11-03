@@ -1,0 +1,64 @@
+/* Confirm dialog (brand book §9): modal, dims what's behind (HIG "dim to focus"),
+ * red only on a destructive confirm. Native <dialog>: focus trap + Esc for free. */
+
+.dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: var(--space-6);
+  border: 1px solid var(--material-line);
+  border-radius: var(--radius-shell);
+  background: var(--bg-surface);
+  color: var(--fg-body);
+  box-shadow: var(--material-shadow);
+}
+.dialog[open] {
+  animation: arrive 220ms var(--ease-out);
+}
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.title {
+  color: var(--fg-primary);
+}
+.body {
+  margin-top: var(--space-3);
+  color: var(--fg-body);
+}
+.error {
+  margin-top: var(--space-3);
+  color: var(--sig-fail-fg);
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+/* The one place red is used for an action (§5.6 "Fail"). */
+.danger {
+  background: var(--sig-fail-bg);
+  color: var(--sig-fail-fg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sig-fail-fg) 40%, transparent);
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation: fade 160ms ease;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sig-fail-bg) 70%, var(--sig-fail-fg) 12%);
+}

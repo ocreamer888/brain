@@ -1,154 +1,144 @@
-import { useEffect, useRef, useState } from 'react'
-import { ActionableCard } from '../components/MemoryCard'
-import { apiFetch } from '../lib/apiFetch'
+import { useState } from 'react'
+import { getObservations, listMemories, patchMemory, searchIndex, sendFeedback } from '../api'
+import Tile from '../components/brand/Tile'
+import { Button, SearchPill } from '../components/brand/primitives'
+import { isPromoted, toFactRow } from '../lib/curate'
+import { friendlyError } from '../lib/instances'
+import { useLoad } from '../lib/useLoad'
+import { useSettled } from '../lib/useSettled'
+import FactRow from './curate/FactRow'
+import styles from './Curate.module.css'
 
-const FACT_TYPES = ['all', 'named_entity', 'other']
+const PAGE = 50
+const PROMOTED_SALIENCE = 1.0
 
-function SkeletonCard() {
+/** Facts in review order: newest when nothing is typed, best match otherwise. Always full rows. */
+async function loadFacts(query) {
+  const ids = query
+    ? ((await searchIndex(query, PAGE, 'fact')).results ?? []).map((r) => r.id)
+    : ((await listMemories(PAGE, { memoryType: 'fact' })).items ?? []).map((m) => m.id)
+  if (!ids.length) return []
+  const byId = new Map(((await getObservations(ids)).results ?? []).map((o) => [o.id, o]))
+  return ids.map((id) => byId.get(id)).filter(Boolean).map(toFactRow)
+}
+
+/** Curate: review facts (brand book §13 "List"). Promote marks a fact reliable; Reject records feedback. */
+export default function Curate({ onOpenMemory }) {
+  const [query, setQuery] = useState('')
+  const settled = useSettled(query.trim(), 300)
+  const facts = useLoad(() => loadFacts(settled), `facts|${settled}`)
+  const review = useReview()
+
+  const rows = facts.data ?? []
   return (
-    <div className="py-3 border-b border-zinc-800 animate-pulse">
-      <div className="h-3 w-24 bg-zinc-800 rounded mb-2" />
-      <div className="h-3 w-full bg-zinc-800 rounded mb-1" />
-      <div className="h-3 w-2/3 bg-zinc-800 rounded" />
+    <div className={styles.page}>
+      <section className={styles.list} aria-label="Facts to review">
+        <SearchPill value={query} onChange={setQuery} placeholder="Search facts (empty shows the newest)" />
+        <p className={`t-small ${styles.secondary}`} role="status">
+          {facts.loading ? 'Loading facts…' : settled ? `${rows.length} matches for “${settled}”` : `${rows.length} newest facts, newest first`}
+        </p>
+        {facts.error && (
+          <div className={`t-small ${styles.error}`} role="alert">
+            <span>Couldn't load facts ({friendlyError(facts.error)}).</span>
+            <Button onClick={facts.retry}>Retry</Button>
+          </div>
+        )}
+        {!facts.loading && !facts.error && rows.length === 0 && (
+          <p className={`t-body ${styles.secondary}`}>{settled ? 'No facts match. Try other words.' : 'No facts saved yet.'}</p>
+        )}
+        <ul className={styles.rows}>
+          {rows.map((row) => (
+            <FactRow
+              key={row.id}
+              row={row}
+              review={review.stateOf(row)}
+              onPromote={() => review.promote(row)}
+              onUndo={() => review.undo(row)}
+              onReject={() => review.reject(row)}
+              onOpen={() => onOpenMemory?.(row.id)}
+            />
+          ))}
+        </ul>
+      </section>
+      <HowItWorks counts={review.counts} />
     </div>
   )
 }
 
-export default function Curate() {
-  const [facts, setFacts] = useState([])
-  const [query, setQuery] = useState('')
-  const [factTypeFilter, setFactTypeFilter] = useState('all')
-  const [actedMap, setActedMap] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState(null)
-  const initialLoad = useRef(true)
+/**
+ * Review state per fact: what the server confirmed this session, layered over
+ * what the data already says (a stored salience ≥ 0.95 means promoted earlier).
+ * Nothing changes on screen until the server confirms.
+ */
+function useReview() {
+  const [byId, setById] = useState({}) // id → { salience?, rejected?, prev?, busy?, error? }
+  const patch = (id, next) => setById((m) => ({ ...m, [id]: { ...m[id], ...next } }))
 
-  async function loadFacts(q, ftf) {
-    if (initialLoad.current) setLoading(true)
-    setLoadError(null)
+  async function act(row, fn, after) {
+    patch(row.id, { busy: true, error: null })
     try {
-      const effectiveQuery = q.trim() || 'fact'
-      const body = { query: effectiveQuery, n: 50, memory_type: 'fact' }
-      const r = await apiFetch('/v1/search_index', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!r.ok) throw new Error(`Load failed: ${r.status}`)
-      const data = await r.json()
-      let results = data.results ?? []
-
-      // Client-side fact_type filter
-      if (ftf === 'named_entity') {
-        results = results.filter(r => r.fact_type === 'named_entity')
-      } else if (ftf === 'other') {
-        results = results.filter(r => r.fact_type !== 'named_entity')
-      }
-
-      setFacts(results)
+      await fn()
+      patch(row.id, { busy: false, ...after })
     } catch (e) {
-      setLoadError(e.message)
-    } finally {
-      setLoading(false)
-      initialLoad.current = false
+      patch(row.id, { busy: false, error: friendlyError(e.message || String(e)) })
     }
   }
 
-  useEffect(() => { loadFacts('', 'all') }, [])
-
-  function debounce(fn, ms) {
-    let t
-    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms) }
-  }
-  const debouncedLoad = useRef(debounce((q, ftf) => loadFacts(q, ftf), 300)).current
-
-  function handleQuery(e) {
-    const q = e.target.value
-    setQuery(q)
-    debouncedLoad(q, factTypeFilter)
-  }
-
-  function handleTypeFilter(ftf) {
-    setFactTypeFilter(ftf)
-    loadFacts(query, ftf)
+  const stateOf = (row) => {
+    const s = byId[row.id] ?? {}
+    const salience = s.salience ?? row.salience
+    // promoted reflects the real stored state (a fact promoted last session still shows
+    // as promoted); canUndo is stricter -- only true when this session actually knows
+    // the real prior salience to restore, so Undo never overwrites it with a guess.
+    return {
+      promoted: isPromoted(salience),
+      canUndo: isPromoted(salience) && s.prev !== undefined,
+      rejected: !!s.rejected,
+      busy: !!s.busy,
+      error: s.error ?? null,
+    }
   }
 
-  async function handlePromote(id) {
-    const r = await apiFetch(`/memories/${id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ salience: 1.0 }),
-    })
-    if (!r.ok) throw new Error(`Promote failed: ${r.status}`)
-    setActedMap(prev => ({ ...prev, [id]: 'promoted' }))
+  return {
+    stateOf,
+    promote: (row) =>
+      act(row, () => patchMemory(row.id, { salience: PROMOTED_SALIENCE }), { salience: PROMOTED_SALIENCE, prev: row.salience ?? 0.5, promotedNow: true }),
+    undo: (row) => {
+      const prev = byId[row.id]?.prev ?? 0.5
+      return act(row, () => patchMemory(row.id, { salience: prev }), { salience: prev, promotedNow: false })
+    },
+    reject: (row) =>
+      act(row, () => sendFeedback({ event_type: 'rejected', memory_id: row.id, source: 'mcp' }), { rejected: true }),
+    counts: {
+      promoted: Object.values(byId).filter((s) => s.promotedNow).length,
+      rejected: Object.values(byId).filter((s) => s.rejected).length,
+    },
   }
+}
 
-  async function handleReject(id) {
-    const r = await apiFetch('/feedback', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ event_type: 'rejected', memory_id: id, source: 'mcp' }),
-    })
-    if (!r.ok) throw new Error(`Reject failed: ${r.status}`)
-    setActedMap(prev => ({ ...prev, [id]: 'rejected' }))
-  }
-
+function HowItWorks({ counts }) {
   return (
-    <div className="p-6 max-w-3xl">
-      <h2 className="text-lg font-semibold text-white mb-4">Curate</h2>
-
-      <input
-        type="search"
-        value={query}
-        onChange={handleQuery}
-        placeholder="Filter facts…"
-        autoComplete="off"
-        className="w-full bg-zinc-900 border border-zinc-700 rounded-full px-4 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 mb-3"
-      />
-
-      {/* Fact type filter chips */}
-      <div className="flex gap-2 mb-4">
-        {FACT_TYPES.map(ft => (
-          <button
-            key={ft}
-            onClick={() => handleTypeFilter(ft)}
-            className={`px-3 py-0.5 rounded-full text-xs border transition-colors ${
-              factTypeFilter === ft
-                ? 'bg-zinc-700 border-zinc-500 text-white'
-                : 'border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
-            }`}
-          >
-            {ft}
-          </button>
-        ))}
-      </div>
-
-      {loadError && (
-        <div className="text-xs text-red-400 bg-red-900/20 rounded p-2 mb-3 flex items-center justify-between">
-          {loadError}
-          <button onClick={() => loadFacts(query, factTypeFilter)} className="underline ml-2">Retry</button>
-        </div>
-      )}
-
-      <p className="text-xs text-zinc-600 mb-3">{facts.length} facts</p>
-
-      <div>
-        {loading && (
-          <><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
-        )}
-        {!loading && facts.length === 0 && (
-          <p className="text-sm text-zinc-600 py-4">No facts found.</p>
-        )}
-        {facts.map(fact => (
-          <ActionableCard
-            key={fact.id}
-            memory={fact}
-            acted={actedMap[fact.id] ?? null}
-            onPromote={handlePromote}
-            onReject={handleReject}
-          />
-        ))}
-      </div>
-    </div>
+    <aside className={styles.side} aria-label="How curating works">
+      <Tile icon="curate" title="This session" sub="Confirmed by the server">
+        <p className={`t-kpi ${styles.primary}`}>
+          {counts.promoted}
+          <span className={styles.unit}> promoted</span>
+        </p>
+        <p className={`t-kpi ${styles.primary}`}>
+          {counts.rejected}
+          <span className={styles.unit}> rejected</span>
+        </p>
+      </Tile>
+      <Tile icon="fact" title="What the buttons do">
+        <p className={`t-small ${styles.secondary}`}>
+          <strong className={styles.primary}>Promote</strong> marks a fact as reliable (importance 1.0, up from about 0.5). It shows as
+          promoted from then on, and you can undo it.
+        </p>
+        <p className={`t-small ${styles.secondary} ${styles.note}`}>
+          <strong className={styles.primary}>Reject</strong> records “not useful” feedback for ranking. The fact itself stays, and
+          the API has no way to take the feedback back, so there's no undo.
+        </p>
+      </Tile>
+    </aside>
   )
 }

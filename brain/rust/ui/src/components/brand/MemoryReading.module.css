@@ -1,0 +1,110 @@
+/* Memory reading (brand book §9, §10 "Reading"): one column, meta above,
+ * body at 14px for long reads, links below. Solid surface, never glass. */
+
+.reading {
+  display: grid;
+  gap: var(--space-6);
+  max-width: 68ch;
+}
+
+.meta {
+  display: grid;
+  gap: var(--space-3);
+}
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  color: var(--fg-secondary);
+}
+.title {
+  color: var(--fg-primary);
+}
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--fg-secondary);
+}
+.copy:hover {
+  background: var(--bg-raised);
+  color: var(--fg-primary);
+}
+
+.body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--fg-body);
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-inner);
+  background: var(--sig-notice-bg);
+  color: var(--sig-notice-fg);
+}
+.link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: inherit;
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+}
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--fg-secondary);
+}
+
+.tags,
+.entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 1.5rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  color: var(--fg-secondary);
+}
+
+.rows {
+  display: grid;
+  gap: var(--space-1);
+}
+.rows > li > * {
+  background: color-mix(in srgb, var(--bg-raised) 45%, transparent);
+}
+
+.quiet {
+  color: var(--fg-secondary);
+}
+.error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--sig-fail-fg);
+}

@@ -1,124 +1,204 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import LineChart from '../components/brand/LineChart'
+import TickRing from '../components/brand/TickRing'
+import Tile from '../components/brand/Tile'
+import { Button, SignalChip } from '../components/brand/primitives'
 import { useEval } from '../context/EvalContext'
+import { classifyGap, formatPp, p1Series, parseRunId, pct, summarizeRuns } from '../lib/evalRuns'
+import styles from './Eval.module.css'
 
-function pct(v) {
-  return v != null ? `${(v * 100).toFixed(1)}%` : '—'
-}
+const PAGE = 20
+const SERIES = [
+  { key: 'p1', label: 'P@1 average', color: 'var(--chart-1)' },
+  { key: 'mcp', label: 'MCP P@1 (live path)', color: 'var(--chart-2)', dashed: true },
+]
+const GAP_HELP = 'Live MCP P@1 minus offline RRF P@1 on the same gold queries. Positive = the live path beats plain RRF.'
+const when = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' })
 
-function gap(v) {
-  if (v == null) return '—'
-  const sign = v >= 0 ? '+' : ''
-  const cls = v <= -0.05 ? 'text-red-400' : 'text-green-400'
-  return <span className={cls}>{sign}{(v * 100).toFixed(1)}pp</span>
-}
-
-function PassBadge({ pass }) {
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
-      pass ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
-    }`}>
-      {pass ? 'PASS' : 'FAIL'}
-    </span>
-  )
-}
-
+/** Eval: retrieval quality runs (brand book §10 "Score sheet"). */
 export default function Eval({ activeView }) {
   const { data, error, refresh } = useEval()
 
+  // The eval suite writes a file; re-read it whenever the view opens.
   useEffect(() => {
     if (activeView === 'eval') refresh()
   }, [activeView, refresh])
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Eval</h2>
-        <div className="text-xs text-red-400 bg-red-900/20 rounded p-3 flex items-center justify-between">
-          Failed to load eval data: {error}
-          <button onClick={refresh} className="underline ml-2">Retry</button>
-        </div>
-      </div>
-    )
-  }
-
-  if (!data) {
-    return (
-      <div className="p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Eval</h2>
-        <p className="text-xs text-zinc-600">Loading…</p>
-      </div>
-    )
-  }
-
+  if (error) return <LoadError message={error} onRetry={refresh} />
+  if (!data) return <p className={`t-body ${styles.page} ${styles.secondary}`}>Loading runs…</p>
   const runs = data.runs ?? []
+  if (!runs.length) return <NoRuns />
+  return <ScoreSheet runs={runs} />
+}
 
-  if (!runs.length) {
-    return (
-      <div className="p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Eval</h2>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 text-center">
-          <p className="text-sm text-zinc-400 mb-2">No eval runs yet.</p>
-          <p className="text-xs text-zinc-600 font-mono">
-            python3 brain/tools/eval_suite.py
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  const latest = runs[0]
-
+function ScoreSheet({ runs }) {
+  const summary = summarizeRuns(runs)
+  const points = useMemo(() => p1Series(runs), [runs])
   return (
-    <div className="p-6 max-w-4xl">
-      <h2 className="text-lg font-semibold text-white mb-4">Eval</h2>
+    <div className={styles.page}>
+      <PassRing className={styles.ring} summary={summary} />
+      <LatestRun className={styles.latest} run={runs[0]} />
+      <Tile
+        className={styles.trend}
+        icon="bars"
+        title="Precision over time"
+        sub={`${points.length} scored runs, evenly spaced, oldest to newest · hover or use ←/→ for a run`}
+      >
+        <LineChart points={points} series={SERIES} label="Precision at 1 across eval runs" format={pct} />
+      </Tile>
+      <RunTable className={styles.runs} runs={runs} />
+    </div>
+  )
+}
 
-      {/* Latest run summary */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 mb-6">
-        <div className="flex items-center gap-3 mb-3">
-          <PassBadge pass={latest.pass} />
-          <p className="text-xs text-zinc-500 font-mono">{latest.run_id}</p>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <p className="text-xs text-zinc-600 mb-1">non-fact P@1</p>
-            <p className="text-xl font-semibold text-white tabular-nums">{pct(latest.non_fact_p1)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-zinc-600 mb-1">MCP P@1</p>
-            <p className="text-xl font-semibold text-white tabular-nums">{pct(latest.mcp_p1)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-zinc-600 mb-1" title="Live MCP P@1 minus offline RRF P@1 on the same gold queries. Positive = live path beats plain RRF.">MCP vs RRF</p>
-            <p className="text-xl font-semibold tabular-nums">{gap(latest.mcp_gap)}</p>
-          </div>
-        </div>
+function PassRing({ summary, className }) {
+  const failed = summary.total - summary.passed
+  return (
+    <Tile className={className} icon="eval" title="Pass rate" sub={`All ${summary.total} runs`}>
+      <div className={styles.ringBody}>
+        <TickRing
+          value={summary.total ? summary.passed / summary.total : 0}
+          tone={failed ? 'fail' : 'ok'}
+          label={`${summary.passed} of ${summary.total} runs passed`}
+        >
+          <TickRing.Value>
+            {summary.passed}/{summary.total}
+          </TickRing.Value>
+          <TickRing.Caption>{failed ? `${failed} failed` : 'all passed'}</TickRing.Caption>
+        </TickRing>
       </div>
+    </Tile>
+  )
+}
 
-      {/* Run history table */}
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="text-left text-xs text-zinc-500 border-b border-zinc-800">
-            <th className="pb-2 pr-4 font-normal">Run ID</th>
-            <th className="pb-2 pr-4 font-normal">Pass</th>
-            <th className="pb-2 pr-4 font-normal tabular-nums">P@1 avg</th>
-            <th className="pb-2 pr-4 font-normal tabular-nums">non-fact P@1</th>
-            <th className="pb-2 pr-4 font-normal tabular-nums">MCP P@1</th>
-            <th className="pb-2 font-normal" title="Live MCP P@1 minus offline RRF P@1 on the same gold queries. Positive = live path beats plain RRF.">MCP vs RRF</th>
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map(r => (
-            <tr key={r.run_id} className="border-b border-zinc-900 text-zinc-400">
-              <td className="py-2 pr-4 font-mono text-xs text-zinc-500">{r.run_id}</td>
-              <td className="py-2 pr-4"><PassBadge pass={r.pass} /></td>
-              <td className="py-2 pr-4 tabular-nums">{pct(r.quick_p1_avg)}</td>
-              <td className="py-2 pr-4 tabular-nums">{pct(r.non_fact_p1)}</td>
-              <td className="py-2 pr-4 tabular-nums">{pct(r.mcp_p1)}</td>
-              <td className="py-2">{gap(r.mcp_gap)}</td>
+/** The newest run, in the cream tile: is retrieval good right now? */
+function LatestRun({ run, className }) {
+  const at = parseRunId(run.run_id)
+  return (
+    <Tile className={className} tone="lamp" icon="decision" title="Latest run" sub={at ? when.format(at) : run.run_id}>
+      <div>
+        {run.pass ? (
+          <SignalChip signal="use" icon="decision">pass</SignalChip>
+        ) : (
+          <SignalChip signal="fail" icon="close">fail</SignalChip>
+        )}
+      </div>
+      <div className={styles.metrics}>
+        <Metric label="P@1 average" value={pct(run.quick_p1_avg)} />
+        <Metric label="Non-fact P@1" value={pct(run.non_fact_p1)} />
+        <Metric label="MCP P@1 (live path)" value={pct(run.mcp_p1)} />
+        <Metric label="MCP vs RRF" value={<Gap v={run.mcp_gap} />} help={GAP_HELP} />
+      </div>
+    </Tile>
+  )
+}
+
+function Metric({ label, value, help }) {
+  return (
+    <div className={styles.metric}>
+      <span className={`t-label ${styles.label}`} title={help}>
+        {label}
+      </span>
+      <span className={`t-kpi ${styles.value}`}>{value}</span>
+    </div>
+  )
+}
+
+const GAP_WORDS = { gain: ['↑', 'beats RRF'], flat: ['→', 'within tolerance'], regression: ['↓', 'regression'] }
+
+/** Gain / within tolerance / regression: arrow + word + color, never color alone. */
+function Gap({ v, compact = false }) {
+  const kind = classifyGap(v)
+  if (!kind) return '—'
+  const [arrow, word] = GAP_WORDS[kind]
+  return (
+    <span className={styles.delta} data-kind={kind} title={GAP_HELP}>
+      <span aria-hidden>{arrow}</span>
+      {formatPp(v)}
+      {!compact && <span className="t-small">{word}</span>}
+      {compact && <span className="sr-only">{word}</span>}
+    </span>
+  )
+}
+
+function RunTable({ runs, className }) {
+  const [limit, setLimit] = useState(PAGE)
+  const shown = runs.slice(0, limit)
+  return (
+    <Tile className={className} icon="conversation" title="Run history" sub={`Newest first · ${runs.length} runs`}>
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr className="t-label">
+              <th scope="col">Run</th>
+              <th scope="col">Result</th>
+              <th scope="col" className={styles.num}>P@1 avg</th>
+              <th scope="col" className={styles.num}>Non-fact P@1</th>
+              <th scope="col" className={styles.num}>MCP P@1</th>
+              <th scope="col" title={GAP_HELP}>MCP vs RRF</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {shown.map((r) => (
+              <RunRow key={r.run_id} r={r} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {runs.length > shown.length && (
+        <div className={styles.more}>
+          <Button onClick={() => setLimit((n) => n + PAGE)}>Show {Math.min(PAGE, runs.length - shown.length)} more</Button>
+          <Button onClick={() => setLimit(runs.length)}>Show all {runs.length}</Button>
+        </div>
+      )}
+    </Tile>
+  )
+}
+
+function RunRow({ r }) {
+  const at = parseRunId(r.run_id)
+  return (
+    <tr>
+      <td>
+        <span className="t-body">{at ? when.format(at) : r.run_id}</span>
+      </td>
+      <td>
+        {r.pass ? (
+          <SignalChip signal="use" icon="decision">pass</SignalChip>
+        ) : (
+          <SignalChip signal="fail" icon="close">fail</SignalChip>
+        )}
+      </td>
+      <td className={`t-mono ${styles.num}`}>{pct(r.quick_p1_avg)}</td>
+      <td className={`t-mono ${styles.num}`}>{pct(r.non_fact_p1)}</td>
+      <td className={`t-mono ${styles.num}`}>{pct(r.mcp_p1)}</td>
+      <td className="t-mono">
+        <Gap v={r.mcp_gap} compact />
+      </td>
+    </tr>
+  )
+}
+
+function NoRuns() {
+  return (
+    <div className={styles.page}>
+      <Tile icon="eval" title="No eval runs yet" sub="Run the suite to measure retrieval quality">
+        <div className={styles.empty}>
+          <p className={`t-body ${styles.secondary}`}>Results appear here after the first run, newest first.</p>
+          <code className="t-mono">python3 brain/tools/eval_suite.py</code>
+        </div>
+      </Tile>
+    </div>
+  )
+}
+
+function LoadError({ message, onRetry }) {
+  return (
+    <div className={styles.page}>
+      <div className={`t-small ${styles.error}`} role="alert">
+        <span>Couldn't load eval runs ({message}).</span>
+        <Button onClick={onRetry}>Retry</Button>
+      </div>
     </div>
   )
 }
