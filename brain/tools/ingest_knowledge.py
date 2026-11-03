@@ -6,7 +6,7 @@ chunk as ``memory_type=knowledge`` with provenance:
 
   - ``file_path``     source path
   - ``title``         doc stem + section
-  - ``derived_from``  ``corpus:<doc_id>:c<ordinal>:sha:<hash>`` — parent doc id,
+  - ``extracted_by``  ``corpus:<doc_id>:c<ordinal>:sha:<hash>`` — parent doc id,
                       chunk ordinal (for future sibling expansion), content hash
 
 Idempotent by content hash: re-running on an unchanged file adds zero rows;
@@ -77,11 +77,11 @@ def provenance(doc_id: str, ordinal: int, chunk_sha: str) -> str:
     return f"corpus:{doc_id}:c{ordinal}:sha:{chunk_sha}"
 
 
-def sha_of_provenance(derived_from: str | None) -> str | None:
-    """Extract the content hash back out of a derived_from string."""
-    if not derived_from or ":sha:" not in derived_from:
+def sha_of_provenance(extracted_by: str | None) -> str | None:
+    """Extract the content hash back out of an extracted_by string."""
+    if not extracted_by or ":sha:" not in extracted_by:
         return None
-    return derived_from.rsplit(":sha:", 1)[1] or None
+    return extracted_by.rsplit(":sha:", 1)[1] or None
 
 
 def build_chunks(text: str, stem: str) -> list[tuple[str, str, str]]:
@@ -99,14 +99,14 @@ def build_chunks(text: str, stem: str) -> list[tuple[str, str, str]]:
 
 
 def existing_chunks(file_path: str) -> list[tuple[str, str | None]]:
-    """[(id, derived_from)] of live knowledge rows for this file.
+    """[(id, extracted_by)] of live knowledge rows for this file.
 
     The ``type`` column stores the serde JSON encoding — quotes included.
     """
     conn = sqlite3.connect(_db_path(), timeout=30)
     try:
         rows = conn.execute(
-            """SELECT id, derived_from FROM memories
+            """SELECT id, extracted_by FROM memories
                WHERE type = '"knowledge"' AND file_path = ?
                  AND superseded_by IS NULL""",
             (file_path,),
@@ -172,7 +172,7 @@ def ingest_file(
             source=source,
             file_path=file_path,
             title=title,
-            derived_from=provenance(doc_id, ordinal, chunk_sha),
+            extracted_by=provenance(doc_id, ordinal, chunk_sha),
             auto_entities=entities,
         )
         saved += 1

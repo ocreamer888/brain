@@ -56,7 +56,7 @@ class FactDraft:
     event_time: str | None
     entities: list[str]
     fact_type: str   # "decision"|"error_fix"|"preference"|"named_entity"|"outcome"
-    derived_from: str = field(default="")  # set by extract_facts; passed through to curator
+    extracted_by: str = field(default="")  # set by extract_facts; passed through to curator
 
 
 def _call_llm(prompt: str) -> str:
@@ -168,8 +168,8 @@ def extract_facts(
     facts = _parse_facts(raw, max_facts)
     facts = _dedup_within_batch(facts)
 
-    derived_from = f"ollama/{OLLAMA_SUMMARIZE_MODEL}/{prompt_version}"
+    extracted_by = f"ollama/{OLLAMA_SUMMARIZE_MODEL}/{prompt_version}"
     for f in facts:
-        f.derived_from = derived_from
+        f.extracted_by = extracted_by
 
     return facts

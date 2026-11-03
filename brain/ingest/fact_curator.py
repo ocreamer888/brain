@@ -187,7 +187,7 @@ def _save_fact(
         parent_id=parent_id,
         event_time=effective_event_time,
         salience=draft.salience,
-        derived_from=draft.derived_from or None,
+        extracted_by=draft.extracted_by or None,
         entities=draft.entities or None,
         auto_entities=False,
     )
@@ -329,7 +329,7 @@ def _curate_one(
             event_time=draft.event_time,
             entities=draft.entities,
             fact_type=draft.fact_type,
-            derived_from=draft.derived_from,
+            extracted_by=draft.extracted_by,
         )
         new_id = _save_fact(merged, project, parent_id, session_id, source_event_time)
         _mark_superseded(old_id, new_id)

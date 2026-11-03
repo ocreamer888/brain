@@ -363,11 +363,14 @@ def save_memory_tool(
     memory_type: str = "conversation",
     tags: str = "",
     project: str = "",
-    source: str = "claude_code_session",
+    source: str = "",
     title: str = "",
 ) -> str:
     from brain.ingest.payloads import with_ingest_tag
 
+    # Caller-supplied source wins; else the host env identifies itself (BRAIN_MCP_SOURCE,
+    # set by Hermes's mcp_servers.brain.env); else the historical default for Cursor/Claude Code.
+    source = source.strip() or _os.environ.get("BRAIN_MCP_SOURCE", "").strip() or "claude_code_session"
     memory_type = _normalize_memory_type(memory_type)
     tag_list = with_ingest_tag([t.strip() for t in tags.split(",") if t.strip()])
     tit = title.strip() or None

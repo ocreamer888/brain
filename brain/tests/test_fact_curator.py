@@ -63,7 +63,7 @@ def _draft(content: str, salience: float = 0.8, fact_type: str = "decision") -> 
     return FactDraft(
         content=content, salience=salience,
         event_time=None, entities=[], fact_type=fact_type,
-        derived_from="openrouter/anthropic/claude-sonnet-4-5/v1",
+        extracted_by="openrouter/anthropic/claude-sonnet-4-5/v1",
     )
 
 
@@ -416,7 +416,7 @@ def test_save_fact_uses_source_event_time_when_llm_null(monkeypatch):
     from brain.ingest.fact_extractor import FactDraft
     from brain.ingest.fact_curator import _save_fact
     draft = FactDraft(content="test fact", salience=0.8, event_time=None,
-                      entities=[], fact_type="decision", derived_from="v1")
+                      entities=[], fact_type="decision", extracted_by="v1")
     _save_fact(draft, project="test", parent_id=None, session_id=None,
                source_event_time="2025-07-01T00:00:00+00:00")
     assert saved.get("event_time") == "2025-07-01T00:00:00+00:00"
@@ -433,7 +433,7 @@ def test_save_fact_llm_event_time_wins(monkeypatch):
     from brain.ingest.fact_extractor import FactDraft
     from brain.ingest.fact_curator import _save_fact
     draft = FactDraft(content="test fact", salience=0.8, event_time="2024-03-15T00:00:00+00:00",
-                      entities=[], fact_type="decision", derived_from="v1")
+                      entities=[], fact_type="decision", extracted_by="v1")
     _save_fact(draft, project="test", parent_id=None, session_id=None,
                source_event_time="2025-07-01T00:00:00+00:00")
     assert saved.get("event_time") == "2024-03-15T00:00:00+00:00"

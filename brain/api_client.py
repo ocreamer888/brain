@@ -244,7 +244,7 @@ def save_memory(
     parent_id: str | None = None,
     event_time: str | None = None,
     salience: float | None = None,
-    derived_from: str | None = None,
+    extracted_by: str | None = None,
     entities: list[str] | None = None,
     auto_entities: bool = True,
 ) -> str:
@@ -270,8 +270,8 @@ def save_memory(
         payload["event_time"] = event_time
     if salience is not None:
         payload["salience"] = salience
-    if derived_from is not None:
-        payload["derived_from"] = derived_from
+    if extracted_by is not None:
+        payload["extracted_by"] = extracted_by
     resp = _request("POST", "/save", payload)
     mem_id = resp.get("id", "")
     _link_entities_after_save(

@@ -35,6 +35,11 @@ SQL_PATH = Path(
 # so Python-extracted facts share the same vector space as API-saved memories.
 EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+# qwen3-coder:30b is deliberately chosen, not a placeholder: Brain's Ollama
+# calls (summarize/fact-extract/curator/entity-extract) don't send
+# think:false, and fact_extractor.py rejects reasoning models because they
+# leave message.content empty. ornith:35b is a thinking/agentic model and
+# is not a safe substitute here -- see brain memory 5d5ed144.
 OLLAMA_SUMMARIZE_MODEL = os.environ.get("OLLAMA_SUMMARIZE_MODEL", "qwen3-coder:30b")
 
 

@@ -49,7 +49,7 @@ def test_first_ingest_saves_all_chunks(tmp_path):
     kw = save.call_args.kwargs
     assert kw["memory_type"] == "knowledge"
     assert kw["file_path"] == str(f)
-    assert kw["derived_from"].startswith("corpus:")
+    assert kw["extracted_by"].startswith("corpus:")
     assert "corpus:manuals" in kw["tags"] and "brain/ingest" in kw["tags"]
 
 

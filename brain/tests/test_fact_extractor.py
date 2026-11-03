@@ -210,7 +210,7 @@ def test_dedup_multi_topic_all_survive() -> None:
 # extract_facts — end-to-end with mocked LLM
 # ---------------------------------------------------------------------------
 
-def test_extract_facts_sets_derived_from(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_extract_facts_sets_extracted_by(monkeypatch: pytest.MonkeyPatch) -> None:
     fixture = load_fixture("decision")
     mock_response = json.dumps({"facts": fixture["facts"]})
     monkeypatch.setattr("brain.ingest.fact_extractor._call_llm", lambda *a, **kw: mock_response)
@@ -223,8 +223,8 @@ def test_extract_facts_sets_derived_from(monkeypatch: pytest.MonkeyPatch) -> Non
     )
     assert len(facts) > 0
     for f in facts:
-        assert f.derived_from, "derived_from must be set"
-        assert f.derived_from.startswith("ollama/"), f"unexpected derived_from: {f.derived_from}"
+        assert f.extracted_by, "extracted_by must be set"
+        assert f.extracted_by.startswith("ollama/"), f"unexpected extracted_by: {f.extracted_by}"
 
 
 def test_extract_facts_returns_empty_on_empty_llm_response(monkeypatch: pytest.MonkeyPatch) -> None:
