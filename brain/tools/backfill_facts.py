@@ -16,8 +16,16 @@ Common flags:
   --dry-run          Print what would happen, skip saves
   --batch-id ID      Reuse an existing batch ID (retries)
 
-Rollback a batch:
-  python3 brain/tools/retrieval_eval_kfold.py --rollback-batch <batch_id>
+Regression gate (G5, 2026-11-03): the four bulk modes (--all/--from-db/
+--from-perplexity/--from-cursor-db) automatically measure recall on the
+trusted gold set (brain/eval/gold_mined.jsonl) before and after the run,
+and auto-rollback the batch if recall drops more than 0.05 -- see
+regression_gate()/the comment block above main(). Skipped on --dry-run or
+--limit <= 20 (a canary shouldn't pay for a full gold pass), and NOT
+applied to --file (small, frequent, session_end-hook-triggered batches --
+the per-batch risk is low and a full eval pass per session is the wrong
+cost). To roll back a batch manually instead (e.g. after noticing a problem
+later): rollback_batch(db_path, batch_id) in brain/tools/retrieval_eval_kfold.py.
 """
 from __future__ import annotations
 
@@ -27,9 +35,12 @@ import os
 import sqlite3
 import sys
 import uuid
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT))
 
 from brain.ingest.fact_extractor import extract_facts
 from brain.ingest.fact_curator import curate_facts
@@ -425,11 +436,7 @@ def run_from_db(
     dry_run: bool,
     batch_id: str,
 ) -> None:
-    db_path = os.environ.get("BRAIN_DB_PATH", str(Path.home() / ".brain" / "brain.db"))
-    # Prefer the Rust DB
-    rust_db = Path(__file__).resolve().parents[1] / "rust" / "brain.db"
-    if rust_db.exists():
-        db_path = str(rust_db)
+    db_path = str(_resolve_db_path())
 
     done_ids = load_checkpoint(CHECKPOINT_DB)
 
@@ -485,6 +492,133 @@ def run_from_db(
 # CLI
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# G5 regression gate (bulk modes only -- not --file, see module docstring's
+# "Rollback a batch" note and docs/architecture/cognitive-architecture-spec.md
+# section 3). The --file path runs via the session_end hook on small,
+# frequent batches; a full gold-set pass per session is the wrong cost and
+# the per-session risk is low. Bulk runs (--all/--from-db/--from-perplexity/
+# --from-cursor-db) are deliberate, infrequent, and carry real regression
+# risk, so they get an automatic before/after check instead of the
+# previously-manual (and in practice never-run) retrieval_eval_kfold.py
+# --rollback-batch step.
+# ---------------------------------------------------------------------------
+
+GATE_GOLD_PATH = _REPO_ROOT / "brain" / "eval" / "gold_mined.jsonl"
+GATE_MIN_LIMIT = 20  # a canary-sized run shouldn't pay for a full gold pass
+GATE_REGRESSION_TOLERANCE = 0.05  # matches the existing --rollback-baseline convention
+
+
+def _resolve_db_path() -> Path:
+    db_path = os.environ.get("BRAIN_DB_PATH", str(Path.home() / ".brain" / "brain.db"))
+    rust_db = Path(__file__).resolve().parents[1] / "rust" / "brain.db"
+    if rust_db.exists():
+        db_path = str(rust_db)
+    return Path(db_path)
+
+
+def _measure_recall(gold_path: Path = GATE_GOLD_PATH) -> float | None:
+    """Trusted-gold-set recall@k through the live production /search.
+
+    Deliberately NOT retrieval_eval_kfold's own eval, which scores each
+    memory's title against itself -- the 2026-10-27 audit already found
+    that self-match structurally can't detect a real regression. gold_mined
+    .jsonl is mined from real usage (brain/tools/mine_eval_queries.py) and
+    replayed through the real production ranker (retrieval_eval.py).
+    Returns None if the gold set doesn't exist -- the gate no-ops rather
+    than block ingestion on a missing file.
+    """
+    if not gold_path.exists():
+        return None
+    from brain.tools.retrieval_eval import run_eval
+    from brain.api_client import search as api_search
+
+    def search_fn(query: str, n: int, project: str | None = None, memory_type: str | None = None):
+        return api_search(query=query, n=n, project=project, memory_type=memory_type)
+
+    report = run_eval(gold_path, k=10, search_fn=search_fn)
+    return report["mean_recall"]
+
+
+def _gate_start(batch_id: str, project: str | None) -> float | None:
+    """Capture p1_before once, at the true start of a fresh bulk run, and
+    persist it to backfill_batches so a --batch-id retry can reuse it
+    instead of remeasuring against a corpus the batch has already changed."""
+    recall = _measure_recall()
+    if recall is None:
+        print("[backfill/gate] no gold set found -- regression gate skipped", file=sys.stderr)
+        return None
+    conn = sqlite3.connect(str(_resolve_db_path()), timeout=30)
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO backfill_batches (batch_id, project, started_at, p1_before) "
+            "VALUES (?, ?, ?, ?)",
+            (batch_id, project or "general", datetime.now(timezone.utc).isoformat(), recall),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    print(f"[backfill/gate] batch={batch_id} p1_before={recall:.4f}", file=sys.stderr)
+    return recall
+
+
+def _gate_load_p1_before(batch_id: str) -> float | None:
+    conn = sqlite3.connect(str(_resolve_db_path()), timeout=30)
+    try:
+        row = conn.execute(
+            "SELECT p1_before FROM backfill_batches WHERE batch_id = ?", (batch_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None or row[0] is None:
+        print(f"[backfill/gate] no stored p1_before for batch={batch_id} -- gate skipped on resume", file=sys.stderr)
+        return None
+    return row[0]
+
+
+def _gate_finish(batch_id: str, p1_before: float) -> None:
+    recall_after = _measure_recall()
+    if recall_after is None:
+        return
+    threshold = p1_before - GATE_REGRESSION_TOLERANCE
+    db_path = _resolve_db_path()
+    print(
+        f"[backfill/gate] batch={batch_id} p1_before={p1_before:.4f} "
+        f"p1_after={recall_after:.4f} threshold={threshold:.4f}",
+        file=sys.stderr,
+    )
+    if recall_after < threshold:
+        print(f"[backfill/gate] TRIGGERED -- rolling back batch {batch_id!r}", file=sys.stderr)
+        from brain.tools.retrieval_eval_kfold import rollback_batch
+        n = rollback_batch(db_path, batch_id)
+        print(f"[backfill/gate] ROLLED BACK: {n} facts deleted", file=sys.stderr)
+        return
+    conn = sqlite3.connect(str(db_path), timeout=30)
+    try:
+        conn.execute(
+            "UPDATE backfill_batches SET finished_at = ?, p1_after = ? WHERE batch_id = ?",
+            (datetime.now(timezone.utc).isoformat(), recall_after, batch_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    print("[backfill/gate] OK -- recall within acceptable range, batch retained", file=sys.stderr)
+
+
+@contextmanager
+def regression_gate(batch_id: str, project: str | None, dry_run: bool, limit: int | None, is_retry: bool):
+    """Wraps a bulk backfill run with an automatic before/after regression
+    check, auto-rolling back the batch if recall drops more than
+    GATE_REGRESSION_TOLERANCE. No-ops on --dry-run or a canary-sized --limit."""
+    gated = not dry_run and not (limit is not None and limit <= GATE_MIN_LIMIT)
+    p1_before = None
+    if gated:
+        p1_before = _gate_load_p1_before(batch_id) if is_retry else _gate_start(batch_id, project)
+    yield
+    if gated and p1_before is not None:
+        _gate_finish(batch_id, p1_before)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--file", type=Path, help="Single session JSON (session_end hook)")
@@ -502,28 +636,35 @@ def main() -> int:
     args = p.parse_args()
 
     batch_id = args.batch_id or str(uuid.uuid4())
+    is_retry = bool(args.batch_id)
 
     if args.file:
         if not args.file.exists():
             print(f"error: {args.file} not found", file=sys.stderr)
             return 2
+        # Not gated: small, frequent, session_end-hook-triggered batches --
+        # see the regression_gate docstring for why.
         run_single(args.file, batch_id, args.dry_run)
         return 0
 
     if args.all:
-        run_all(args.project, args.limit, args.dry_run, batch_id)
+        with regression_gate(batch_id, args.project, args.dry_run, args.limit, is_retry):
+            run_all(args.project, args.limit, args.dry_run, batch_id)
         return 0
 
     if args.from_perplexity:
-        run_perplexity(args.limit, args.dry_run, batch_id)
+        with regression_gate(batch_id, args.project, args.dry_run, args.limit, is_retry):
+            run_perplexity(args.limit, args.dry_run, batch_id)
         return 0
 
     if args.from_db:
-        run_from_db(args.source, args.mem_type, args.project, args.limit, args.dry_run, batch_id)
+        with regression_gate(batch_id, args.project, args.dry_run, args.limit, is_retry):
+            run_from_db(args.source, args.mem_type, args.project, args.limit, args.dry_run, batch_id)
         return 0
 
     if args.from_cursor_db:
-        run_from_cursor_db(args.cursor_db, args.limit, args.dry_run, batch_id)
+        with regression_gate(batch_id, args.project, args.dry_run, args.limit, is_retry):
+            run_from_cursor_db(args.cursor_db, args.limit, args.dry_run, batch_id)
         return 0
 
     p.print_help()

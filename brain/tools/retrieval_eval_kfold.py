@@ -43,9 +43,30 @@ MIN_QUERY_CHARS = 12  # too-short queries are noise
 def rollback_batch(db_path: Path, batch_id: str) -> int:
     """Hard-rollback all facts inserted by a backfill batch.
 
-    Mirrors store.rs rollback_batch: deletes facts, clears superseded_by on
-    any memories they superseded, and marks the batch row as rolled_back=1.
+    Clears superseded_by on any memories the batch's facts had hidden (a
+    metadata-only SQLite write -- Brain::search reads superseded_by live
+    per-query, see brain.rs get_memory, so this takes effect immediately,
+    no restart needed), then deletes the facts themselves through the live
+    POST /delete API rather than raw SQLite.
+
+    This distinction matters: brain_api's vector index is in-process and
+    rebuilt from SQLite only at startup (brain.rs delete_memories evicts
+    from both store AND the live index.remove(id); a raw `DELETE FROM
+    memories` only touches SQLite). A raw-SQL delete would leave the
+    running API still serving the "rolled back" facts in search results
+    until a restart -- a rollback that looks successful but isn't live.
+
     Returns the number of facts deleted.
+
+    Not a single atomic transaction -- the SQLite write and the live API
+    delete can't share one. If the API call fails partway (brain_api down,
+    5xx), this is safe to simply call again with the same batch_id: the
+    fact_ids are re-read fresh from curation_events (unaffected by a partial
+    failure), and re-clearing an already-cleared superseded_by is a no-op.
+    rolled_back/finished_at are only set after the delete succeeds, so a
+    batch stuck with rolled_back=0 after a raised exception is the signal
+    that a retry (not a fresh rollback_batch call on a different batch) is
+    needed.
     """
     conn = sqlite3.connect(str(db_path), timeout=30)
     try:
@@ -64,15 +85,33 @@ def rollback_batch(db_path: Path, batch_id: str) -> int:
                 "UPDATE memories SET superseded_by = NULL WHERE superseded_by = ?",
                 (fact_id,),
             )
-            conn.execute("DELETE FROM memories WHERE id = ?", (fact_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    from brain.api_client import delete_memories, BrainApiError
+    try:
+        deleted = delete_memories(fact_ids)
+    except BrainApiError as e:
+        print(
+            f"[rollback_batch] batch={batch_id!r}: superseded_by cleared for "
+            f"{len(fact_ids)} fact(s), but the live delete failed ({e}). "
+            f"backfill_batches.rolled_back is still 0 -- call rollback_batch("
+            f"{batch_id!r}) again once brain_api is reachable to finish the rollback.",
+            file=sys.stderr,
+        )
+        raise
+
+    conn = sqlite3.connect(str(db_path), timeout=30)
+    try:
         conn.execute(
             "UPDATE backfill_batches SET rolled_back = 1, finished_at = ? WHERE batch_id = ?",
             (datetime.now(timezone.utc).isoformat(), batch_id),
         )
         conn.commit()
-        return len(fact_ids)
     finally:
         conn.close()
+    return deleted
 
 
 def load_corpus(
@@ -96,7 +135,7 @@ def load_corpus(
     conn = sqlite3.connect(str(db_path))
     rows = conn.execute(
         f"""
-        SELECT id, type, project, title, content, embedding
+        SELECT id, type, project, title, content, embedding, salience
         FROM memories
         WHERE {' AND '.join(clauses)}
         """
@@ -105,7 +144,7 @@ def load_corpus(
 
     metas: list[dict] = []
     embeddings: list[np.ndarray] = []
-    for mid, mtype, project, title, content, emb_blob in rows:
+    for mid, mtype, project, title, content, emb_blob, salience in rows:
         emb = np.frombuffer(emb_blob, dtype="<f4")
         if emb.shape[0] != EMBEDDING_DIMS:
             continue
@@ -115,6 +154,7 @@ def load_corpus(
             "project": project or "general",
             "title": (title or "").strip(),
             "content": content or "",
+            "salience": 0.5 if salience is None else float(salience),
         })
         embeddings.append(emb)
     matrix = np.vstack(embeddings).astype(np.float32)
@@ -122,6 +162,27 @@ def load_corpus(
     norms[norms < 1e-10] = 1.0
     matrix /= norms
     return metas, matrix
+
+
+# Mirrors brain.rs:437's live salience_w formula exactly. This is a THIRD
+# independent copy (brain.rs is the source of truth; brain/tools/corroboration
+# .py's trust_w() deliberately reuses the same shape for a different metric,
+# documented there as intentional, not a copy of this one). Python and Rust
+# can't share a literal constant, so there's no way to make this auto-sync --
+# test_salience_weights_matches_documented_production_formula below locks in
+# the exact values so an accidental edit here (not a real brain.rs retune) is
+# caught immediately, and a real brain.rs retune is a visible, deliberate
+# two-sided edit instead of a silent eval/production drift.
+SALIENCE_BASE = 1.0
+SALIENCE_BETA = 0.3
+SALIENCE_CLAMP = (0.85, 1.15)
+
+
+def salience_weights(metas: list[dict]) -> np.ndarray:
+    """Production salience_w (brain.rs:437): neutral=1.0 at salience=0.5,
+    clamped to [0.85, 1.15]. Document-level, query-independent."""
+    sal = np.array([m["salience"] for m in metas], dtype=np.float32)
+    return np.clip(SALIENCE_BASE + SALIENCE_BETA * (sal - 0.5), *SALIENCE_CLAMP)
 
 
 def apply_mean_centering(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -228,6 +289,7 @@ def evaluate(
     fusion: str = "cosine",
     alpha: float = 0.7,
     scoped_project: bool = False,
+    salience_w: np.ndarray | None = None,
 ) -> dict:
     queries: list[str] = []
     valid_idxs: list[int] = []
@@ -287,6 +349,11 @@ def evaluate(
             0.0,
         ).astype(np.float32)
         score_matrix = alpha * cos_norm + (1.0 - alpha) * bm25_norm
+
+    if salience_w is not None:
+        # Document-level multiplier (brain.rs:437), applied on top of whatever
+        # fusion scoring is active — matches how production composes final_score.
+        score_matrix = (score_matrix if score_matrix is not None else sims) * salience_w[np.newaxis, :]
 
     # Optional project-scoping: only same-project memories compete with the held-out.
     # Diagnostic ceiling test for cross-project leakage. Skips queries where the
@@ -567,6 +634,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Apply T1 mean-centering to corpus embeddings (matches production brain.rs behavior)",
     )
     parser.add_argument(
+        "--salience",
+        action="store_true",
+        help="G0: apply production salience_w (brain.rs:437) on top of the fusion score. "
+             "Omit for the neutral baseline; compare both for the live-vs-neutral A/B.",
+    )
+    parser.add_argument(
         "--report",
         type=Path,
         default=_REPO_ROOT / "brain" / "eval" / "kfold_report.json",
@@ -632,6 +705,10 @@ def main(argv: list[str] | None = None) -> int:
         matrix, corpus_mean = apply_mean_centering(matrix)
         print("  applied T1 mean-centering", file=sys.stderr)
 
+    salience_arr = salience_weights(metas) if args.salience else None
+    if args.salience:
+        print("  [G0] applying live salience_w on top of fusion score", file=sys.stderr)
+
     held_out = stratified_sample(metas, args.fraction, args.seed, args.full)
     if args.sample is not None and args.sample < len(held_out):
         rng = random.Random(args.seed)
@@ -691,6 +768,7 @@ def main(argv: list[str] | None = None) -> int:
                 fusion="alpha",
                 alpha=a,
                 scoped_project=args.scoped_project,
+                salience_w=salience_arr,
             )
             sweep[f"{a:.3f}"] = rep
             p1 = rep["overall"]["precision@1"]
@@ -720,10 +798,14 @@ def main(argv: list[str] | None = None) -> int:
             fusion=fusion,
             alpha=args.alpha,
             scoped_project=args.scoped_project,
+            salience_w=salience_arr,
         )
     if "error" in report:
         print(f"FAIL: {report['error']}", file=sys.stderr)
         return 2
+
+    if not args.alpha_sweep:
+        report["salience_applied"] = bool(args.salience)
 
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2), encoding="utf-8")

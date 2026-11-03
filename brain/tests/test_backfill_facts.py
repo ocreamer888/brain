@@ -307,3 +307,179 @@ def test_process_session_passes_ended_at(monkeypatch):
     }
     process_session(session, batch_id="b1")
     assert captured.get("source_event_time") == "2026-04-15T10:00:00+00:00"
+
+
+# ---------------------------------------------------------------------------
+# G5 regression gate (2026-11-03)
+# ---------------------------------------------------------------------------
+
+import sqlite3
+from brain.tools import backfill_facts
+
+
+def _make_gate_test_db(path: Path) -> None:
+    conn = sqlite3.connect(str(path))
+    conn.executescript(
+        """
+        CREATE TABLE backfill_batches (
+            batch_id TEXT PRIMARY KEY,
+            project TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            p1_before REAL,
+            p1_after REAL,
+            rolled_back INTEGER NOT NULL DEFAULT 0,
+            facts_inserted INTEGER NOT NULL DEFAULT 0,
+            facts_superseded INTEGER NOT NULL DEFAULT 0
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_gate_should_skip_on_dry_run(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(backfill_facts, "_measure_recall", lambda *a, **kw: calls.append("measured") or 0.9)
+    with backfill_facts.regression_gate("b1", "brain", dry_run=True, limit=None, is_retry=False):
+        pass
+    assert calls == []  # never measured -- dry-run is a no-op for the gate
+
+
+def test_gate_should_skip_on_small_limit(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(backfill_facts, "_measure_recall", lambda *a, **kw: calls.append("measured") or 0.9)
+    with backfill_facts.regression_gate("b1", "brain", dry_run=False, limit=5, is_retry=False):
+        pass
+    assert calls == []  # canary-sized run, below GATE_MIN_LIMIT
+
+
+def test_gate_runs_on_large_limit(monkeypatch, tmp_path):
+    db_path = tmp_path / "test_brain.db"
+    _make_gate_test_db(db_path)
+    monkeypatch.setattr(backfill_facts, "_resolve_db_path", lambda: db_path)
+    monkeypatch.setattr(backfill_facts, "_measure_recall", lambda *a, **kw: 0.9)
+
+    with backfill_facts.regression_gate("b1", "brain", dry_run=False, limit=500, is_retry=False):
+        pass
+
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute("SELECT p1_before, p1_after FROM backfill_batches WHERE batch_id='b1'").fetchone()
+    conn.close()
+    assert row == (0.9, 0.9)
+
+
+def test_gate_start_inserts_batch_row_with_p1_before(monkeypatch, tmp_path):
+    db_path = tmp_path / "test_brain.db"
+    _make_gate_test_db(db_path)
+    monkeypatch.setattr(backfill_facts, "_resolve_db_path", lambda: db_path)
+    monkeypatch.setattr(backfill_facts, "_measure_recall", lambda *a, **kw: 0.85)
+
+    recall = backfill_facts._gate_start("b1", "brain")
+
+    assert recall == 0.85
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute("SELECT project, p1_before FROM backfill_batches WHERE batch_id='b1'").fetchone()
+    conn.close()
+    assert row == ("brain", 0.85)
+
+
+def test_gate_start_returns_none_when_gold_set_missing(monkeypatch, tmp_path):
+    db_path = tmp_path / "test_brain.db"
+    _make_gate_test_db(db_path)
+    monkeypatch.setattr(backfill_facts, "_resolve_db_path", lambda: db_path)
+    monkeypatch.setattr(backfill_facts, "_measure_recall", lambda *a, **kw: None)
+
+    assert backfill_facts._gate_start("b1", "brain") is None
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute("SELECT * FROM backfill_batches WHERE batch_id='b1'").fetchone()
+    conn.close()
+    assert row is None  # no-op, not a half-written row
+
+
+def test_gate_load_p1_before_reads_stored_baseline(monkeypatch, tmp_path):
+    db_path = tmp_path / "test_brain.db"
+    _make_gate_test_db(db_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO backfill_batches (batch_id, project, started_at, p1_before) VALUES (?, ?, ?, ?)",
+        ("b1", "brain", "2026-11-03T00:00:00Z", 0.77),
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(backfill_facts, "_resolve_db_path", lambda: db_path)
+
+    assert backfill_facts._gate_load_p1_before("b1") == 0.77
+
+
+def test_gate_load_p1_before_missing_batch_returns_none(monkeypatch, tmp_path):
+    db_path = tmp_path / "test_brain.db"
+    _make_gate_test_db(db_path)
+    monkeypatch.setattr(backfill_facts, "_resolve_db_path", lambda: db_path)
+
+    assert backfill_facts._gate_load_p1_before("no-such-batch") is None
+
+
+def test_gate_finish_retains_batch_when_recall_holds(monkeypatch, tmp_path):
+    db_path = tmp_path / "test_brain.db"
+    _make_gate_test_db(db_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO backfill_batches (batch_id, project, started_at, p1_before) VALUES ('b1', 'brain', 't', 0.80)"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(backfill_facts, "_resolve_db_path", lambda: db_path)
+    monkeypatch.setattr(backfill_facts, "_measure_recall", lambda *a, **kw: 0.78)  # within 0.05 tolerance
+
+    rollback_mock = MagicMock()
+    monkeypatch.setattr("brain.tools.retrieval_eval_kfold.rollback_batch", rollback_mock)
+
+    backfill_facts._gate_finish("b1", 0.80)
+
+    rollback_mock.assert_not_called()
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute("SELECT p1_after, rolled_back FROM backfill_batches WHERE batch_id='b1'").fetchone()
+    conn.close()
+    assert row == (0.78, 0)
+
+
+def test_gate_finish_triggers_rollback_on_regression(monkeypatch, tmp_path):
+    db_path = tmp_path / "test_brain.db"
+    _make_gate_test_db(db_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO backfill_batches (batch_id, project, started_at, p1_before) VALUES ('b1', 'brain', 't', 0.80)"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(backfill_facts, "_resolve_db_path", lambda: db_path)
+    monkeypatch.setattr(backfill_facts, "_measure_recall", lambda *a, **kw: 0.70)  # drop of 0.10 > 0.05 tolerance
+
+    rollback_mock = MagicMock(return_value=3)
+    monkeypatch.setattr("brain.tools.retrieval_eval_kfold.rollback_batch", rollback_mock)
+
+    backfill_facts._gate_finish("b1", 0.80)
+
+    rollback_mock.assert_called_once_with(db_path, "b1")
+
+
+def test_regression_gate_reuses_baseline_on_retry(monkeypatch, tmp_path):
+    db_path = tmp_path / "test_brain.db"
+    _make_gate_test_db(db_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO backfill_batches (batch_id, project, started_at, p1_before) VALUES ('b1', 'brain', 't', 0.80)"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(backfill_facts, "_resolve_db_path", lambda: db_path)
+
+    start_mock = MagicMock()
+    monkeypatch.setattr(backfill_facts, "_gate_start", start_mock)
+    monkeypatch.setattr(backfill_facts, "_measure_recall", lambda *a, **kw: 0.80)
+
+    with backfill_facts.regression_gate("b1", "brain", dry_run=False, limit=None, is_retry=True):
+        pass
+
+    start_mock.assert_not_called()  # retry must reuse the stored baseline, not remeasure
