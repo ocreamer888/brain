@@ -1167,6 +1167,34 @@ impl MetadataStore {
     }
 }
 
+/// G7/G8 prep (cognitive-architecture-spec.md section 0, the G2 split):
+/// `superseded_by` is overloaded with three different meanings -- NULL
+/// (active), a real memory id (genuine supersession), or a `quarantine:*`/
+/// `hidden:*` sentinel string (not history, just a hidden/noise marker).
+/// Any future code that wants to walk supersede chains as layer links (G7's
+/// similar_to edges, G8's layer confidence) must resolve through this
+/// instead of reading the column raw, so a sentinel string -- or a
+/// now-dangling id whose target was later deleted -- never gets mistaken
+/// for a real link. Returns `Ok(None)` for anything that isn't a live,
+/// resolvable pointer to an existing row.
+pub fn resolved_supersedes(
+    conn: &Connection,
+    superseded_by: Option<&str>,
+) -> Result<Option<String>, BrainError> {
+    let Some(raw) = superseded_by else { return Ok(None) };
+    if raw.is_empty() || raw.starts_with("quarantine:") || raw.starts_with("hidden:") {
+        return Ok(None);
+    }
+    let exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM memories WHERE id = ?1)",
+            params![raw],
+            |row| row.get(0),
+        )
+        .map_err(|e| BrainError::Database(e.to_string()))?;
+    Ok(if exists { Some(raw.to_string()) } else { None })
+}
+
 /// Connection-parameterized so a pooled read-only connection can reuse the
 /// exact same query (see read_pool.rs) instead of needing the Arc<Mutex<Brain>>
 /// lock just to read one row. MetadataStore::get_memory is a thin wrapper
@@ -1412,6 +1440,44 @@ mod tests {
         assert_eq!(fetched.content, "hello world");
         assert_eq!(fetched.metadata.project, "test");
         assert_eq!(fetched.metadata.memory_type, MemoryType::Solution);
+    }
+
+    #[test]
+    fn resolved_supersedes_none_for_absent_or_sentinel_or_dangling() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        assert_eq!(resolved_supersedes(store.conn(), None).unwrap(), None);
+        assert_eq!(resolved_supersedes(store.conn(), Some("")).unwrap(), None);
+        assert_eq!(
+            resolved_supersedes(store.conn(), Some("quarantine:path_fragment_project")).unwrap(),
+            None
+        );
+        assert_eq!(
+            resolved_supersedes(store.conn(), Some("hidden:no_traceable_project_2026-11-02")).unwrap(),
+            None
+        );
+        // Dangling: a UUID-shaped string that never resolves to a real row
+        // (its target was deleted after the pointer was set).
+        assert_eq!(
+            resolved_supersedes(store.conn(), Some("00000000-0000-0000-0000-000000000000")).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn resolved_supersedes_some_for_a_real_existing_row() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        store
+            .upsert_memory(&Memory {
+                id: "real-target".into(),
+                content: "the actual successor".into(),
+                metadata: test_metadata(),
+                embedding: None,
+            })
+            .unwrap();
+        assert_eq!(
+            resolved_supersedes(store.conn(), Some("real-target")).unwrap(),
+            Some("real-target".to_string())
+        );
     }
 
     #[test]
