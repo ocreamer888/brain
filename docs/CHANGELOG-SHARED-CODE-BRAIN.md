@@ -439,6 +439,19 @@ cfb55c6  2026-07-27  docs: add brain instances multi-DB workspace design
 
 ---
 
+### 3.23 `205dbfc` — salience_pinned: gate salience_w on deliberate human pins, G0 (2026-11-04)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` (schema change, deployed live) |
+| **Before** | The live `salience_w` formula (`brain.rs:437`) applied to every memory's `salience` column, which conflated two signals: the LLM extractor's one-time guess at save time (Phase 6 calibration found this anti-correlates with true quality — curator-`IGNORE`d facts average higher salience than `ADD`ed ones) and a human's deliberate "Promote" in Curate.jsx (`PATCH /memories/:id`, trustworthy, actively used — 19 live rows at exactly `salience=1.0`). The spec's G0 recommended an A/B before deciding, using `retrieval_eval_kfold.py` — the same circular self-matching eval §3.9 had already flagged and replaced. |
+| **After** | A/B run instead against the trustworthy usage-mined gold set (`gold_mined.jsonl` via `retrieval_eval.py`, extended with a new `--salience-neutral` flag and a request-scoped `SearchFilter.salience_neutral` override — default off, never affects real traffic). Results: recall@k is a ceiling either way (1.0 on this 20-query set) but `mean_mrr` is marginally better neutral (0.6634) than live (0.656), consistent with Phase 6's finding. Rather than a blind revert (losing the real Promote feature) or leaving the known-bad signal live, added `salience_pinned` (new column, default false, best-effort backfilled true for existing `salience=1.0` rows): `salience_w` now applies only when a memory is pinned; the >99% LLM-assigned majority is neutral. `PATCH /memories/:id` gained `salience_pinned` (defaults true when omitted — a PATCH is always deliberate today); Curate.jsx's Promote sends `true`, Undo sends `false` explicitly. |
+| **How** | `brain/rust/src/types.rs`, `brain/rust/src/brain.rs`, `brain/rust/src/store.rs`, `brain/rust/src/migrate.rs`, `brain/rust/src/bin/brain_api.rs`, `brain/api_client.py`, `brain/tools/retrieval_eval.py`, `brain/rust/ui/src/views/Curate.jsx`. |
+| **Why** | Closes gate **G0**. The real question the owner asked mid-implementation — "is the calibration wrong?" — led to separating the two conflated signals instead of patching the symptom. |
+| **Live deploy verification** | Took a fresh DB backup before restarting. Post-migration: 23,601 memories intact, 19 rows backfilled pinned, 0 `salience=1.0` rows left unpinned. One restart stalled ~6 minutes in the same macOS first-launch binary-verification step seen (and resolved on its own) twice earlier the same session; killed and let launchd relaunch, which came up clean in under 5s on retry — flagged to the owner rather than assumed benign given it ran long. `cargo test --lib`: 160 passed; `cargo test --bin brain_api`: 20 passed. |
+
+---
+
 ## 4. Uncommitted working-tree changes (as of 2026-07-28)
 
 Verified with `git status` / `git diff` at documentation time.
@@ -595,4 +608,4 @@ When landing further work:
 3. Move items from §5 → §3 when implementation merges.
 4. Do not delete old entries — append corrections with a dated note if a decision reverses.
 
-**Last verified against git:** 2026-07-28 (HEAD `6e75315` + WIP listed in §4) for §§1–3.8; 2026-11-04 (HEAD `84ae1fb` + WIP listed in §4's final entry) for §3.9 onward.
+**Last verified against git:** 2026-07-28 (HEAD `6e75315` + WIP listed in §4) for §§1–3.8; 2026-11-04 (HEAD `205dbfc` + WIP listed in §4's final entry) for §3.9 onward.
