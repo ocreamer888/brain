@@ -6,6 +6,16 @@ PKG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$PKG_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Load brain/.env (single source for MCP client → API URL/key).
+# Values in .env override Cursor mcp.json env for the same keys.
+ENV_FILE="${PKG_DIR}/.env"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 export BRAIN_BACKEND="${BRAIN_BACKEND:-api}"
 export BRAIN_API_KEY="${BRAIN_API_KEY:-local-dev-key}"
 export BRAIN_API_URL="${BRAIN_API_URL:-http://127.0.0.1:8787}"

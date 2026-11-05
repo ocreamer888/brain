@@ -1,8 +1,18 @@
 #!/bin/bash
-# Claude Code / Cursor hook launcher — this checkout → local brain_api.
+# Claude Code / Cursor hook launcher — Shared/Code brain clients.
+# Loads brain/.env so hooks hit the same API as MCP (e.g. Mac Studio).
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PKG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$PKG_DIR/.." && pwd)"
+
+ENV_FILE="${PKG_DIR}/.env"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
 
 export BRAIN_BACKEND="${BRAIN_BACKEND:-api}"
 export BRAIN_API_URL="${BRAIN_API_URL:-http://127.0.0.1:8787}"
