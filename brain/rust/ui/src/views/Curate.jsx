@@ -102,10 +102,21 @@ function useReview() {
   return {
     stateOf,
     promote: (row) =>
-      act(row, () => patchMemory(row.id, { salience: PROMOTED_SALIENCE }), { salience: PROMOTED_SALIENCE, prev: row.salience ?? 0.5, promotedNow: true }),
+      act(
+        row,
+        () => patchMemory(row.id, { salience: PROMOTED_SALIENCE, salience_pinned: true }),
+        { salience: PROMOTED_SALIENCE, prev: row.salience ?? 0.5, promotedNow: true },
+      ),
     undo: (row) => {
       const prev = byId[row.id]?.prev ?? 0.5
-      return act(row, () => patchMemory(row.id, { salience: prev }), { salience: prev, promotedNow: false })
+      // salience_pinned: false -- restoring the pre-promotion value is not a
+      // new deliberate pin (G0: PATCH defaults salience_pinned to true when
+      // omitted, which would be wrong here).
+      return act(
+        row,
+        () => patchMemory(row.id, { salience: prev, salience_pinned: false }),
+        { salience: prev, promotedNow: false },
+      )
     },
     reject: (row) =>
       act(row, () => sendFeedback({ event_type: 'rejected', memory_id: row.id, source: 'mcp' }), { rejected: true }),

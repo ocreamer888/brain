@@ -79,6 +79,7 @@ def search(
     project: str | None = None,
     alpha: float | None = None,
     graph_expand: bool = False,
+    salience_neutral: bool = False,
 ) -> list[dict]:
     payload: dict = {"query": query, "n": n, "graph_expand": graph_expand}
     if memory_type:
@@ -87,6 +88,11 @@ def search(
         payload["project"] = project
     if alpha is not None:
         payload["alpha"] = alpha
+    if salience_neutral:
+        # G0 (cognitive-architecture-spec.md section 0): eval-only escape
+        # hatch to A/B live vs. neutral salience_w. Default off; never
+        # changes ranking for real callers that don't pass this.
+        payload["salience_neutral"] = True
     return _request("POST", "/search", payload).get("results", [])
 
 

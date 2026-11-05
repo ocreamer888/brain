@@ -1,6 +1,14 @@
 {
   "runs": [
     {
+      "run_id": "2026-11-05-0313",
+      "pass": true,
+      "quick_p1_avg": 0.9983,
+      "non_fact_p1": 0.9983,
+      "mcp_p1": 0.1875,
+      "mcp_gap": 0.0699
+    },
+    {
       "run_id": "graph_expand_ab_20260812T073827Z",
       "pass": null,
       "quick_p1_avg": null,

@@ -151,6 +151,22 @@ impl MetadataStore {
         let _ = self.conn.execute_batch(
             "UPDATE memories SET extracted_by = derived_from WHERE derived_from IS NOT NULL AND extracted_by IS NULL;",
         );
+        // G0 (cognitive-architecture-spec.md section 0): `salience` conflates two
+        // signals -- the LLM extractor's one-time guess (empirically
+        // anti-correlated with true quality, Phase 6 calibration) and a human's
+        // deliberate PATCH /memories/:id promotion (Curate.jsx, trustworthy).
+        // salience_pinned distinguishes them; salience_w in brain.rs only applies
+        // when this is true. Best-effort backfill: a pre-existing salience of
+        // exactly 1.0 is the UI's PROMOTED_SALIENCE constant, so likely (not
+        // certainly -- no provenance was recorded before this column existed) a
+        // real promotion. Everything else defaults unpinned, matching the new
+        // evidence that the auto-score shouldn't affect ranking.
+        let _ = self
+            .conn
+            .execute_batch("ALTER TABLE memories ADD COLUMN salience_pinned INTEGER NOT NULL DEFAULT 0;");
+        let _ = self.conn.execute_batch(
+            "UPDATE memories SET salience_pinned = 1 WHERE salience = 1.0 AND salience_pinned = 0;",
+        );
         let _ = self.conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_memories_parent ON memories(parent_id) WHERE parent_id IS NOT NULL;",
         );
@@ -456,7 +472,7 @@ impl MetadataStore {
             .prepare(
                 "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                         file_path, thread_id, title, embedding,
-                        parent_id, event_time, salience, superseded_by, extracted_by
+                        parent_id, event_time, salience, superseded_by, extracted_by, salience_pinned
                  FROM memories WHERE timestamp < ?1 ORDER BY timestamp DESC LIMIT ?2",
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
@@ -477,7 +493,7 @@ impl MetadataStore {
             .prepare(
                 "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                         file_path, thread_id, title, embedding,
-                        parent_id, event_time, salience, superseded_by, extracted_by
+                        parent_id, event_time, salience, superseded_by, extracted_by, salience_pinned
                  FROM memories WHERE timestamp > ?1 ORDER BY timestamp ASC LIMIT ?2",
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
@@ -655,7 +671,7 @@ impl MetadataStore {
         let mut stmt = self.conn.prepare(
             "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                     file_path, thread_id, title, embedding,
-                    parent_id, event_time, salience, superseded_by, extracted_by
+                    parent_id, event_time, salience, superseded_by, extracted_by, salience_pinned
              FROM memories ORDER BY timestamp DESC",
         ).map_err(|e| BrainError::Database(e.to_string()))?;
 
@@ -738,7 +754,7 @@ impl MetadataStore {
         let mut stmt = self.conn.prepare(
             "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                     file_path, thread_id, title, embedding,
-                    parent_id, event_time, salience, superseded_by, extracted_by
+                    parent_id, event_time, salience, superseded_by, extracted_by, salience_pinned
              FROM memories
              WHERE parent_id = ?1 AND type = '\"fact\"' AND superseded_by IS NULL
              ORDER BY salience DESC, timestamp ASC",
@@ -762,11 +778,15 @@ impl MetadataStore {
         Ok(())
     }
 
-    pub fn update_salience(&self, id: &str, salience: f64) -> Result<bool, BrainError> {
+    /// `pinned`: see MemoryMetadata::salience_pinned's doc comment (G0). This
+    /// is the only write path that can set it true -- the general
+    /// `upsert_memory` path (LLM extraction via `/save`) never touches this
+    /// column, so a pin survives any future re-save of the same id.
+    pub fn update_salience(&self, id: &str, salience: f64, pinned: bool) -> Result<bool, BrainError> {
         let rows = self.conn
             .execute(
-                "UPDATE memories SET salience = ?1 WHERE id = ?2",
-                params![salience, id],
+                "UPDATE memories SET salience = ?1, salience_pinned = ?2 WHERE id = ?3",
+                params![salience, pinned, id],
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
         Ok(rows > 0)
@@ -1155,7 +1175,7 @@ pub fn get_memory_conn(conn: &Connection, id: &str) -> Result<Option<Memory>, Br
     let result = conn.query_row(
         "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
                 file_path, thread_id, title, embedding,
-                parent_id, event_time, salience, superseded_by, extracted_by
+                parent_id, event_time, salience, superseded_by, extracted_by, salience_pinned
          FROM memories WHERE id = ?1",
         params![id],
         |row| memory_from_row(row),
@@ -1259,6 +1279,7 @@ fn memory_from_row(row: &rusqlite::Row<'_>) -> Result<Memory, rusqlite::Error> {
     let salience: f64 = row.get::<_, Option<f64>>(15)?.unwrap_or(0.5);
     let superseded_by: Option<String> = row.get(16)?;
     let extracted_by: Option<String> = row.get(17)?;
+    let salience_pinned: bool = row.get::<_, Option<bool>>(18)?.unwrap_or(false);
 
     let memory_type: MemoryType = serde_json::from_str(&type_str).map_err(|e| {
         rusqlite::Error::FromSqlConversionFailure(
@@ -1308,6 +1329,7 @@ fn memory_from_row(row: &rusqlite::Row<'_>) -> Result<Memory, rusqlite::Error> {
             salience,
             superseded_by,
             extracted_by,
+            salience_pinned,
         },
         embedding: emb_bytes.map(|b| bytes_to_embedding(&b)),
     })
@@ -1363,6 +1385,7 @@ mod tests {
             parent_id: None,
             event_time: None,
             salience: 0.5,
+            salience_pinned: false,
             superseded_by: None,
             extracted_by: None,
         }
@@ -1746,6 +1769,7 @@ mod tests {
             parent_id: Some(parent_id.to_string()),
             event_time: None,
             salience: 0.8,
+            salience_pinned: false,
             superseded_by: None,
             extracted_by: Some("openrouter/claude-sonnet-4-5/v1".into()),
         }

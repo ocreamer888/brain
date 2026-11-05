@@ -126,6 +126,12 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("brain/eval/last_report.json"),
         help="Write JSON summary here",
     )
+    p.add_argument(
+        "--salience-neutral",
+        action="store_true",
+        help="G0: force salience_w=1.0 for this eval run only (vs. live brain.rs:437), "
+        "to A/B live vs. neutral salience on this gold set. Never affects real traffic.",
+    )
     args = p.parse_args(argv)
 
     gold_path = args.gold if args.gold.is_absolute() else _REPO_ROOT / args.gold
@@ -134,7 +140,13 @@ def main(argv: list[str] | None = None) -> int:
     def search_fn(
         query: str, n: int, project: str | None, memory_type: str | None
     ) -> list[dict[str, Any]]:
-        return api_search(query=query, n=n, project=project, memory_type=memory_type)
+        return api_search(
+            query=query,
+            n=n,
+            project=project,
+            memory_type=memory_type,
+            salience_neutral=args.salience_neutral,
+        )
 
     try:
         report = run_eval(gold_path, args.k, search_fn)
@@ -145,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 
+    report["salience_neutral"] = args.salience_neutral
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
 

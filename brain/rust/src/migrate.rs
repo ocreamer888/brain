@@ -151,6 +151,9 @@ fn parse_metadata(v: &Value) -> Result<MemoryMetadata, BrainError> {
         Some(Value::String(s)) => s.parse::<f64>().unwrap_or(0.5),
         _ => 0.5,
     };
+    // G0: absent on exports taken before this field existed; false is the
+    // correct default (never retroactively treat old data as pinned).
+    let salience_pinned = matches!(obj.get("salience_pinned"), Some(Value::Bool(true)));
     let event_time = if let Some(s) = get_string(obj.get("event_time")) {
         DateTime::parse_from_rfc3339(&s)
             .map(|dt| Some(dt.with_timezone(&Utc)))
@@ -175,6 +178,7 @@ fn parse_metadata(v: &Value) -> Result<MemoryMetadata, BrainError> {
         parent_id,
         event_time,
         salience,
+        salience_pinned,
         superseded_by,
         extracted_by,
     })

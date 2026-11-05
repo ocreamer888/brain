@@ -285,6 +285,9 @@ impl Brain {
                 parent_id: parent_id.map(String::from),
                 event_time,
                 salience: salience.unwrap_or(0.5),
+                // save_memory is the LLM-extraction/generic save path -- never
+                // sets salience_pinned (G0). Only PATCH /memories/:id does.
+                salience_pinned: false,
                 superseded_by: None,
                 extracted_by: extracted_by.map(String::from),
             },
@@ -508,10 +511,18 @@ pub fn rank_candidates(
             // T32: recency weight — half-life ~730 days, floor at 0.85 (never suppresses).
             // event_time used when available (Phase 7); falls back to ingest timestamp.
             let recency_w = 0.85 + 0.15 * 0.5_f32.powf(age_days / 730.0);
-            // Salience weight: LLM-assigned quality signal (0.0–1.0, default 0.5).
+            // Salience weight: only applies when a human deliberately pinned
+            // this memory (MemoryMetadata::salience_pinned's doc comment, G0)
+            // — the LLM extractor's auto-score was found to anti-correlate
+            // with true quality, so it's excluded from ranking by default.
             // salience=0.5 → 1.00 (neutral), salience=1.0 → 1.15 (boost), salience=0.0 → 0.85 (suppress).
             let sal = memory.metadata.salience as f32;
-            let salience_w = (1.0 + 0.3 * (sal - 0.5)).clamp(0.85, 1.15);
+            let request_forces_neutral = filter.map(|f| f.salience_neutral).unwrap_or(false);
+            let salience_w = if memory.metadata.salience_pinned && !request_forces_neutral {
+                (1.0 + 0.3 * (sal - 0.5)).clamp(0.85, 1.15)
+            } else {
+                1.0
+            };
 
             let distance = cos_candidates
                 .iter()
@@ -914,8 +925,8 @@ impl Brain {
     }
 
     /// Update the salience score of a single memory. Returns false if the ID is not found.
-    pub fn update_salience(&self, id: &str, salience: f64) -> Result<bool, BrainError> {
-        self.store.update_salience(id, salience)
+    pub fn update_salience(&self, id: &str, salience: f64, pinned: bool) -> Result<bool, BrainError> {
+        self.store.update_salience(id, salience, pinned)
     }
 
     /// Link a memory to named entities (upsert entity rows + `mentions` edges).
@@ -1810,6 +1821,7 @@ mod tests {
             parent_id: None,
             event_time: None,
             salience: 0.5,
+            salience_pinned: false,
             superseded_by: None,
             extracted_by: None,
         };
@@ -1955,5 +1967,33 @@ mod tests {
         for w in results.windows(2) {
             assert!(w[0].score >= w[1].score, "scores must be non-increasing");
         }
+    }
+
+    #[test]
+    fn salience_neutral_filter_ignores_live_salience_weight() {
+        let brain = test_brain();
+        let id = save(&brain, "unique needle content about parsers", MemoryType::Solution, "p");
+        // pinned=true: salience_w only applies to pinned rows (G0), so this
+        // must be pinned for the live arm to actually differ from neutral.
+        brain.update_salience(&id, 1.0, true).unwrap();
+
+        let live = brain.search("needle content parsers", 5, None).unwrap();
+        let live_score = live.iter().find(|r| r.id == id).unwrap().score;
+
+        let neutral_filter = SearchFilter { salience_neutral: true, ..SearchFilter::default() };
+        let neutral = brain.search("needle content parsers", 5, Some(neutral_filter)).unwrap();
+        let neutral_score = neutral.iter().find(|r| r.id == id).unwrap().score;
+
+        // salience=1.0 -> live salience_w=1.15 (brain.rs:437's formula); the
+        // neutral override forces salience_w=1.0 for this request only.
+        assert!(
+            live_score > neutral_score,
+            "live salience boost should raise the score above the neutral run"
+        );
+        let ratio = live_score / neutral_score;
+        assert!(
+            (ratio - 1.15).abs() < 0.01,
+            "ratio should equal salience_w's live value (1.15), got {ratio}"
+        );
     }
 }

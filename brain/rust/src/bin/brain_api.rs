@@ -277,6 +277,10 @@ struct SearchRequest {
     alpha: Option<f32>,
     #[serde(default)]
     graph_expand: bool,
+    /// G0 eval-only escape hatch — see SearchFilter::salience_neutral's doc
+    /// comment. Default off.
+    #[serde(default)]
+    salience_neutral: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -851,6 +855,7 @@ async fn search(
         exclude_superseded: req.exclude_superseded,
         alpha: req.alpha,
         graph_expand: req.graph_expand,
+        salience_neutral: req.salience_neutral,
         ..SearchFilter::default()
     };
 
@@ -1625,6 +1630,12 @@ async fn reflect(
 #[derive(Debug, Deserialize)]
 struct PatchMemoryRequest {
     salience: Option<f64>,
+    /// G0: defaults true when omitted -- a PATCH is always a deliberate human
+    /// action (only the UI's Promote/Undo flow calls this endpoint today), so
+    /// pre-existing callers that don't send this field keep their old
+    /// behavior. Undo-promote explicitly sends `false` to un-pin.
+    #[serde(default = "default_true")]
+    salience_pinned: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -1648,10 +1659,11 @@ async fn patch_memory(
     if !(0.0..=1.0).contains(&salience) {
         return Err(bad_request("salience must be 0.0–1.0"));
     }
+    let pinned = req.salience_pinned;
     let brain = state.brain.clone();
     let updated = tokio::task::spawn_blocking(move || -> Result<bool, String> {
         let brain = brain.lock().unwrap_or_else(|p| p.into_inner());
-        brain.update_salience(&id, salience).map_err(|e| e.to_string())
+        brain.update_salience(&id, salience, pinned).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| internal_err(format!("patch task join failed: {e}")))?
@@ -2375,6 +2387,93 @@ mod tests {
         let stats_after = app.oneshot(get_request("/stats")).await.unwrap();
         let stats_after_body = body_json(stats_after).await;
         assert_eq!(stats_after_body["save_count_this_session"], 1);
+    }
+
+    // G0 (cognitive-architecture-spec.md section 0): PATCH /memories/:id is
+    // the only write path that can set salience_pinned, and it's the only
+    // thing that makes salience_w affect ranking at all. Proves the default
+    // (omitted salience_pinned -> true, i.e. a PATCH is always deliberate)
+    // and the explicit un-pin path (Undo-promote) both land correctly.
+    #[tokio::test]
+    async fn patch_memory_salience_pinned_defaults_true_and_can_be_unset() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+
+        let save_res = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/save",
+                serde_json::json!({"content": "g0 pin test content", "memory_type": "fact"}),
+            ))
+            .await
+            .unwrap();
+        let save_body = body_json(save_res).await;
+        let id = save_body["id"].as_str().unwrap().to_string();
+
+        let patch_res = app
+            .clone()
+            .oneshot(json_request(
+                "PATCH",
+                &format!("/memories/{id}"),
+                serde_json::json!({"salience": 1.0}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(patch_res.status(), StatusCode::OK);
+
+        let search_res = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/search",
+                serde_json::json!({"query": "g0 pin test content", "n": 5}),
+            ))
+            .await
+            .unwrap();
+        let search_body = body_json(search_res).await;
+        let hit = search_body["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == id)
+            .expect("saved memory must be findable");
+        assert_eq!(
+            hit["metadata"]["salience_pinned"], true,
+            "omitting salience_pinned on PATCH must default to true"
+        );
+
+        let undo_res = app
+            .clone()
+            .oneshot(json_request(
+                "PATCH",
+                &format!("/memories/{id}"),
+                serde_json::json!({"salience": 0.5, "salience_pinned": false}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(undo_res.status(), StatusCode::OK);
+
+        let search_res2 = app
+            .oneshot(json_request(
+                "POST",
+                "/search",
+                serde_json::json!({"query": "g0 pin test content", "n": 5}),
+            ))
+            .await
+            .unwrap();
+        let search_body2 = body_json(search_res2).await;
+        let hit2 = search_body2["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == id)
+            .expect("saved memory must still be findable after undo");
+        assert_eq!(
+            hit2["metadata"]["salience_pinned"], false,
+            "explicit salience_pinned:false must un-pin"
+        );
     }
 
     #[tokio::test]

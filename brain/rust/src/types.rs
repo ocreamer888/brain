@@ -68,10 +68,20 @@ pub struct MemoryMetadata {
     #[serde(default)]
     pub event_time: Option<DateTime<Utc>>,
 
-    /// Extraction confidence from the fact extractor (0.0–1.0).
-    /// Stored but NOT included in retrieval scoring until Phase 6 calibration.
+    /// Extraction confidence from the fact extractor (0.0–1.0), OR a human's
+    /// manual override via `PATCH /memories/:id` (see `salience_pinned`).
+    /// Affects retrieval scoring (`brain.rs:437`'s `salience_w`) only when
+    /// `salience_pinned` is true (G0, cognitive-architecture-spec.md §0).
     #[serde(default = "default_salience")]
     pub salience: f64,
+
+    /// G0: true only when `salience` was set by a deliberate human action
+    /// (`PATCH /memories/:id`), never by the LLM extractor's `/save` call —
+    /// the extractor's auto-score was found to anti-correlate with true
+    /// quality (Phase 6 calibration), so it's excluded from ranking unless
+    /// pinned. Default false.
+    #[serde(default)]
+    pub salience_pinned: bool,
 
     /// ID of the fact that supersedes this one (set on UPDATE/MERGE by curator).
     /// Superseded facts stay in DB for audit; excluded from search by default.
@@ -127,6 +137,13 @@ pub struct SearchFilter {
     /// never crowd context-injection. An explicit `memory_type` filter (or
     /// `get_episode` by id) still reaches them. Default true.
     pub exclude_episodes_by_default: bool,
+    /// G0 (cognitive-architecture-spec.md §0): when true, treat salience_w as
+    /// 1.0 for this request only instead of the live brain.rs:437 formula.
+    /// Request-scoped and default-off so it never changes ranking for real
+    /// traffic — exists solely so the eval harness can A/B live vs. neutral
+    /// salience against the trustworthy gold set without a global ranking
+    /// change. Do not wire this to a public API default without a decision.
+    pub salience_neutral: bool,
 }
 
 impl Default for SearchFilter {
@@ -138,6 +155,7 @@ impl Default for SearchFilter {
             alpha: None,
             graph_expand: false,
             exclude_episodes_by_default: true,
+            salience_neutral: false,
         }
     }
 }
@@ -326,6 +344,7 @@ mod tests {
             parent_id: None,
             event_time: None,
             salience: 0.5,
+            salience_pinned: false,
             superseded_by: None,
             extracted_by: None,
         };
