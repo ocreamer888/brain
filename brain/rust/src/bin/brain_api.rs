@@ -20,12 +20,15 @@ use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 use brain::brain::Brain;
 use brain::config::{anthropic_api_key, brain_config_from_env, openrouter_api_key};
+use brain::index::VectorIndex;
 use brain::instances::{self, InstanceRegistry};
+use brain::read_pool::ReadPool;
 use brain::store::MetadataStore;
 use brain::embedder::{embedder_from_env, EmbedderBackend};
 use brain::summarizer::{AnthropicClient, OllamaClient, OpenRouterClient};
 use brain::{
-    BrainError, FeedbackEventType, FeedbackSource, Memory, MemorySource, MemoryType, SearchFilter,
+    apply_type_diversity_cap, rank_candidates, BrainError, FeedbackEventType, FeedbackSource,
+    Memory, MemorySource, MemoryType, SearchFilter,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -55,6 +58,53 @@ struct AppState {
     /// Set while an instance switch is in flight, so concurrent requests can
     /// be rejected instead of racing the Brain swap (Task 5).
     switching: Arc<AtomicBool>,
+    /// G6: handles for the lock-free read path (/search without graph_expand,
+    /// /stats), bypassing `brain` (and its Arc<Mutex<Brain>>) entirely.
+    /// Profiling found the single lock genuinely serializes every request --
+    /// even /stats, which barely touches SQLite -- down to a flat ~60 req/s
+    /// ceiling regardless of concurrency. Rebuilt wholesale on every
+    /// instance switch, at the same moment `brain` itself is swapped (see
+    /// switch_instance), so this can never point at a stale instance.
+    fast: Arc<std::sync::RwLock<FastHandles>>,
+}
+
+/// See AppState.fast's doc comment. Cheap to clone (three Arcs + a float) --
+/// readers hold the RwLock only for the instant it takes to clone this out,
+/// then do their real work with no lock held at all.
+#[derive(Clone)]
+struct FastHandles {
+    index: Arc<Mutex<VectorIndex>>,
+    embedder: Arc<dyn EmbedderBackend>,
+    /// None when the active instance is a `:memory:` DB (tests only --
+    /// SQLite in-memory databases don't support independent connections to
+    /// "the same" database). Handlers fall back to the locked path.
+    read_pool: Option<Arc<ReadPool>>,
+    hybrid_alpha: f32,
+}
+
+impl FastHandles {
+    fn from_brain(brain: &Brain, db_path: &str) -> Self {
+        let read_pool = if db_path == ":memory:" {
+            None
+        } else {
+            match ReadPool::open(db_path, 4) {
+                Ok(p) => Some(Arc::new(p)),
+                Err(e) => {
+                    eprintln!(
+                        "[BRAIN API] warning: failed to open read pool for {db_path}: {e} \
+                         -- /search and /stats will use the locked path until the next switch"
+                    );
+                    None
+                }
+            }
+        };
+        Self {
+            index: brain.index_handle(),
+            embedder: brain.embedder_handle(),
+            read_pool,
+            hybrid_alpha: brain.hybrid_alpha(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -419,6 +469,16 @@ async fn main() {
         brain.get_stats().map(|s| s.total_memories).unwrap_or(0),
         boot.elapsed().as_secs_f64() * 1000.0
     );
+    // Opening the read pool is blocking I/O (SQLite connections), same as
+    // opening Brain itself above -- off the async runtime for the same reason.
+    let fast_path = active_path.clone();
+    let (fast_handles, brain) = tokio::task::spawn_blocking(move || {
+        let handles = FastHandles::from_brain(&brain, &fast_path);
+        (handles, brain)
+    })
+    .await
+    .expect("FastHandles build task panicked");
+    let fast = Arc::new(std::sync::RwLock::new(fast_handles));
     let brain = Arc::new(Mutex::new(brain));
 
     let state = AppState {
@@ -432,6 +492,7 @@ async fn main() {
         registry: Arc::new(Mutex::new(registry)),
         active_db_path: Arc::new(Mutex::new(active_path.clone())),
         switching: Arc::new(AtomicBool::new(false)),
+        fast,
     };
 
     // Background job worker: open a short-lived DB handle per tick so the connection
@@ -763,7 +824,6 @@ async fn search(
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     reject_if_switching(&state)?;
-    let brain = lock_brain(&state);
     let filter = SearchFilter {
         project: req.project,
         memory_type: req.memory_type.as_deref().and_then(parse_memory_type),
@@ -772,9 +832,33 @@ async fn search(
         graph_expand: req.graph_expand,
         ..SearchFilter::default()
     };
-    let results = brain
-        .search(&req.query, req.n, Some(filter))
-        .map_err(internal_err)?;
+
+    // G6 fast path: bypass Arc<Mutex<Brain>> entirely for the common case
+    // (no graph_expand -- off by default, and the one thing the pool-based
+    // path doesn't implement, see rank_candidates' doc comment). Falls back
+    // to the locked path if the active instance has no read pool (a
+    // `:memory:` DB, tests only) or if graph_expand was explicitly requested.
+    let results = if !filter.graph_expand {
+        let handles = state.fast.read().unwrap_or_else(|p| p.into_inner()).clone();
+        if let Some(pool) = handles.read_pool {
+            let conn = pool.acquire();
+            let (scored, _embedding, type_filter_active) = rank_candidates(
+                &conn,
+                &handles.index,
+                handles.embedder.as_ref(),
+                handles.hybrid_alpha,
+                &req.query,
+                req.n,
+                Some(&filter),
+            )
+            .map_err(internal_err)?;
+            apply_type_diversity_cap(scored, req.n, type_filter_active)
+        } else {
+            lock_brain(&state).search(&req.query, req.n, Some(filter)).map_err(internal_err)?
+        }
+    } else {
+        lock_brain(&state).search(&req.query, req.n, Some(filter)).map_err(internal_err)?
+    };
     if log_search_enabled() {
         let ms = start.elapsed().as_millis();
         let qlen = req.query.chars().count();
@@ -1821,11 +1905,26 @@ async fn switch_instance(
         }
     };
 
+    // Build the new instance's fast-path handles (G6) before the swap below,
+    // off the async runtime -- ReadPool::open does blocking SQLite opens,
+    // same reasoning as opening Brain itself just above. Must land at the
+    // same moment as the brain_guard swap or a request could briefly use
+    // read-path handles from the old instance with the new one now active.
+    let new_fast_path = db_path.clone();
+    let (new_fast, new_brain) = tokio::task::spawn_blocking(move || {
+        let handles = FastHandles::from_brain(&new_brain, &new_fast_path);
+        (handles, new_brain)
+    })
+    .await
+    .expect("FastHandles rebuild task panicked");
+
     // Only now that the replacement Brain opened successfully do we drop the
-    // previous one, by overwriting it behind the mutex.
+    // previous one, by overwriting it behind the mutex. fast is swapped in
+    // the same critical window so the two are never inconsistent.
     {
         let mut brain_guard = lock_brain(&state);
         *brain_guard = new_brain;
+        *state.fast.write().unwrap_or_else(|p| p.into_inner()) = new_fast;
     }
     *state.active_db_path.lock().unwrap_or_else(|p| p.into_inner()) = db_path.clone();
     // Persist active_id only after the swap succeeded — a crash between the
@@ -2164,9 +2263,13 @@ mod tests {
         let db_path = base.join("brain.db");
         std::env::set_var("BRAIN_DB_PATH", db_path.to_string_lossy().as_ref());
         let (memory_tx, _) = broadcast::channel(64);
-        let brain = Arc::new(Mutex::new(
-            open_brain_at(&db_path.to_string_lossy(), &memory_tx).expect("open brain in test"),
-        ));
+        let opened_brain =
+            open_brain_at(&db_path.to_string_lossy(), &memory_tx).expect("open brain in test");
+        let fast = Arc::new(std::sync::RwLock::new(FastHandles::from_brain(
+            &opened_brain,
+            &db_path.to_string_lossy(),
+        )));
+        let brain = Arc::new(Mutex::new(opened_brain));
 
         // Bootstrap a throwaway registry under the same tempdir so tests never
         // touch the real `~/.brain/instances.json`.
@@ -2191,6 +2294,7 @@ mod tests {
             active_db_path: Arc::new(Mutex::new(db_path.to_string_lossy().into_owned())),
             registry: Arc::new(Mutex::new(registry)),
             switching: Arc::new(AtomicBool::new(false)),
+            fast,
         };
         (state, guard)
     }
@@ -2400,6 +2504,158 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // G6: /search's fast path reads through `state.fast` (index + read-pool
+    // handles) instead of the `Arc<Mutex<Brain>>` lock. Those handles are
+    // rebuilt and swapped only at `switch_instance` time, so this test exists
+    // to prove the swap actually happens -- that a search right after
+    // switching instances sees the NEW instance's data, not the handles the
+    // fast path had cached from the previous active instance.
+    #[tokio::test]
+    async fn search_after_switch_reflects_new_instance_not_stale_fast_handles() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+
+        let save_main = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/save",
+                serde_json::json!({
+                    "content": "zzz-main-only-marker-content",
+                    "memory_type": "fact"
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(save_main.status(), StatusCode::OK);
+
+        let create_res = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/v1/instances",
+                serde_json::json!({"name": "Empty"}),
+            ))
+            .await
+            .unwrap();
+        let created = body_json(create_res).await;
+        let id = created["id"].as_str().unwrap().to_string();
+
+        let switch_res = app
+            .clone()
+            .oneshot(method_request(
+                "POST",
+                &format!("/v1/instances/{id}/switch"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(switch_res.status(), StatusCode::OK);
+
+        // Immediately after switching, a search for the OLD instance's
+        // content must come back empty -- the new instance has zero
+        // memories, so even the mock embedder's always-return-top-n
+        // behavior has nothing stale to surface unless the fast path were
+        // still holding the previous instance's read-pool/index.
+        let stale_check = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/search",
+                serde_json::json!({"query": "zzz-main-only-marker-content", "n": 5}),
+            ))
+            .await
+            .unwrap();
+        let stale_body = body_json(stale_check).await;
+        let stale_results = stale_body["results"].as_array().unwrap();
+        assert!(
+            stale_results.is_empty(),
+            "search after switch returned stale data from the previous instance: {stale_body:?}"
+        );
+
+        let save_new = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/save",
+                serde_json::json!({
+                    "content": "zzz-new-instance-only-marker",
+                    "memory_type": "fact"
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(save_new.status(), StatusCode::OK);
+
+        let fresh_check = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/search",
+                serde_json::json!({"query": "zzz-new-instance-only-marker", "n": 5}),
+            ))
+            .await
+            .unwrap();
+        let fresh_body = body_json(fresh_check).await;
+        let fresh_results = fresh_body["results"].as_array().unwrap();
+        assert!(
+            fresh_results
+                .iter()
+                .any(|r| r["content"] == "zzz-new-instance-only-marker"),
+            "search did not find a memory saved into the newly-active instance: {fresh_body:?}"
+        );
+
+        let back_res = app
+            .clone()
+            .oneshot(method_request("POST", "/v1/instances/main/switch"))
+            .await
+            .unwrap();
+        assert_eq!(back_res.status(), StatusCode::OK);
+
+        // And switching back must restore the fast path to main's data --
+        // the new instance's marker must no longer be visible (main's
+        // corpus is small, so the mock embedder's always-return-top-n
+        // behavior may still surface irrelevant rows -- the check that
+        // actually matters is that the new instance's exact content is
+        // gone), and main's own marker must be found again.
+        let after_back_new = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/search",
+                serde_json::json!({"query": "zzz-new-instance-only-marker", "n": 5}),
+            ))
+            .await
+            .unwrap();
+        let after_back_new_body = body_json(after_back_new).await;
+        assert!(
+            !after_back_new_body["results"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|r| r["content"] == "zzz-new-instance-only-marker"),
+            "search after switching back to main still returned the other instance's memory: {after_back_new_body:?}"
+        );
+
+        let after_back_main = app
+            .oneshot(json_request(
+                "POST",
+                "/search",
+                serde_json::json!({"query": "zzz-main-only-marker-content", "n": 5}),
+            ))
+            .await
+            .unwrap();
+        let after_back_main_body = body_json(after_back_main).await;
+        assert!(
+            after_back_main_body["results"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|r| r["content"] == "zzz-main-only-marker-content"),
+            "search after switching back to main did not find main's own memory: {after_back_main_body:?}"
+        );
     }
 
     #[tokio::test]

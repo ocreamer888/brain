@@ -97,6 +97,14 @@ impl MetadataStore {
         Ok(store)
     }
 
+    /// The underlying connection, for callers (brain::rank_candidates) that
+    /// need the connection-parameterized free functions above instead of a
+    /// method -- the G6 fast path calls the same functions with a pooled
+    /// connection instead of this one.
+    pub fn conn(&self) -> &Connection {
+        &self.conn
+    }
+
     pub fn open_in_memory() -> Result<Self, BrainError> {
         let conn =
             Connection::open_in_memory().map_err(|e| BrainError::Database(e.to_string()))?;
@@ -413,20 +421,7 @@ impl MetadataStore {
     }
 
     pub fn get_memory(&self, id: &str) -> Result<Option<Memory>, BrainError> {
-        let result = self.conn.query_row(
-            "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
-                    file_path, thread_id, title, embedding,
-                    parent_id, event_time, salience, superseded_by, extracted_by
-             FROM memories WHERE id = ?1",
-            params![id],
-            |row| memory_from_row(row),
-        );
-
-        match result {
-            Ok(m) => Ok(Some(m)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(BrainError::Database(e.to_string())),
-        }
+        get_memory_conn(&self.conn, id)
     }
 
     pub fn get_memories_by_ids(&self, ids: &[&str]) -> Result<Vec<Memory>, BrainError> {
@@ -523,23 +518,7 @@ impl MetadataStore {
     /// BM25 full-text search. Returns memory ids ordered best-first.
     /// Returns empty vec (not an error) if query is unsearchable.
     pub fn fts_search(&self, query: &str, n: usize) -> Result<Vec<String>, BrainError> {
-        let clean = sanitize_fts_query(query);
-        if clean.is_empty() {
-            return Ok(vec![]);
-        }
-        let mut stmt = self
-            .conn
-            .prepare(
-                "SELECT id FROM memories_fts WHERE memories_fts MATCH ?1
-                 ORDER BY bm25(memories_fts) LIMIT ?2",
-            )
-            .map_err(|e| BrainError::Database(e.to_string()))?;
-        let ids: Vec<String> = stmt
-            .query_map(params![clean, n as i64], |row| row.get(0))
-            .map_err(|e| BrainError::Database(e.to_string()))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| BrainError::Database(e.to_string()))?;
-        Ok(ids)
+        fts_search_conn(&self.conn, query, n)
     }
 
     pub fn count_memories(&self) -> Result<usize, BrainError> {
@@ -1201,6 +1180,47 @@ impl MetadataStore {
             .map_err(|e| BrainError::Database(e.to_string()))?;
         Ok(n > 0)
     }
+}
+
+/// Connection-parameterized so a pooled read-only connection can reuse the
+/// exact same query (see read_pool.rs) instead of needing the Arc<Mutex<Brain>>
+/// lock just to read one row. MetadataStore::get_memory is a thin wrapper
+/// over this using its own connection.
+pub fn get_memory_conn(conn: &Connection, id: &str) -> Result<Option<Memory>, BrainError> {
+    let result = conn.query_row(
+        "SELECT id, content, type, project, tags, timestamp, source, session_id, importance,
+                file_path, thread_id, title, embedding,
+                parent_id, event_time, salience, superseded_by, extracted_by
+         FROM memories WHERE id = ?1",
+        params![id],
+        |row| memory_from_row(row),
+    );
+
+    match result {
+        Ok(m) => Ok(Some(m)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(BrainError::Database(e.to_string())),
+    }
+}
+
+/// See get_memory_conn's doc comment -- same rationale.
+pub fn fts_search_conn(conn: &Connection, query: &str, n: usize) -> Result<Vec<String>, BrainError> {
+    let clean = sanitize_fts_query(query);
+    if clean.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT id FROM memories_fts WHERE memories_fts MATCH ?1
+             ORDER BY bm25(memories_fts) LIMIT ?2",
+        )
+        .map_err(|e| BrainError::Database(e.to_string()))?;
+    let ids: Vec<String> = stmt
+        .query_map(params![clean, n as i64], |row| row.get(0))
+        .map_err(|e| BrainError::Database(e.to_string()))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| BrainError::Database(e.to_string()))?;
+    Ok(ids)
 }
 
 fn memory_from_row(row: &rusqlite::Row<'_>) -> Result<Memory, rusqlite::Error> {

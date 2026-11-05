@@ -10,12 +10,13 @@ pub mod instances;
 pub mod memory_atlas;
 pub mod migrate;
 pub mod privacy;
+pub mod read_pool;
 pub mod store;
 pub mod symbols;
 pub mod summarizer;
 pub mod worker;
 pub mod types;
 
-pub use brain::MemoryEvent;
+pub use brain::{apply_type_diversity_cap, rank_candidates, MemoryEvent};
 pub use error::BrainError;
 pub use types::*;

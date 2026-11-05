@@ -118,7 +118,11 @@ impl Default for BrainConfig {
 pub struct Brain {
     store: MetadataStore,
     index: Arc<Mutex<VectorIndex>>,
-    embedder: Box<dyn EmbedderBackend>,
+    /// Arc, not Box: EmbedderBackend: Send + Sync already requires safe
+    /// concurrent &self calls, so a cheap clone lets read-only handlers
+    /// (G6 fast path, see read_pool.rs) call embed() without needing the
+    /// Arc<Mutex<Brain>> lock at all. See embedder_handle() below.
+    embedder: Arc<dyn EmbedderBackend>,
     llm_client: Option<Box<dyn LlmClient>>,
     save_count: AtomicUsize,
     reflect_every_n: usize,
@@ -164,7 +168,7 @@ impl Brain {
         Ok(Self {
             store,
             index: Arc::new(Mutex::new(index)),
-            embedder,
+            embedder: Arc::from(embedder),
             llm_client: None,
             save_count: AtomicUsize::new(0),
             reflect_every_n: config.reflect_every_n,
@@ -177,6 +181,28 @@ impl Brain {
     /// Subscribe to [`MemoryEvent`]s emitted after each successful [`Brain::save_memory`].
     pub fn subscribe_memory_events(&self) -> Option<broadcast::Receiver<MemoryEvent>> {
         self.memory_events.as_ref().map(|tx| tx.subscribe())
+    }
+
+    /// Cheap Arc clone, not a lock. For the G6 fast read path (read_pool.rs):
+    /// callers take this handle once (e.g. at startup, or after an instance
+    /// switch), then never need Arc<Mutex<Brain>> for index reads again.
+    /// VectorIndex::search takes &self (read-only); only insert/remove need
+    /// the Mutex's exclusive access, so concurrent searches here only
+    /// contend with an in-flight save's index insert, never with each other.
+    pub fn index_handle(&self) -> Arc<Mutex<VectorIndex>> {
+        self.index.clone()
+    }
+
+    /// Cheap Arc clone -- see index_handle's doc comment, same rationale.
+    pub fn embedder_handle(&self) -> Arc<dyn EmbedderBackend> {
+        self.embedder.clone()
+    }
+
+    /// The alpha this Brain was opened with, for callers (the G6 fast path)
+    /// that re-implement search() against pooled connections instead of
+    /// going through this method.
+    pub fn hybrid_alpha(&self) -> f32 {
+        self.hybrid_alpha
     }
 
     /// Save a memory. Returns the memory id and whether the write was deduplicated.
@@ -336,27 +362,69 @@ impl Brain {
         n: usize,
         filter: Option<SearchFilter>,
     ) -> Result<Vec<SearchResult>, BrainError> {
-        let embedding = self.embedder.embed(query)?;
+        let (mut scored, embedding, type_filter_active_for_fetch) = rank_candidates(
+            self.store.conn(),
+            &self.index,
+            self.embedder.as_ref(),
+            self.hybrid_alpha,
+            query,
+            n,
+            filter.as_ref(),
+        )?;
+
+        // Graph expansion (Task 7): pull in 1-hop entity neighbors of the top
+        // seeds, score them with a hop-decay penalty, merge, and re-sort —
+        // strictly before the final truncate/diversity cut below. Not
+        // supported by the G6 fast read path (read_pool.rs) -- a request
+        // with graph_expand=true is routed to this method instead.
+        if filter.as_ref().map(|f| f.graph_expand).unwrap_or(false) {
+            self.expand_graph_neighbors(&mut scored, n, filter.as_ref(), &embedding)?;
+        }
+
+        Ok(apply_type_diversity_cap(scored, n, type_filter_active_for_fetch))
+    }
+}
+
+/// The core of Brain::search, minus graph expansion: embed, hybrid cosine+BM25
+/// score, filter, sort. Takes its connection/index/embedder as parameters
+/// instead of &self so the G6 fast read path (read_pool.rs) can call the
+/// exact same scoring logic with a pooled connection and a cloned Arc index/
+/// embedder handle, without needing the Arc<Mutex<Brain>> lock at all.
+/// Brain::search is a thin wrapper around this plus graph_expand + the
+/// type-diversity cut (apply_type_diversity_cap, below).
+///
+/// Returns (scored-and-sorted candidates with their raw score, the query
+/// embedding [graph_expand needs it], whether a type filter was active for
+/// the fetch [the diversity cut skips entirely in that case]).
+#[allow(clippy::too_many_arguments)]
+pub fn rank_candidates(
+    conn: &rusqlite::Connection,
+    index: &Mutex<VectorIndex>,
+    embedder: &dyn EmbedderBackend,
+    hybrid_alpha: f32,
+    query: &str,
+    n: usize,
+    filter: Option<&SearchFilter>,
+) -> Result<(Vec<(SearchResult, f32)>, Vec<f32>, bool), BrainError> {
+    let embedding = embedder.embed(query)?;
         // Over-fetch cosine candidates: 30× when diversity reranking is active (no type filter)
         // so buried non-fact memories can surface past the fact-flood. 10× otherwise.
         let type_filter_active_for_fetch =
-            filter.as_ref().and_then(|f| f.memory_type.as_ref()).is_some();
+            filter.and_then(|f| f.memory_type.as_ref()).is_some();
         let overfetch = if type_filter_active_for_fetch { n * 10 } else { n * 30 };
-        let cos_candidates = self
-            .index
+        let cos_candidates = index
             .lock()
             .map_err(|e| BrainError::Database(e.to_string()))?
             .search(&embedding, overfetch);
 
         // BM25 candidates — fetch more than n so filters don't starve the result set.
-        let bm25_ids = self.store.fts_search(query, n * 5).unwrap_or_default();
+        let bm25_ids = crate::store::fts_search_conn(conn, query, n * 5).unwrap_or_default();
 
         // Build score maps.
         let n_bm25 = bm25_ids.len();
         let alpha = filter
-            .as_ref()
             .and_then(|f| f.alpha)
-            .unwrap_or(self.hybrid_alpha)
+            .unwrap_or(hybrid_alpha)
             .clamp(0.0, 1.0);
         let cos_score_of: std::collections::HashMap<&str, f32> = cos_candidates
             .iter()
@@ -381,15 +449,14 @@ impl Brain {
         let mut scored: Vec<(SearchResult, f32)> = Vec::new();
 
         for id in candidate_ids {
-            let Some(memory) = self.store.get_memory(id)? else {
+            let Some(memory) = crate::store::get_memory_conn(conn, id)? else {
                 continue;
             };
             // Evaluated regardless of whether a filter object was passed at all —
             // a missing filter must behave like SearchFilter::default(), not like
             // "no exclusions."
-            let type_filter = filter.as_ref().and_then(|f| f.memory_type.as_ref());
+            let type_filter = filter.and_then(|f| f.memory_type.as_ref());
             let exclude_episodes = filter
-                .as_ref()
                 .map(|f| f.exclude_episodes_by_default)
                 .unwrap_or(true);
             if exclude_episodes
@@ -399,7 +466,7 @@ impl Brain {
                 continue;
             }
 
-            if let Some(ref f) = filter {
+            if let Some(f) = filter {
                 if let Some(ref mt) = f.memory_type {
                     if &memory.metadata.memory_type != mt {
                         continue;
@@ -449,7 +516,7 @@ impl Brain {
             // candidates carry distance 1.0 → zero proximity bonus.
             let knowledge_w = if memory.metadata.memory_type == MemoryType::Knowledge {
                 let mut w = 1.0 + K_BASE + K_CLOSE_MAX * knowledge_closeness(distance);
-                if filter.as_ref().and_then(|f| f.project.as_ref()).is_some() {
+                if filter.and_then(|f| f.project.as_ref()).is_some() {
                     w += K_PROJ;
                 }
                 w.clamp(1.0, KNOWLEDGE_W_MAX)
@@ -473,36 +540,40 @@ impl Brain {
         // Sort descending — higher hybrid score is better.
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-        // Graph expansion (Task 7): pull in 1-hop entity neighbors of the top
-        // seeds, score them with a hop-decay penalty, merge, and re-sort —
-        // strictly before the final truncate/diversity cut below.
-        if filter.as_ref().map(|f| f.graph_expand).unwrap_or(false) {
-            self.expand_graph_neighbors(&mut scored, n, filter.as_ref(), &embedding)?;
-        }
+        Ok((scored, embedding, type_filter_active_for_fetch))
+}
 
-        // Type-diversity reranking: when no type filter is active, cap any single
-        // memory type at 40% of n (min 1) so facts can't crowd out solutions/conversations.
-        if type_filter_active_for_fetch {
-            return Ok(scored.into_iter().take(n).map(|(r, _)| r).collect());
-        }
-        let cap = ((n as f32 * 0.4).ceil() as usize).max(1);
-        let mut type_counts: std::collections::HashMap<std::mem::Discriminant<crate::types::MemoryType>, usize> =
-            std::collections::HashMap::new();
-        let mut diverse: Vec<SearchResult> = Vec::with_capacity(n);
-        for (result, _) in scored {
-            let disc = std::mem::discriminant(&result.metadata.memory_type);
-            let count = type_counts.entry(disc).or_insert(0);
-            if *count < cap {
-                *count += 1;
-                diverse.push(result);
-                if diverse.len() == n {
-                    break;
-                }
+/// Type-diversity reranking: when no type filter was active for the fetch,
+/// cap any single memory type at 40% of n (min 1) so facts can't crowd out
+/// solutions/conversations. Split out of Brain::search (see rank_candidates'
+/// doc comment) so the G6 fast read path applies the identical cut.
+pub fn apply_type_diversity_cap(
+    scored: Vec<(SearchResult, f32)>,
+    n: usize,
+    type_filter_active_for_fetch: bool,
+) -> Vec<SearchResult> {
+    if type_filter_active_for_fetch {
+        return scored.into_iter().take(n).map(|(r, _)| r).collect();
+    }
+    let cap = ((n as f32 * 0.4).ceil() as usize).max(1);
+    let mut type_counts: std::collections::HashMap<std::mem::Discriminant<crate::types::MemoryType>, usize> =
+        std::collections::HashMap::new();
+    let mut diverse: Vec<SearchResult> = Vec::with_capacity(n);
+    for (result, _) in scored {
+        let disc = std::mem::discriminant(&result.metadata.memory_type);
+        let count = type_counts.entry(disc).or_insert(0);
+        if *count < cap {
+            *count += 1;
+            diverse.push(result);
+            if diverse.len() == n {
+                break;
             }
         }
-        Ok(diverse)
     }
+    diverse
+}
 
+impl Brain {
     /// Expand a ranked candidate list with 1-hop graph neighbors (Task 7).
     ///
     /// Seeds from the top `min(n, 5)` entries of `scored`. For each seed, looks
