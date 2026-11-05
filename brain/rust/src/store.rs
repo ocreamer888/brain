@@ -522,58 +522,23 @@ impl MetadataStore {
     }
 
     pub fn count_memories(&self) -> Result<usize, BrainError> {
-        self.conn
-            .query_row("SELECT COUNT(*) FROM memories", [], |row| {
-                row.get::<_, usize>(0)
-            })
-            .map_err(|e| BrainError::Database(e.to_string()))
+        count_memories_conn(&self.conn)
     }
 
     pub fn count_memories_by_type(&self) -> Result<std::collections::HashMap<String, usize>, BrainError> {
-        let mut stmt = self.conn
-            .prepare("SELECT type, COUNT(*) FROM memories GROUP BY type")
-            .map_err(|e| BrainError::Database(e.to_string()))?;
-        let mut map = std::collections::HashMap::new();
-        let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, usize>(1)?))
-        }).map_err(|e| BrainError::Database(e.to_string()))?;
-        for row in rows {
-            let (raw_type, count) = row.map_err(|e| BrainError::Database(e.to_string()))?;
-            let key = raw_type.trim_matches('"').to_string();
-            map.insert(key, count);
-        }
-        Ok(map)
+        count_memories_by_type_conn(&self.conn)
     }
 
     pub fn count_sessions(&self) -> Result<usize, BrainError> {
-        self.conn
-            .query_row(
-                "SELECT COUNT(DISTINCT session_id) FROM memories WHERE session_id != ''",
-                [],
-                |row| row.get::<_, usize>(0),
-            )
-            .map_err(|e| BrainError::Database(e.to_string()))
+        count_sessions_conn(&self.conn)
     }
 
     pub fn count_feedback_events(&self) -> Result<usize, BrainError> {
-        self.conn
-            .query_row("SELECT COUNT(*) FROM feedback_events", [], |row| {
-                row.get::<_, usize>(0)
-            })
-            .map_err(|e| BrainError::Database(e.to_string()))
+        count_feedback_events_conn(&self.conn)
     }
 
     pub fn feedback_last_event_ts(&self) -> Result<Option<String>, BrainError> {
-        let result = self.conn.query_row(
-            "SELECT ts FROM feedback_events ORDER BY ts DESC LIMIT 1",
-            [],
-            |row| row.get::<_, String>(0),
-        );
-        match result {
-            Ok(ts) => Ok(Some(ts)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(BrainError::Database(e.to_string())),
-        }
+        feedback_last_event_ts_conn(&self.conn)
     }
 
     fn feedback_id_by_idempotency_key(&self, key: &str) -> Result<Option<String>, BrainError> {
@@ -1221,6 +1186,57 @@ pub fn fts_search_conn(conn: &Connection, query: &str, n: usize) -> Result<Vec<S
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| BrainError::Database(e.to_string()))?;
     Ok(ids)
+}
+
+/// See get_memory_conn's doc comment -- same rationale: lets the /stats fast
+/// path (brain_api.rs) read through a pooled connection instead of the
+/// Arc<Mutex<Brain>> lock.
+pub fn count_memories_conn(conn: &Connection) -> Result<usize, BrainError> {
+    conn.query_row("SELECT COUNT(*) FROM memories", [], |row| row.get::<_, usize>(0))
+        .map_err(|e| BrainError::Database(e.to_string()))
+}
+
+pub fn count_memories_by_type_conn(
+    conn: &Connection,
+) -> Result<std::collections::HashMap<String, usize>, BrainError> {
+    let mut stmt = conn
+        .prepare("SELECT type, COUNT(*) FROM memories GROUP BY type")
+        .map_err(|e| BrainError::Database(e.to_string()))?;
+    let mut map = std::collections::HashMap::new();
+    let rows = stmt
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, usize>(1)?)))
+        .map_err(|e| BrainError::Database(e.to_string()))?;
+    for row in rows {
+        let (raw_type, count) = row.map_err(|e| BrainError::Database(e.to_string()))?;
+        let key = raw_type.trim_matches('"').to_string();
+        map.insert(key, count);
+    }
+    Ok(map)
+}
+
+pub fn count_sessions_conn(conn: &Connection) -> Result<usize, BrainError> {
+    conn.query_row(
+        "SELECT COUNT(DISTINCT session_id) FROM memories WHERE session_id != ''",
+        [],
+        |row| row.get::<_, usize>(0),
+    )
+    .map_err(|e| BrainError::Database(e.to_string()))
+}
+
+pub fn count_feedback_events_conn(conn: &Connection) -> Result<usize, BrainError> {
+    conn.query_row("SELECT COUNT(*) FROM feedback_events", [], |row| row.get::<_, usize>(0))
+        .map_err(|e| BrainError::Database(e.to_string()))
+}
+
+pub fn feedback_last_event_ts_conn(conn: &Connection) -> Result<Option<String>, BrainError> {
+    let result = conn.query_row("SELECT ts FROM feedback_events ORDER BY ts DESC LIMIT 1", [], |row| {
+        row.get::<_, String>(0)
+    });
+    match result {
+        Ok(ts) => Ok(Some(ts)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(BrainError::Database(e.to_string())),
+    }
 }
 
 fn memory_from_row(row: &rusqlite::Row<'_>) -> Result<Memory, rusqlite::Error> {

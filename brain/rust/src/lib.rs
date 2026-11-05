@@ -17,6 +17,6 @@ pub mod summarizer;
 pub mod worker;
 pub mod types;
 
-pub use brain::{apply_type_diversity_cap, rank_candidates, MemoryEvent};
+pub use brain::{apply_type_diversity_cap, compute_stats, rank_candidates, MemoryEvent};
 pub use error::BrainError;
 pub use types::*;

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -27,8 +27,8 @@ use brain::store::MetadataStore;
 use brain::embedder::{embedder_from_env, EmbedderBackend};
 use brain::summarizer::{AnthropicClient, OllamaClient, OpenRouterClient};
 use brain::{
-    apply_type_diversity_cap, rank_candidates, BrainError, FeedbackEventType, FeedbackSource,
-    Memory, MemorySource, MemoryType, SearchFilter,
+    apply_type_diversity_cap, compute_stats, rank_candidates, BrainError, FeedbackEventType,
+    FeedbackSource, Memory, MemorySource, MemoryType, SearchFilter,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -80,6 +80,8 @@ struct FastHandles {
     /// "the same" database). Handlers fall back to the locked path.
     read_pool: Option<Arc<ReadPool>>,
     hybrid_alpha: f32,
+    /// In-process save counter, not in SQLite -- see Brain::save_count_handle.
+    save_count: Arc<AtomicUsize>,
 }
 
 impl FastHandles {
@@ -103,6 +105,7 @@ impl FastHandles {
             embedder: brain.embedder_handle(),
             read_pool,
             hybrid_alpha: brain.hybrid_alpha(),
+            save_count: brain.save_count_handle(),
         }
     }
 }
@@ -633,9 +636,15 @@ async fn stats(
             .unwrap_or_default();
         (reg.active_id.clone(), name)
     };
-    let brain = lock_brain(&state);
-    let mut value = stats_json(&brain)?;
-    drop(brain);
+    let handles = state.fast.read().unwrap_or_else(|p| p.into_inner()).clone();
+    let mut value = if let Some(pool) = handles.read_pool {
+        let conn = pool.acquire();
+        let stats = compute_stats(&conn, &handles.save_count).map_err(internal_err)?;
+        stats_value(&stats)
+    } else {
+        let brain = lock_brain(&state);
+        stats_json(&brain)?
+    };
     value["active_instance"] = serde_json::json!({ "id": active_id, "name": active_name });
     log_request("GET", "/stats", StatusCode::OK, start);
     Ok(Json(value))
@@ -645,14 +654,18 @@ async fn stats(
 /// and the switch handler's response.
 fn stats_json(brain: &Brain) -> Result<serde_json::Value, (StatusCode, Json<ApiError>)> {
     let stats = brain.get_stats().map_err(internal_err)?;
-    Ok(serde_json::json!({
+    Ok(stats_value(&stats))
+}
+
+fn stats_value(stats: &brain::BrainStats) -> serde_json::Value {
+    serde_json::json!({
         "total_memories": stats.total_memories,
         "total_sessions": stats.total_sessions,
         "save_count_this_session": stats.save_count_this_session,
         "feedback_events_total": stats.feedback_events_total,
         "feedback_last_event_ts": stats.feedback_last_event_ts,
         "by_type": stats.by_type,
-    }))
+    })
 }
 
 async fn save(
@@ -2308,6 +2321,40 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    // G6: /stats' save_count_this_session comes from an in-process
+    // AtomicUsize (not SQLite), now shared into FastHandles via
+    // Brain::save_count_handle so the fast path can read it too. This
+    // proves a write through the normal save() path is visible to a /stats
+    // call served by the fast path -- i.e. the Arc clone genuinely aliases
+    // the same counter, not a stale snapshot taken at FastHandles::from_brain.
+    #[tokio::test]
+    async fn stats_save_count_reflects_saves_via_fast_path() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+
+        let stats_before = app
+            .clone()
+            .oneshot(get_request("/stats"))
+            .await
+            .unwrap();
+        let stats_before_body = body_json(stats_before).await;
+        assert_eq!(stats_before_body["save_count_this_session"], 0);
+
+        app.clone()
+            .oneshot(json_request(
+                "POST",
+                "/save",
+                serde_json::json!({"content": "g6 stats probe", "memory_type": "fact"}),
+            ))
+            .await
+            .unwrap();
+
+        let stats_after = app.oneshot(get_request("/stats")).await.unwrap();
+        let stats_after_body = body_json(stats_after).await;
+        assert_eq!(stats_after_body["save_count_this_session"], 1);
     }
 
     #[tokio::test]

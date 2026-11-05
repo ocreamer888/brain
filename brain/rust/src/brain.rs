@@ -124,7 +124,9 @@ pub struct Brain {
     /// Arc<Mutex<Brain>> lock at all. See embedder_handle() below.
     embedder: Arc<dyn EmbedderBackend>,
     llm_client: Option<Box<dyn LlmClient>>,
-    save_count: AtomicUsize,
+    /// Arc, not plain AtomicUsize: the /stats fast path (G6) needs to read
+    /// this without the Arc<Mutex<Brain>> lock, same rationale as `embedder`.
+    save_count: Arc<AtomicUsize>,
     reflect_every_n: usize,
     reflection_disabled: bool,
     hybrid_alpha: f32,
@@ -170,7 +172,7 @@ impl Brain {
             index: Arc::new(Mutex::new(index)),
             embedder: Arc::from(embedder),
             llm_client: None,
-            save_count: AtomicUsize::new(0),
+            save_count: Arc::new(AtomicUsize::new(0)),
             reflect_every_n: config.reflect_every_n,
             reflection_disabled: config.reflection_disabled,
             hybrid_alpha: config.hybrid_alpha,
@@ -203,6 +205,11 @@ impl Brain {
     /// going through this method.
     pub fn hybrid_alpha(&self) -> f32 {
         self.hybrid_alpha
+    }
+
+    /// Cheap Arc clone -- see index_handle's doc comment, same rationale.
+    pub fn save_count_handle(&self) -> Arc<AtomicUsize> {
+        self.save_count.clone()
     }
 
     /// Save a memory. Returns the memory id and whether the write was deduplicated.
@@ -573,6 +580,24 @@ pub fn apply_type_diversity_cap(
     diverse
 }
 
+/// Connection-parameterized so the /stats fast path (brain_api.rs) can read
+/// through a pooled connection instead of the Arc<Mutex<Brain>> lock, same
+/// rationale as rank_candidates. `save_count` is in-process state (not in
+/// SQLite), so it's passed in separately -- see Brain::save_count_handle.
+pub fn compute_stats(
+    conn: &rusqlite::Connection,
+    save_count: &AtomicUsize,
+) -> Result<BrainStats, BrainError> {
+    Ok(BrainStats {
+        total_memories: crate::store::count_memories_conn(conn)?,
+        total_sessions: crate::store::count_sessions_conn(conn)?,
+        save_count_this_session: save_count.load(Ordering::Relaxed),
+        feedback_events_total: crate::store::count_feedback_events_conn(conn)?,
+        feedback_last_event_ts: crate::store::feedback_last_event_ts_conn(conn)?,
+        by_type: crate::store::count_memories_by_type_conn(conn)?,
+    })
+}
+
 impl Brain {
     /// Expand a ranked candidate list with 1-hop graph neighbors (Task 7).
     ///
@@ -744,14 +769,7 @@ impl Brain {
     }
 
     pub fn get_stats(&self) -> Result<BrainStats, BrainError> {
-        Ok(BrainStats {
-            total_memories: self.store.count_memories()?,
-            total_sessions: self.store.count_sessions()?,
-            save_count_this_session: self.save_count.load(Ordering::Relaxed),
-            feedback_events_total: self.store.count_feedback_events()?,
-            feedback_last_event_ts: self.store.feedback_last_event_ts()?,
-            by_type: self.store.count_memories_by_type()?,
-        })
+        compute_stats(self.store.conn(), &self.save_count)
     }
 
     /// Record structured feedback (accepted / rejected / etc.). Does not touch the vector index.
