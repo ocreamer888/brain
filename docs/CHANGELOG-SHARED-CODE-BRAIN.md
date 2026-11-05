@@ -452,6 +452,19 @@ cfb55c6  2026-07-27  docs: add brain instances multi-DB workspace design
 
 ---
 
+### 3.24 `8303cfe` — source_quality_w: ship the orphaned G2 reference, drop the generic status enum (2026-11-05)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` |
+| **Before** | The gate table's G2 line ("approve `status`/`source_quality` columns, or defer") was an orphaned reference to the original Perplexity vision conversation, carried into the 2026-10-16 design doc and then into this spec's gate table without ever being reconciled against the 2026-10-21 temporal-layer revision. Neither field appeared anywhere in the authoritative diagram. Separately, `superseded_by` was found to be overloaded with `quarantine:*`/`hidden:*` tag strings on 7,402 rows plus 59 dangling (deleted-target) pointers — a real blocker to ever walking it as a clean layer link (G7/G8). |
+| **After** | Traced `source_quality`'s actual origin (Perplexity's own critique of the owner's design, not something the owner asked for) and re-evaluated it on merit rather than provenance: it answers a question neither `salience_pinned` (G0) nor layer confidence (G8) does — not "was this pinned" or "has this been superseded," but "how much should I trust the pipeline that produced it." Shipped as `source_quality_w(source)` (`brain.rs`) — a pure function of the already-stored `source` enum, needing no schema column. Exposed on every `SearchResult`; gated behind `SearchFilter::apply_source_quality` (default off) so it never affects real traffic, mirroring G0's validate-before-wiring discipline exactly. A/B on `gold_mined.jsonl` was inconclusive: 93.7% of the corpus is `claude_code_session` alone (97.8% combined with `cursor_history`), so this particular gold set never surfaces a query where a competing tier (`obsidian_books` 1.2%, `perplexity` 0.7%) is actually in play. `status` was **not** implemented as a generic enum — the real problem (the quarantine overload above) is now tracked as cleanup needed before G7/G8, not its own gate. |
+| **How** | `brain/rust/src/brain.rs`, `brain/rust/src/types.rs`, `brain/rust/src/bin/brain_api.rs`, `brain/api_client.py`, `brain/tools/retrieval_eval.py`, plus matching updates to `docs/architecture/cognitive-architecture-spec.md` and `cognitive-architecture-diagram.md`. |
+| **Why** | Closes the orphaned half of gate **G2**. The owner pushed back on dismissing `source_quality` by provenance alone and asked for the actual merits — this is the result of that discussion. |
+| **Verification** | `cargo test --lib`: 161 passed (new: `source_quality_is_always_exposed_but_only_applied_when_requested`). `cargo test --bin brain_api`: 20 passed. Live-deployed (no schema change, no backup needed); confirmed `source_quality` field correctly returns 0.85 for `claude_code_session` results in production. |
+
+---
+
 ## 4. Uncommitted working-tree changes (as of 2026-07-28)
 
 Verified with `git status` / `git diff` at documentation time.
@@ -608,4 +621,4 @@ When landing further work:
 3. Move items from §5 → §3 when implementation merges.
 4. Do not delete old entries — append corrections with a dated note if a decision reverses.
 
-**Last verified against git:** 2026-07-28 (HEAD `6e75315` + WIP listed in §4) for §§1–3.8; 2026-11-04 (HEAD `205dbfc` + WIP listed in §4's final entry) for §3.9 onward.
+**Last verified against git:** 2026-07-28 (HEAD `6e75315` + WIP listed in §4) for §§1–3.8; 2026-11-05 (HEAD `8303cfe` + WIP listed in §4's final entry) for §3.9 onward.

@@ -8,6 +8,8 @@ Solid/green = exists in code today. Dashed/yellow = proposed, not built. Red = r
 
 **Revised 2026-10-21:** confidence is now defined (layer confidence, derived at query time, spec §8.3), salience is marked for retirement from ranking, `superseded_by` is reinterpreted as a layer link, and §3–§4 are new.
 
+**Revised 2026-11-05:** salience retirement shipped as `salience_pinned` (G0) rather than a blind retirement — see section 2's `SAL` node. `source_quality_w` added as a new, real (code-shipped) node, closing the gap where the original vision's `source_quality` idea had no place in this diagram — see section 2's new `SQ` node and item 4 below.
+
 ---
 
 ## 1. Full architecture in vision
@@ -66,8 +68,9 @@ flowchart TD
         TYPE["type (t)<br/>fact · solution · decision · conversation ·<br/>pattern · project_context · error_lesson · episode · knowledge"]
         PROJ["project (x)<br/>plain string — NOT a structured entity"]
         TIME["timestamp + event_time (y)<br/>ingest-time vs occurred-time<br/>layer order uses event_time, fallback timestamp"]
-        SRC["source (s)<br/>WHERE it came from (claude_code_session, cursor_history...)<br/>NOT trustworthiness"]
-        SAL["salience<br/>LLM score set once at save; UI 'pin'<br/>live in ranking today — to be retired from ranking (G8)"]
+        SRC["source (s)<br/>WHERE it came from (claude_code_session, cursor_history...)<br/>NOT trustworthiness — see source_quality_w"]
+        SQ["source_quality_w(source)<br/>HOW MUCH to trust the origin, computed from source<br/>93.7% of rows are claude_code_session alone (one tier) —<br/>exposed on every result; not applied to ranking by default,<br/>inconclusive A/B on the current gold set (2026-11-05)"]
+        SAL["salience<br/>LLM score set once at save; UI 'pin'<br/>live in ranking only when salience_pinned (G0, 2026-11-04)"]
         FP["file_path<br/>strongest 'same subject' signal<br/>only 2.7% of rows have it (G10)"]
         SUP["superseded_by<br/>today: HIDES the old row from search<br/>vision: explicit layer link (w = 1)<br/>also overloaded for quarantine:* (not history)"]
     end
@@ -78,6 +81,7 @@ flowchart TD
     ID -.-> PROJ
     ID -.-> TIME
     ID -.-> SRC
+    SRC -. "derives" .-> SQ
     ID -.-> SAL
     ID -.-> FP
     ID -.-> SUP
@@ -92,7 +96,7 @@ flowchart TD
     classDef warn fill:#2a1a05,stroke:#e5bd24,color:#fff
     classDef proposed fill:#201010,stroke:#e5bd24,color:#fff,stroke-dasharray: 6 4
     class ID,TYPE,PROJ,TIME,SRC,EDGE,ENT real
-    class SAL,FP,SUP warn
+    class SAL,FP,SUP,SQ warn
     class CONF proposed
 ```
 
@@ -103,6 +107,8 @@ flowchart TD
 2. **`links` (z)** — exists, but narrower than drawn: "this memory mentions this entity" (e.g. a memory mentioning "Supabase" links to a `Supabase` entity row). It is not memory-to-memory reasoning ("this contradicts that"). That richer link type was tried once (`graph_expand`), measurably hurt retrieval, and is off by default pending a benchmark. In the owner's model, `z` is the associative half: it finds neighbours and decides which memories are layers of the same subject (§4 below).
 
 3. **`confidence` (c)** — **now defined** (spec §8). It is not salience (the LLM's one-time score) and not the raw ranker `score`. It is **layer confidence**: how many newer memories sit on top of this one about the same subject. It is **computed at query time and never stored**, so old memories are never rewritten. On the sketch's 1–10 scale, the top layer is `c = 10`.
+
+4. **`source_quality` (s, trustworthiness half)** — the original vision conversation proposed this, and the gate table carried it forward as an orphaned "G2" reference that the 2026-10-21 revision never reconciled against the layer model. It earns a real place here because it answers a question neither `salience_pinned` nor layer confidence does: not "did a human pin this" and not "has something newer superseded it," but "how much should I inherently trust the pipeline that produced it, independent of both." Implemented 2026-11-05 as `source_quality_w(source)` — a pure function of the already-stored `source` enum, no schema column needed. Exposed on every search result; **not** applied to `final_score` by default, matching the discipline G0 established for salience. A/B on the current gold set was inconclusive (97.8% of the corpus shares one tier, so nothing in that set exercises a real tier contrast) — needs a gold set that actually contrasts `obsidian_books`/`perplexity` against session capture before this can be validated either way.
 
 ---
 
