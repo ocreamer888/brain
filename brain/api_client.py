@@ -80,6 +80,7 @@ def search(
     alpha: float | None = None,
     graph_expand: bool = False,
     salience_neutral: bool = False,
+    apply_source_quality: bool = False,
 ) -> list[dict]:
     payload: dict = {"query": query, "n": n, "graph_expand": graph_expand}
     if memory_type:
@@ -93,6 +94,10 @@ def search(
         # hatch to A/B live vs. neutral salience_w. Default off; never
         # changes ranking for real callers that don't pass this.
         payload["salience_neutral"] = True
+    if apply_source_quality:
+        # Eval-only opt-in to A/B source_quality_w before it's ever applied
+        # to real traffic. Default off.
+        payload["apply_source_quality"] = True
     return _request("POST", "/search", payload).get("results", [])
 
 

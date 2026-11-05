@@ -121,6 +121,13 @@ pub struct SearchResult {
     /// Distance alone can't show BM25 keyword wins; grounding hints need this.
     #[serde(default)]
     pub score: f32,
+    /// source_quality_w for this result's `metadata.source` (brain.rs's
+    /// source_quality_w doc comment -- a proposed, not-yet-scoped-into-G2
+    /// line from the original vision, newly grounded). Always computed and
+    /// exposed for inspection; only multiplied into `score` when the request
+    /// set `SearchFilter::apply_source_quality` (default off).
+    #[serde(default)]
+    pub source_quality: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -144,6 +151,13 @@ pub struct SearchFilter {
     /// salience against the trustworthy gold set without a global ranking
     /// change. Do not wire this to a public API default without a decision.
     pub salience_neutral: bool,
+    /// When true, multiply source_quality_w (brain.rs) into the final score
+    /// for this request. Default off -- source_quality is always computed
+    /// and exposed on every SearchResult regardless of this flag, but it
+    /// does not affect real-traffic ranking until validated the same way
+    /// G0 validated salience (A/B on the trustworthy gold set) and this
+    /// default is deliberately flipped. Do not flip without that A/B.
+    pub apply_source_quality: bool,
 }
 
 impl Default for SearchFilter {
@@ -156,6 +170,7 @@ impl Default for SearchFilter {
             graph_expand: false,
             exclude_episodes_by_default: true,
             salience_neutral: false,
+            apply_source_quality: false,
         }
     }
 }

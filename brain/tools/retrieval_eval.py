@@ -132,6 +132,12 @@ def main(argv: list[str] | None = None) -> int:
         help="G0: force salience_w=1.0 for this eval run only (vs. live brain.rs:437), "
         "to A/B live vs. neutral salience on this gold set. Never affects real traffic.",
     )
+    p.add_argument(
+        "--apply-source-quality",
+        action="store_true",
+        help="A/B source_quality_w (not applied to real traffic by default) against "
+        "this gold set before ever wiring it into live ranking.",
+    )
     args = p.parse_args(argv)
 
     gold_path = args.gold if args.gold.is_absolute() else _REPO_ROOT / args.gold
@@ -146,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
             project=project,
             memory_type=memory_type,
             salience_neutral=args.salience_neutral,
+            apply_source_quality=args.apply_source_quality,
         )
 
     try:
@@ -158,6 +165,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     report["salience_neutral"] = args.salience_neutral
+    report["apply_source_quality"] = args.apply_source_quality
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
 

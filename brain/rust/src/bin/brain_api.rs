@@ -281,6 +281,10 @@ struct SearchRequest {
     /// comment. Default off.
     #[serde(default)]
     salience_neutral: bool,
+    /// Eval-only opt-in — see SearchFilter::apply_source_quality's doc
+    /// comment. Default off.
+    #[serde(default)]
+    apply_source_quality: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -856,6 +860,7 @@ async fn search(
         alpha: req.alpha,
         graph_expand: req.graph_expand,
         salience_neutral: req.salience_neutral,
+        apply_source_quality: req.apply_source_quality,
         ..SearchFilter::default()
     };
 

@@ -524,6 +524,13 @@ pub fn rank_candidates(
                 1.0
             };
 
+            // source_quality: always computed (exposed on every result for
+            // inspection), only multiplied into final_score when the request
+            // opts in. See SearchFilter::apply_source_quality's doc comment.
+            let source_quality = source_quality_w(memory.metadata.source.clone());
+            let apply_source_quality = filter.map(|f| f.apply_source_quality).unwrap_or(false);
+            let source_quality_w_applied = if apply_source_quality { source_quality } else { 1.0 };
+
             let distance = cos_candidates
                 .iter()
                 .find(|(cid, _)| cid == id)
@@ -541,7 +548,7 @@ pub fn rank_candidates(
             } else {
                 1.0
             };
-            let final_score = salience_w * recency_w * hybrid_score * knowledge_w;
+            let final_score = source_quality_w_applied * salience_w * recency_w * hybrid_score * knowledge_w;
 
             scored.push((
                 SearchResult {
@@ -550,6 +557,7 @@ pub fn rank_candidates(
                     metadata: memory.metadata,
                     distance,
                     score: final_score,
+                    source_quality,
                 },
                 final_score,
             ));
@@ -589,6 +597,36 @@ pub fn apply_type_diversity_cap(
         }
     }
     diverse
+}
+
+/// How much to inherently trust the pipeline that produced a memory,
+/// independent of its content, recency, or any human pin (cognitive-
+/// architecture-spec.md, newly-scoped "source_quality" line formerly under
+/// G2). Distinct from salience_pinned (G0, a human's deliberate per-memory
+/// signal) and the planned layer confidence (G8, dynamic recency-within-
+/// subject) -- this is static per *origin type*, derived purely from the
+/// already-stored `source` enum, so it needs no schema column: the mapping
+/// can change without any data migration.
+///
+/// Tiers grounded in what each origin actually is, not a specific use case:
+/// high = deliberately authored (books, personal notes); medium = external
+/// research synthesis; low = automatic session/agent capture (the same
+/// class of noise this session's corpus-cleanup work spent most of its
+/// effort on) and Brain's own self-generated Reflection output.
+///
+/// NOT applied to live ranking by default -- see SearchFilter::
+/// apply_source_quality's doc comment. Bounds mirror salience_w's (0.85–
+/// 1.15) so the two are directly comparable once validated.
+pub fn source_quality_w(source: MemorySource) -> f32 {
+    match source {
+        MemorySource::ObsidianBooks | MemorySource::Obsidian => 1.15,
+        MemorySource::Perplexity => 1.0,
+        MemorySource::ClaudeCodeSession
+        | MemorySource::CursorHistory
+        | MemorySource::ClawCode
+        | MemorySource::Hermes
+        | MemorySource::Reflection => 0.85,
+    }
 }
 
 /// Connection-parameterized so the /stats fast path (brain_api.rs) can read
@@ -711,6 +749,7 @@ impl Brain {
                 .as_ref()
                 .map(|e| cosine_distance(query_embedding, e))
                 .unwrap_or(1.0);
+            let source_quality = source_quality_w(memory.metadata.source.clone());
             scored.push((
                 SearchResult {
                     id: memory.id,
@@ -718,6 +757,7 @@ impl Brain {
                     metadata: memory.metadata,
                     distance,
                     score,
+                    source_quality,
                 },
                 score,
             ));
@@ -1481,6 +1521,7 @@ mod tests {
                 metadata: brain.store.get_memory(&seed).unwrap().unwrap().metadata,
                 distance: 1.0,
                 score: 0.0,
+                source_quality: 1.0,
             },
             0.0_f32, // the pathological score
         )];
@@ -1994,6 +2035,50 @@ mod tests {
         assert!(
             (ratio - 1.15).abs() < 0.01,
             "ratio should equal salience_w's live value (1.15), got {ratio}"
+        );
+    }
+
+    #[test]
+    fn source_quality_is_always_exposed_but_only_applied_when_requested() {
+        let brain = test_brain();
+        let id = brain
+            .save_memory(
+                "unique thimble content about gardening",
+                MemoryType::Solution,
+                &[],
+                "p",
+                None,
+                MemorySource::Obsidian, // high tier -> source_quality_w = 1.15
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap()
+            .id;
+
+        let default_results = brain.search("thimble content gardening", 5, None).unwrap();
+        let default_hit = default_results.iter().find(|r| r.id == id).unwrap();
+        // Exposed on every result regardless of whether it's applied.
+        assert!(
+            (default_hit.source_quality - 1.15).abs() < 0.001,
+            "source_quality must be computed and exposed even when not applied"
+        );
+        let default_score = default_hit.score;
+
+        let applied_filter = SearchFilter { apply_source_quality: true, ..SearchFilter::default() };
+        let applied_results = brain.search("thimble content gardening", 5, Some(applied_filter)).unwrap();
+        let applied_score = applied_results.iter().find(|r| r.id == id).unwrap().score;
+
+        // Default (apply_source_quality: false) must NOT be boosted -- this
+        // is the "store/expose first, don't touch real ranking" requirement.
+        let ratio = applied_score / default_score;
+        assert!(
+            (ratio - 1.15).abs() < 0.01,
+            "opting in should apply exactly source_quality_w's value (1.15), got ratio {ratio}"
         );
     }
 }
