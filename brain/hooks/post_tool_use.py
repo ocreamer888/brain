@@ -183,7 +183,7 @@ try:
                 "memory_type": "solution",
                 "tags": with_ingest_tag(["edit_group", project]),
                 "project": project,
-                "source": "claude_code_hook",
+                "source": os.environ.get("BRAIN_HOOK_SOURCE", "claude_code_hook"),
                 "title": group_title,
             }
             try:
@@ -230,7 +230,7 @@ try:
             "memory_type": memory_type,
             "tags": tags,
             "project": project,
-            "source": "claude_code_hook",
+            "source": os.environ.get("BRAIN_HOOK_SOURCE", "claude_code_hook"),
             "title": title,
         }
         try:
