@@ -28,7 +28,7 @@ use brain::embedder::{embedder_from_env, EmbedderBackend};
 use brain::summarizer::{AnthropicClient, OllamaClient, OpenRouterClient};
 use brain::{
     apply_type_diversity_cap, compute_stats, rank_candidates, BrainError, FeedbackEventType,
-    FeedbackSource, Memory, MemorySource, MemoryType, SearchFilter,
+    FeedbackSource, Memory, MemorySource, MemoryType, SearchFilter, SearchResult,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -637,9 +637,17 @@ async fn stats(
         (reg.active_id.clone(), name)
     };
     let handles = state.fast.read().unwrap_or_else(|p| p.into_inner()).clone();
-    let mut value = if let Some(pool) = handles.read_pool {
-        let conn = pool.acquire();
-        let stats = compute_stats(&conn, &handles.save_count).map_err(internal_err)?;
+    let mut value = if handles.read_pool.is_some() {
+        // See the /search handler's comment: keep blocking SQLite work off
+        // the async runtime's worker threads.
+        let stats = tokio::task::spawn_blocking(move || {
+            let pool = handles.read_pool.as_ref().expect("checked Some above");
+            let conn = pool.acquire();
+            compute_stats(&conn, &handles.save_count)
+        })
+        .await
+        .expect("stats fast-path task panicked")
+        .map_err(internal_err)?;
         stats_value(&stats)
     } else {
         let brain = lock_brain(&state);
@@ -853,19 +861,31 @@ async fn search(
     // `:memory:` DB, tests only) or if graph_expand was explicitly requested.
     let results = if !filter.graph_expand {
         let handles = state.fast.read().unwrap_or_else(|p| p.into_inner()).clone();
-        if let Some(pool) = handles.read_pool {
-            let conn = pool.acquire();
-            let (scored, _embedding, type_filter_active) = rank_candidates(
-                &conn,
-                &handles.index,
-                handles.embedder.as_ref(),
-                handles.hybrid_alpha,
-                &req.query,
-                req.n,
-                Some(&filter),
-            )
-            .map_err(internal_err)?;
-            apply_type_diversity_cap(scored, req.n, type_filter_active)
+        if handles.read_pool.is_some() {
+            let query = req.query.clone();
+            let n = req.n;
+            // Blocking SQLite + embedding work must run off the async runtime's
+            // worker threads (same convention as every other handler in this
+            // file) -- otherwise concurrent requests starve each other for
+            // Tokio worker threads even though they no longer contend for
+            // Arc<Mutex<Brain>>.
+            tokio::task::spawn_blocking(move || -> Result<Vec<SearchResult>, BrainError> {
+                let pool = handles.read_pool.as_ref().expect("checked Some above");
+                let conn = pool.acquire();
+                let (scored, _embedding, type_filter_active) = rank_candidates(
+                    &conn,
+                    &handles.index,
+                    handles.embedder.as_ref(),
+                    handles.hybrid_alpha,
+                    &query,
+                    n,
+                    Some(&filter),
+                )?;
+                Ok(apply_type_diversity_cap(scored, n, type_filter_active))
+            })
+            .await
+            .expect("search fast-path task panicked")
+            .map_err(internal_err)?
         } else {
             lock_brain(&state).search(&req.query, req.n, Some(filter)).map_err(internal_err)?
         }
