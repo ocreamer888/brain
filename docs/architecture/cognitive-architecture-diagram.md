@@ -72,7 +72,7 @@ flowchart TD
         SQ["source_quality_w(source)<br/>HOW MUCH to trust the origin, computed from source<br/>93.7% of rows are claude_code_session alone (one tier) —<br/>exposed on every result; not applied to ranking by default,<br/>inconclusive A/B on the current gold set (2026-11-05)"]
         SAL["salience<br/>LLM score set once at save; UI 'pin'<br/>live in ranking only when salience_pinned (G0, 2026-11-04)"]
         FP["file_path<br/>strongest 'same subject' signal<br/>only 2.7% of rows have it (G10)"]
-        SUP["superseded_by<br/>today: HIDES the old row from search<br/>vision: explicit layer link (w = 1)<br/>also overloaded for quarantine:* (not history)"]
+        SUP["superseded_by<br/>today: HIDES the old row from search<br/>vision: explicit layer link (w = 1)<br/>overloaded for quarantine:*/hidden:* (not history) —<br/>resolved_supersedes() (store.rs, 2026-11-05) resolves this<br/>safely; dangling pointers (59 rows) reclassified, not left raw"]
     end
 
     CONF["confidence c(m)<br/>NOT a column — derived at query time<br/>from layer depth (spec §8.3)"]

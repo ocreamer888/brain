@@ -465,6 +465,19 @@ cfb55c6  2026-07-27  docs: add brain instances multi-DB workspace design
 
 ---
 
+### 3.25 `7db2915` — reclassify dangling superseded_by pointers, add resolved_supersedes (2026-11-05)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` (data fix + prep code, no live behavior change) |
+| **Before** | 59 live rows had `superseded_by` set to a UUID that no longer resolved to any existing memory — their real successor had been deleted by a later cleanup pass. Every existing quarantine/cleanup tool (`hide_untraceable_bad_project_facts.py`, `quarantine_path_fragment_facts.py`, `recategorize_generic_project_tags.py`, `retag_path_fragment_projects.py`) explicitly skips rows where `superseded_by` is already non-null, so these 59 fell through every pass — sampled and confirmed same mechanical session-dump noise, same `cursor`/`src`/`frontend` project pattern as the already-quarantined May-2026 backfill-bug rows, just excluded by every `WHERE` clause written so far. |
+| **After** | `brain/tools/reclassify_dangling_superseded.py` relabels them with the same `quarantine:*` sentinel convention the rest of the corpus already uses (backed up to `junk_scrub_backups/` first). No visibility change — both the old dangling UUID and the new sentinel were already excluded by `SearchFilter::exclude_superseded`'s non-null check. `store.rs` gains `resolved_supersedes(conn, superseded_by)` — returns the real target id only if it's non-empty, not a `quarantine:*`/`hidden:*` sentinel, and actually resolves to an existing row. Deliberately did **not** touch the 7 existing scripts or their string convention — rewriting working tools that already partially preserve quarantine reasons in `tags` wasn't justified for a feature (G7/G8) not yet being built. |
+| **How** | `brain/tools/reclassify_dangling_superseded.py` (new), `brain/rust/src/store.rs`. |
+| **Why** | Closes the `superseded_by` cleanup identified while scoping G2 — a real prerequisite for G7/G8 to ever safely walk supersede chains as layer links. |
+| **Verification** | `cargo test --lib`: 163 passed (new: `resolved_supersedes_none_for_absent_or_sentinel_or_dangling`, `resolved_supersedes_some_for_a_real_existing_row`). `cargo test --bin brain_api`: 20 passed. Live DB verified post-fix: the "other string value" `superseded_by` category dropped to 0; total memory count unchanged (23,694) confirming no rows lost. |
+
+---
+
 ## 4. Uncommitted working-tree changes (as of 2026-07-28)
 
 Verified with `git status` / `git diff` at documentation time.
@@ -621,4 +634,4 @@ When landing further work:
 3. Move items from §5 → §3 when implementation merges.
 4. Do not delete old entries — append corrections with a dated note if a decision reverses.
 
-**Last verified against git:** 2026-07-28 (HEAD `6e75315` + WIP listed in §4) for §§1–3.8; 2026-11-05 (HEAD `8303cfe` + WIP listed in §4's final entry) for §3.9 onward.
+**Last verified against git:** 2026-07-28 (HEAD `6e75315` + WIP listed in §4) for §§1–3.8; 2026-11-05 (HEAD `7db2915` + WIP listed in §4's final entry) for §3.9 onward.
