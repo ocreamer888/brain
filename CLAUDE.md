@@ -120,7 +120,7 @@ Focus on:
 
 ## Brain (Persistent Memory)
 
-You have a persistent brain on the `brain` MCP server, the same one Cursor uses. Saves happen only when you call `save_memory_tool`. Do not run session hooks, transcript summarizers, or dedup cleanup.
+You have a persistent brain on the `brain` MCP server, the same one Cursor uses. Saves happen via `save_memory_tool` **and** via this repo's project-level `.claude/settings.json` hooks (`SessionStart`/`UserPromptSubmit`/`PostToolUse`/`Stop` → `brain/hooks/*.py`) — both are live as of 2026-11-04 (see `AGENTS.md` and `docs/CHANGELOG-SHARED-CODE-BRAIN.md` §10 for how this was verified and why an earlier "hooks off" note was wrong). Do not run `reflect_tool` or any separate dedup/cleanup script yourself outside those paths — the Stop hook's `run_cleanup.py` already handles dedup automatically.
 
 ### Quick Start
 
