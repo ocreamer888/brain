@@ -128,6 +128,10 @@ pub struct SearchResult {
     /// set `SearchFilter::apply_source_quality` (default off).
     #[serde(default)]
     pub source_quality: f32,
+    /// Only set when `SearchFilter::include_superseded_with_lineage` let
+    /// this superseded row through -- see that field's doc comment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lineage: Option<MemoryLineage>,
 }
 
 #[derive(Debug, Clone)]
@@ -174,6 +178,35 @@ pub struct SearchFilter {
     /// Still request-overridable to `false` for eval/ops work that needs
     /// the pre-G8 baseline for comparison.
     pub use_layer_confidence: bool,
+    /// Spec §8.8 open question 1 (owner condition, 2026-11-06): a
+    /// superseded memory may resurface in search ONLY if the result
+    /// genuinely carries its historical link — what it was replaced by —
+    /// not stale content with no traceability. When true: a row with
+    /// `exclude_superseded=true` and a non-null `superseded_by` is no
+    /// longer hard-excluded; it is let through *only if*
+    /// `store::resolved_supersedes` resolves it to a real, existing row
+    /// (a dangling id or a `quarantine:*`/`hidden:*` sentinel still has
+    /// nothing to trace, so it stays excluded either way). When let
+    /// through, `SearchResult::lineage` is populated with the resolved
+    /// successor and this row's own `layer::depth()`/`layer_w()` — the
+    /// "timeline position" the owner asked to see, not just the row.
+    /// Default off; does nothing when `exclude_superseded` is false
+    /// (nothing is being excluded to let back in).
+    pub include_superseded_with_lineage: bool,
+}
+
+/// Populated on a `SearchResult` only when `SearchFilter::
+/// include_superseded_with_lineage` let a superseded memory through —
+/// `None` for every other result, including every result today before
+/// this field existed. This is the traceability payload spec §8.8's
+/// resurfacing condition requires: what replaced this memory, and how
+/// deep it sits in its own stack.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryLineage {
+    pub superseded_by_id: String,
+    pub superseded_by_snippet: String,
+    pub depth: f32,
+    pub layer_w: f32,
 }
 
 impl Default for SearchFilter {
@@ -188,6 +221,7 @@ impl Default for SearchFilter {
             salience_neutral: false,
             apply_source_quality: false,
             use_layer_confidence: true,
+            include_superseded_with_lineage: false,
         }
     }
 }

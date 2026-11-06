@@ -15,7 +15,7 @@ use crate::title::derive_memory_title;
 use crate::summarizer::{LlmClient, ReflectionResult, Summarizer};
 use crate::{
     BrainError, BrainStats, FeedbackEventRecord, FeedbackEventType, FeedbackSource, Memory,
-    MemoryMetadata, MemorySource, MemoryType, SaveOutcome, SearchFilter, SearchResult,
+    MemoryLineage, MemoryMetadata, MemorySource, MemoryType, SaveOutcome, SearchFilter, SearchResult,
 };
 
 /// Cosine-distance threshold for the preventive save-time dedup guard. Memories
@@ -478,6 +478,7 @@ pub fn rank_candidates(
                 continue;
             }
 
+            let mut lineage: Option<MemoryLineage> = None;
             if let Some(f) = filter {
                 if let Some(ref mt) = f.memory_type {
                     if &memory.metadata.memory_type != mt {
@@ -490,7 +491,36 @@ pub fn rank_candidates(
                     }
                 }
                 if f.exclude_superseded && memory.metadata.superseded_by.is_some() {
-                    continue;
+                    // Spec §8.8 open question 1 (owner condition, 2026-11-06):
+                    // a superseded row may only resurface if the result
+                    // genuinely carries its historical link. Resolve first;
+                    // a dangling id or a quarantine:*/hidden:* sentinel has
+                    // nothing to trace, so it stays excluded even with the
+                    // flag on -- this is the gate, not a bypass around it.
+                    if !f.include_superseded_with_lineage {
+                        continue;
+                    }
+                    let resolved = crate::store::resolved_supersedes(
+                        conn,
+                        memory.metadata.superseded_by.as_deref(),
+                    )?;
+                    let Some(successor_id) = resolved else {
+                        continue;
+                    };
+                    let snippet: String = crate::store::get_memory_conn(conn, &successor_id)?
+                        .map(|m| m.content.chars().take(180).collect())
+                        .unwrap_or_default();
+                    let depth = layer::depth(
+                        conn,
+                        &memory.id,
+                        memory.metadata.superseded_by.as_deref(),
+                    )?;
+                    lineage = Some(MemoryLineage {
+                        superseded_by_id: successor_id,
+                        superseded_by_snippet: snippet,
+                        depth: depth as f32,
+                        layer_w: layer::layer_w(depth, layer::DEFAULT_FLOOR, layer::DEFAULT_LAMBDA) as f32,
+                    });
                 }
             }
 
@@ -588,6 +618,7 @@ pub fn rank_candidates(
                     distance,
                     score: final_score,
                     source_quality,
+                    lineage,
                 },
                 final_score,
             ));
@@ -788,6 +819,11 @@ impl Brain {
                     distance,
                     score,
                     source_quality,
+                    // Graph-expand neighbors never go through the
+                    // exclude_superseded/lineage gate above -- out of
+                    // scope for this path, same as source_quality's
+                    // apply_source_quality flag is for ranking.
+                    lineage: None,
                 },
                 score,
             ));
@@ -1601,6 +1637,7 @@ mod tests {
                 distance: 1.0,
                 score: 0.0,
                 source_quality: 1.0,
+                lineage: None,
             },
             0.0_f32, // the pathological score
         )];
@@ -2114,6 +2151,133 @@ mod tests {
         assert!(
             (ratio - 1.15).abs() < 0.01,
             "ratio should equal salience_w's live value (1.15), got {ratio}"
+        );
+    }
+
+    #[test]
+    fn include_superseded_with_lineage_off_by_default_matches_today() {
+        // Regression safety: with the new flag absent/false, a superseded
+        // row with a perfectly resolvable successor must still be fully
+        // excluded, byte-for-byte the same as before this field existed.
+        let brain = test_brain();
+        let old_id = save(
+            &brain,
+            "unique turnip content about queue draining",
+            MemoryType::Solution,
+            "p",
+        );
+        let new_id = save(
+            &brain,
+            "distractor content entirely unrelated",
+            MemoryType::Solution,
+            "p",
+        );
+        brain.store.mark_superseded(&old_id, &new_id).unwrap();
+
+        // Realistic path: brain_api.rs always constructs Some(filter) for
+        // real HTTP traffic, never None (verified by reading every /search
+        // handler). A bare `Some(SearchFilter::default())` is the actual
+        // production default this test needs to protect.
+        let default_filter = SearchFilter::default();
+        let default_results = brain
+            .search("turnip content queue draining", 5, Some(default_filter))
+            .unwrap();
+        assert!(
+            default_results.iter().all(|r| r.id != old_id),
+            "superseded row must stay excluded under SearchFilter::default()"
+        );
+
+        let explicit_off_filter = SearchFilter {
+            include_superseded_with_lineage: false,
+            ..SearchFilter::default()
+        };
+        let explicit_off = brain
+            .search("turnip content queue draining", 5, Some(explicit_off_filter))
+            .unwrap();
+        assert!(
+            explicit_off.iter().all(|r| r.id != old_id),
+            "superseded row must stay excluded with the new flag explicitly false"
+        );
+    }
+
+    #[test]
+    fn include_superseded_with_lineage_surfaces_resolvable_rows_with_real_lineage() {
+        let brain = test_brain();
+        let old_id = save(
+            &brain,
+            "unique sorghum content about index rebuilds",
+            MemoryType::Solution,
+            "p",
+        );
+        let new_id = save(
+            &brain,
+            "distractor content entirely unrelated",
+            MemoryType::Solution,
+            "p",
+        );
+        brain.store.mark_superseded(&old_id, &new_id).unwrap();
+
+        let filter = SearchFilter {
+            include_superseded_with_lineage: true,
+            ..SearchFilter::default()
+        };
+        let results = brain
+            .search("sorghum content index rebuilds", 5, Some(filter))
+            .unwrap();
+        let old_result = results
+            .iter()
+            .find(|r| r.id == old_id)
+            .expect("resolvable superseded row should surface with the flag on");
+
+        let lineage = old_result
+            .lineage
+            .as_ref()
+            .expect("a surfaced superseded row must carry real lineage, not just appear");
+        assert_eq!(
+            lineage.superseded_by_id, new_id,
+            "lineage must point at the real resolved successor"
+        );
+        assert!(
+            lineage.superseded_by_snippet.contains("distractor content"),
+            "lineage must carry an actual snippet of the successor, not an empty placeholder: {:?}",
+            lineage.superseded_by_snippet
+        );
+        // depth=1.0 (one explicit supersede, weight 1.0) -> layer_w strictly below 1.0.
+        assert!((lineage.depth - 1.0).abs() < 1e-6, "depth was {}", lineage.depth);
+        assert!(
+            lineage.layer_w < 1.0,
+            "a surfaced old layer must show a reduced layer_w, not a neutral one: {}",
+            lineage.layer_w
+        );
+    }
+
+    #[test]
+    fn include_superseded_with_lineage_still_excludes_untraceable_rows() {
+        // The flag gates on traceability, not on "show more stuff": a
+        // dangling or sentinel superseded_by has nothing real to trace, so
+        // it must stay excluded even with the flag on.
+        let brain = test_brain();
+        let old_id = save(
+            &brain,
+            "unique chicory content about retry budgets",
+            MemoryType::Solution,
+            "p",
+        );
+        brain
+            .store
+            .mark_superseded(&old_id, "this-id-does-not-exist")
+            .unwrap();
+
+        let filter = SearchFilter {
+            include_superseded_with_lineage: true,
+            ..SearchFilter::default()
+        };
+        let results = brain
+            .search("chicory content retry budgets", 5, Some(filter))
+            .unwrap();
+        assert!(
+            results.iter().all(|r| r.id != old_id),
+            "a dangling superseded_by must stay excluded -- nothing to trace"
         );
     }
 

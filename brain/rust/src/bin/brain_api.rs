@@ -290,6 +290,10 @@ struct SearchRequest {
     /// needs the pre-G8 baseline.
     #[serde(default = "default_true")]
     use_layer_confidence: bool,
+    /// Spec §8.8 open question 1 -- see SearchFilter::
+    /// include_superseded_with_lineage's doc comment. Default off.
+    #[serde(default)]
+    include_superseded_with_lineage: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -938,6 +942,7 @@ async fn search(
         salience_neutral: req.salience_neutral,
         apply_source_quality: req.apply_source_quality,
         use_layer_confidence: req.use_layer_confidence,
+        include_superseded_with_lineage: req.include_superseded_with_lineage,
         ..SearchFilter::default()
     };
 
@@ -1008,6 +1013,7 @@ async fn search_index_handler(
         alpha: req.alpha,
         graph_expand: req.graph_expand,
         use_layer_confidence: req.use_layer_confidence,
+        include_superseded_with_lineage: req.include_superseded_with_lineage,
         ..SearchFilter::default()
     };
     let full = brain
