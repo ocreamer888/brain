@@ -1,0 +1,529 @@
+{
+  "n_labeled": 70,
+  "n_resolvable": 61,
+  "dropped_idx": [
+    57,
+    58,
+    59,
+    60,
+    62,
+    63,
+    67,
+    68,
+    69
+  ],
+  "errors": 0,
+  "elapsed_s": 53.45466494560242,
+  "confusion": {
+    "RELATED|SKIPPED(<floor)": 7,
+    "UNRELATED|SKIPPED(<floor)": 7,
+    "LAYER|RELATED": 10,
+    "RELATED|RELATED": 21,
+    "RELATED|UNRELATED": 2,
+    "LAYER|LAYER": 5,
+    "DUP|RELATED": 4,
+    "RELATED|LAYER": 2,
+    "UNRELATED|RELATED": 1,
+    "UNRELATED|UNRELATED": 1,
+    "LAYER|DUP": 1
+  },
+  "layer_binary": {
+    "tp": 5,
+    "fp": 2,
+    "fn": 11,
+    "tn": 43,
+    "precision": 0.7142857142857143,
+    "recall": 0.3125,
+    "f1": 0.43478260869565216
+  },
+  "results": [
+    {
+      "idx": 0,
+      "band": "0.0-0.5",
+      "sim": 0.395,
+      "truth": "RELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 1,
+      "band": "0.0-0.5",
+      "sim": 0.359,
+      "truth": "RELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 2,
+      "band": "0.0-0.5",
+      "sim": 0.311,
+      "truth": "RELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 3,
+      "band": "0.0-0.5",
+      "sim": 0.155,
+      "truth": "UNRELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 4,
+      "band": "0.0-0.5",
+      "sim": 0.462,
+      "truth": "RELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 5,
+      "band": "0.0-0.5",
+      "sim": 0.372,
+      "truth": "RELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 6,
+      "band": "0.0-0.5",
+      "sim": 0.484,
+      "truth": "RELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 7,
+      "band": "0.0-0.5",
+      "sim": 0.494,
+      "truth": "UNRELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 8,
+      "band": "0.0-0.5",
+      "sim": 0.19,
+      "truth": "UNRELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 9,
+      "band": "0.0-0.5",
+      "sim": 0.348,
+      "truth": "UNRELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 10,
+      "band": "0.0-0.5",
+      "sim": 0.039,
+      "truth": "UNRELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 11,
+      "band": "0.0-0.5",
+      "sim": 0.138,
+      "truth": "UNRELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 12,
+      "band": "0.0-0.5",
+      "sim": 0.436,
+      "truth": "UNRELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 13,
+      "band": "0.0-0.5",
+      "sim": 0.373,
+      "truth": "RELATED",
+      "judged": "SKIPPED(<floor)",
+      "reason": ""
+    },
+    {
+      "idx": 14,
+      "band": "0.5-0.65",
+      "sim": 0.628,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory adds independent facts (agent OS harness details, molecule_catalog preference) and a different transcript count, while the older memory's specific claims about workspace facts and preferences remain independently valid and not overridden."
+    },
+    {
+      "idx": 15,
+      "band": "0.5-0.65",
+      "sim": 0.532,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory describes an index on a different column, which is an independent fact about the same table that does not override or replace the older memory's claim about column aliases."
+    },
+    {
+      "idx": 16,
+      "band": "0.5-0.65",
+      "sim": 0.577,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory adds an independent fact (phone numbers) about the same entity without overriding or correcting the older memory's specific claim about the legal representative."
+    },
+    {
+      "idx": 17,
+      "band": "0.5-0.65",
+      "sim": 0.625,
+      "truth": "RELATED",
+      "judged": "UNRELATED",
+      "reason": "The two memories describe different Angular routes (/module/bid/public/contests-published-awarded vs /module/bid/public/general-report) calling different endpoints, with no status override or version relationship between them."
+    },
+    {
+      "idx": 18,
+      "band": "0.5-0.65",
+      "sim": 0.597,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "the newer memory provides a general overview of connection types while the older memory elaborates on session recovery behavior, and neither supersedes or contradicts the other"
+    },
+    {
+      "idx": 19,
+      "band": "0.5-0.65",
+      "sim": 0.591,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory adds execution details and status updates to the same command but does not override or replace the older memory's specific content."
+    },
+    {
+      "idx": 20,
+      "band": "0.5-0.65",
+      "sim": 0.539,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory describes a separate runtime patching mechanism for the test rig, which adds an independent detail to the PPF Contact Solver API without overriding the older memory's description of the built scene API."
+    },
+    {
+      "idx": 21,
+      "band": "0.5-0.65",
+      "sim": 0.602,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "Criterion B: the older memory explicitly states there is no extracted_text table, while the newer memory creates the cartel_file_extracts table, making the older status claim obsolete."
+    },
+    {
+      "idx": 22,
+      "band": "0.5-0.65",
+      "sim": 0.554,
+      "truth": "DUP",
+      "judged": "RELATED",
+      "reason": "The newer memory describes a specific troubleshooting step (manually creating .env.local) that complements the older memory's broader configuration work without overriding or superseding it."
+    },
+    {
+      "idx": 23,
+      "band": "0.5-0.65",
+      "sim": 0.54,
+      "truth": "RELATED",
+      "judged": "LAYER",
+      "reason": "Criterion B: the newer memory overrides the older memory's status claim by revealing that the Agent OS Slice 1 was never committed or deployed (root cause), making the older memory's implication that the rail was merely dark-launched with pending configuration steps no longer the accurate answer to what's pending for production."
+    },
+    {
+      "idx": 24,
+      "band": "0.5-0.65",
+      "sim": 0.588,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory describes Task 4 completion with new SOUL.md rules, while the older memory covers Task 2 status; they are distinct sub-tasks with independently valid information rather than one superseding the other."
+    },
+    {
+      "idx": 25,
+      "band": "0.5-0.65",
+      "sim": 0.577,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory adds a separate documentation change about the byte extraction workflow while the older memory's comment update about the file's purpose remains independently valid and not overridden."
+    },
+    {
+      "idx": 26,
+      "band": "0.5-0.65",
+      "sim": 0.562,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory adds independent information about ENIA's guiding principles without overriding or replacing the older memory's specific claim about its aim to support AI growth."
+    },
+    {
+      "idx": 27,
+      "band": "0.5-0.65",
+      "sim": 0.565,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory describes a separate execution of the same project with a different focus (GUFIC_SALE block vs ACI SICOP_SALE), which adds an independent detail without overriding the older memory's specific implementation report."
+    },
+    {
+      "idx": 28,
+      "band": "0.65-0.78",
+      "sim": 0.727,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory covers Task 6 of the same project while the older covers Task 1, with both describing independently-valid aspects of different sub-tasks rather than one superseding the other."
+    },
+    {
+      "idx": 29,
+      "band": "0.65-0.78",
+      "sim": 0.679,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory adds independent factual information about the properties of Zamak without overriding or correcting the older memory's definition, which remains equally valid."
+    },
+    {
+      "idx": 30,
+      "band": "0.65-0.78",
+      "sim": 0.734,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory adds background context about Claudio Dubuis's training without overriding the older memory's specific claim about his current role, so elaboration is not override."
+    },
+    {
+      "idx": 31,
+      "band": "0.65-0.78",
+      "sim": 0.743,
+      "truth": "UNRELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory describes a separate worker module that orchestrates jobs, while the older memory documents a read-only canary sample script; both are independently valid components of the harness with no status override or same-artifact versioning."
+    },
+    {
+      "idx": 32,
+      "band": "0.65-0.78",
+      "sim": 0.65,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory describes production implementation details (API endpoints, router logic, tests) for the same project, while the older memory covers UI design decisions; both are independently valid aspects of the project with no status override or artifact versioning."
+    },
+    {
+      "idx": 33,
+      "band": "0.65-0.78",
+      "sim": 0.693,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory describes a blocker encountered during Task 3 of the same feature branch, adding independent context about a missing grain that does not override the older memory's status of Task 2 completion and SQL review blockage."
+    },
+    {
+      "idx": 34,
+      "band": "0.65-0.78",
+      "sim": 0.699,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory provides algorithmic and data flow details that elaborate on the ppf-contact-solver project without overriding or superseding the older memory's content."
+    },
+    {
+      "idx": 35,
+      "band": "0.65-0.78",
+      "sim": 0.709,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory describes an independent export functionality that complements the older update functionality, without overriding or replacing it."
+    },
+    {
+      "idx": 36,
+      "band": "0.65-0.78",
+      "sim": 0.681,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory adds an independent fact about M1 Mac compatibility while the older memory's specific answer about iPad M3 limitations remains valid and useful."
+    },
+    {
+      "idx": 37,
+      "band": "0.65-0.78",
+      "sim": 0.693,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory adds specific version details (5.2 LTS) and next steps without overriding the older memory's architectural decisions, which remain valid."
+    },
+    {
+      "idx": 38,
+      "band": "0.65-0.78",
+      "sim": 0.656,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory adds an independent utility function (print) to a different file (_session_.py) while the older memory's specific answer about is_jupyter_notebook in _plot_.py remains equally valid and useful."
+    },
+    {
+      "idx": 39,
+      "band": "0.65-0.78",
+      "sim": 0.754,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory adds an independent status detail (waiting_for_slide, no console access) while the older memory's specific answer about needing the user to paste the URL remains equally valid and useful."
+    },
+    {
+      "idx": 40,
+      "band": "0.65-0.78",
+      "sim": 0.702,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "Criterion B: the newer memory describes a fix that corrects the bug stated in the older memory, making the older memory's specific claim about the broken state no longer the current answer."
+    },
+    {
+      "idx": 41,
+      "band": "0.65-0.78",
+      "sim": 0.697,
+      "truth": "UNRELATED",
+      "judged": "UNRELATED",
+      "reason": "The two memories describe completely different files (cgr-hub.tsx vs precios-search.tsx) with different functionality (tender filtering vs price search), sharing only the project name."
+    },
+    {
+      "idx": 42,
+      "band": "0.78-0.92",
+      "sim": 0.783,
+      "truth": "RELATED",
+      "judged": "UNRELATED",
+      "reason": "The two memories describe configuration files for two different country ETL projects (El Salvador and Honduras) with no status override or same-artifact relationship."
+    },
+    {
+      "idx": 43,
+      "band": "0.78-0.92",
+      "sim": 0.794,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "Criterion B: the newer memory reports the task as fully completed with both shards passing, overriding the older memory's status of shard 1 still running and failing to reach the pass line."
+    },
+    {
+      "idx": 44,
+      "band": "0.78-0.92",
+      "sim": 0.79,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "Criterion A: both memories describe the same specific file (docs/superpowers/specs/2026-10-10-source-field-ledger-design.md) with the newer one being a more current version that supersedes the older one."
+    },
+    {
+      "idx": 45,
+      "band": "0.78-0.92",
+      "sim": 0.798,
+      "truth": "RELATED",
+      "judged": "LAYER",
+      "reason": "Criterion A: both memories are sequential approvals of the same artifact (Tendrium Agent OS design), with the newer memory (section 2) superseding the older (section 1) as the current version to reference."
+    },
+    {
+      "idx": 46,
+      "band": "0.78-0.92",
+      "sim": 0.87,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory describes Phase D, a subsequent and independent phase that depends on Phase B rather than superseding it, so the older memory's specific content about Phase B remains valid and useful."
+    },
+    {
+      "idx": 47,
+      "band": "0.78-0.92",
+      "sim": 0.816,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory covers different artifacts and UI components (CmReqListQ path, POA406, IJQ001/002, etc.) from a later pass range, adding independent details without overriding any specific claim from the older memory."
+    },
+    {
+      "idx": 48,
+      "band": "0.78-0.92",
+      "sim": 0.803,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory describes a separate API surface (static ops on STATIC groups) that complements but does not override or replace the older memory's pin operation API."
+    },
+    {
+      "idx": 49,
+      "band": "0.78-0.92",
+      "sim": 0.89,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory describes a different method (clear for single parameter) that complements the older memory (clear_all for all parameters) without overriding or superseding it."
+    },
+    {
+      "idx": 50,
+      "band": "0.78-0.92",
+      "sim": 0.825,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory adds an independent fact (administrative email) about the same entity without overriding or correcting the older memory's specific claim about its location."
+    },
+    {
+      "idx": 51,
+      "band": "0.78-0.92",
+      "sim": 0.871,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory describes a separate export function while the older memory's _from_trimesh loading function remains independently valid and useful."
+    },
+    {
+      "idx": 52,
+      "band": "0.78-0.92",
+      "sim": 0.887,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory documents a separate API method (fetch) that complements the older memory's method (add) without overriding or replacing it."
+    },
+    {
+      "idx": 53,
+      "band": "0.78-0.92",
+      "sim": 0.849,
+      "truth": "DUP",
+      "judged": "RELATED",
+      "reason": "The newer memory addresses a different test file (planner.test.ts) and a different bug than the older memory (licitacion-skills.ts), representing independently-valid fixes to separate parts of the same project."
+    },
+    {
+      "idx": 54,
+      "band": "0.78-0.92",
+      "sim": 0.791,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The newer memory is a review/approval report for the same commit (ae2128b) that the older memory describes as completed work, adding independent validation context without overriding the older memory's specific technical details."
+    },
+    {
+      "idx": 55,
+      "band": "0.78-0.92",
+      "sim": 0.786,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory is a test file that validates the parser using constants defined in the older memory's validator file, adding independent verification logic without overriding the original implementation."
+    },
+    {
+      "idx": 56,
+      "band": "0.92-1.01",
+      "sim": 0.993,
+      "truth": "LAYER",
+      "judged": "DUP",
+      "reason": "The newer memory is nearly identical to the older one, with only a minor timestamp annotation change and a truncated ending, adding no meaningfully new information."
+    },
+    {
+      "idx": 61,
+      "band": "0.92-1.01",
+      "sim": 0.999,
+      "truth": "DUP",
+      "judged": "RELATED",
+      "reason": "The newer memory adds a new error case (docker-py not found) and generalizes the transport description to cover both local and SSH backends, but the older memory's specific claims about Docker over SSH remain accurate and useful."
+    },
+    {
+      "idx": 64,
+      "band": "0.92-1.01",
+      "sim": 0.992,
+      "truth": "DUP",
+      "judged": "RELATED",
+      "reason": "The newer memory adds example values for Strain Limit and reformats a figure caption, but does not override or correct any specific claim from the older memory."
+    },
+    {
+      "idx": 65,
+      "band": "0.92-1.01",
+      "sim": 0.982,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The newer memory adds a distinct function (get_ci_dir) for a different but related purpose (local CI directory) without overriding the older memory's specific answer about get_ci_root."
+    },
+    {
+      "idx": 66,
+      "band": "0.92-1.01",
+      "sim": 0.932,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "Both memories are versions of the same file (2026-08-25-pharma-procure-layer-design.md) and the newer one updates the status from 'Draft' to 'Implementing', satisfying Criterion A (same artifact, later edit)."
+    }
+  ]
+}

@@ -1,0 +1,282 @@
+{
+  "n_labeled": 32,
+  "n_resolvable": 32,
+  "dropped_idx": [],
+  "errors": 0,
+  "elapsed_s": 37.0793080329895,
+  "confusion": {
+    "RELATED|LAYER": 5,
+    "LAYER|LAYER": 21,
+    "LAYER|RELATED": 3,
+    "RELATED|RELATED": 1,
+    "UNRELATED|LAYER": 1,
+    "DUP|DUP": 1
+  },
+  "layer_binary": {
+    "tp": 21,
+    "fp": 6,
+    "fn": 3,
+    "tn": 2,
+    "precision": 0.7777777777777778,
+    "recall": 0.875,
+    "f1": 0.823529411764706
+  },
+  "results": [
+    {
+      "idx": 1,
+      "band": "n/a",
+      "sim": 0.5019,
+      "truth": "RELATED",
+      "judged": "LAYER",
+      "reason": "The newer memory reports the completion and push of migrations 128-131 on feat/unified-agent, which supersedes the older memory's status that the branch was at migrations 124/125 and had a clean working tree."
+    },
+    {
+      "idx": 2,
+      "band": "n/a",
+      "sim": 0.5391,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the Tendrium Agent OS design process where visual references were locked and spec sections updated, which supersedes the older memory's earlier state of surfacing open items and unconfirmed decisions."
+    },
+    {
+      "idx": 3,
+      "band": "n/a",
+      "sim": 0.5002,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "The older memory reports a completed patching action that fixed nulls in biddoc_end_dt, while the newer memory reports a separate ongoing investigation finding 669 remaining gap candidates with fully null biddoc_end_dt, representing two distinct aspects of data quality work rather than a temporal progression of the same process."
+    },
+    {
+      "idx": 4,
+      "band": "n/a",
+      "sim": 0.6426,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the feat/obs-warehouse branch where the PR is already merged and the developer has moved on to organizing remaining work, which supersedes and makes stale the older memory's status of the branch still being active with WIP."
+    },
+    {
+      "idx": 5,
+      "band": "n/a",
+      "sim": 0.6132,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports the successful completion of the CDE drain that the older memory confirmed had not yet run, directly superseding the older status with the final outcome."
+    },
+    {
+      "idx": 6,
+      "band": "n/a",
+      "sim": 0.5594,
+      "truth": "RELATED",
+      "judged": "LAYER",
+      "reason": "The newer memory provides a comprehensive methodology and list of health sector entities that actively bid on SICOP, implicitly correcting the older memory's specific claim that CENADRO was not identified as a separate buying institution by showing it is part of the broader institutional landscape analyzed in the newer report."
+    },
+    {
+      "idx": 7,
+      "band": "n/a",
+      "sim": 0.6222,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the same specific thing (claude-code-router) where the user has progressed from trying to use it to verifying its configuration is correct, making the older status report stale."
+    },
+    {
+      "idx": 8,
+      "band": "n/a",
+      "sim": 0.5661,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports the final committed state of the same branch (feat/source-field-ledger-guard) after the older fix, superseding its status with the official record and updated test counts."
+    },
+    {
+      "idx": 9,
+      "band": "n/a",
+      "sim": 0.6603,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory is the actual content of CONTEXT.md at a later timestamp (2026-08-18), superseding the older memory's description of the file's purpose and state."
+    },
+    {
+      "idx": 10,
+      "band": "n/a",
+      "sim": 0.7394,
+      "truth": "RELATED",
+      "judged": "LAYER",
+      "reason": "The newer memory describes the procedural steps to establish an S-Corporation, which supersedes the older memory's static definition by providing the actionable process that implies the entity's creation and status election."
+    },
+    {
+      "idx": 11,
+      "band": "n/a",
+      "sim": 0.7724,
+      "truth": "RELATED",
+      "judged": "RELATED",
+      "reason": "The two memories describe distinct, sequential phases of the same project rather than two snapshots of the same ongoing process, so neither makes the other stale."
+    },
+    {
+      "idx": 12,
+      "band": "n/a",
+      "sim": 0.7028,
+      "truth": "RELATED",
+      "judged": "LAYER",
+      "reason": "The newer memory documents a later execution of the same ACI SICOP targeting process (individual molecule verification) that supersedes the older batch completion report with a more specific, current status update."
+    },
+    {
+      "idx": 13,
+      "band": "n/a",
+      "sim": 0.7253,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports the completion of Task 4 (source-field-ledger-guard) which was explicitly marked as not implemented in the older memory, making the older status report stale."
+    },
+    {
+      "idx": 14,
+      "band": "n/a",
+      "sim": 0.7146,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the same continual-learning process on the same project, with a higher entry count (253 vs 47) and updated AGENTS.md content, making the older memory's specific status stale."
+    },
+    {
+      "idx": 15,
+      "band": "n/a",
+      "sim": 0.7011,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the same pharma procurement design process, advancing from selecting Phase C to having written the design spec and locked specific parameters, which supersedes the older status."
+    },
+    {
+      "idx": 16,
+      "band": "n/a",
+      "sim": 0.768,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the DNS configuration for flywithus.aero, showing that the apex A record was updated to 216.150.1.1 and providing a fix for the www record, which supersedes the older memory's status of 'Invalid Configuration until DNS updated'."
+    },
+    {
+      "idx": 17,
+      "band": "n/a",
+      "sim": 0.7959,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports the implementation status and completion of the ACI market entry volume/competitors feature that the older memory was planning to build, making the older plan's status claim stale."
+    },
+    {
+      "idx": 18,
+      "band": "n/a",
+      "sim": 0.8782,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the same 80-CE drain process, showing updated metrics (OP sold 77 vs 61, never_fetched 39\u21923 vs 469\u2192448) and a different next-step action, making the older status report stale."
+    },
+    {
+      "idx": 19,
+      "band": "n/a",
+      "sim": 0.8263,
+      "truth": "RELATED",
+      "judged": "LAYER",
+      "reason": "The newer memory describes an additional urgent alert mechanism that has been added to the process, making the older memory's description of the workflow incomplete and stale by comparison."
+    },
+    {
+      "idx": 20,
+      "band": "n/a",
+      "sim": 0.8609,
+      "truth": "UNRELATED",
+      "judged": "LAYER",
+      "reason": "The newer memory extends the older one by adding a subsequent section (4.3) covering additional entities and private organizations, and provides a consolidated conclusion that supersedes the older memory's narrower scope with a more complete picture of the health sector's SICOP integration."
+    },
+    {
+      "idx": 21,
+      "band": "n/a",
+      "sim": 0.7938,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports the completion and results of the same 16-shard offer-decrypt run described in the older memory, superseding the older memory's launch status with final outcomes including error counts and coverage details."
+    },
+    {
+      "idx": 22,
+      "band": "n/a",
+      "sim": 0.8883,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports that the same 5 security remediation commits were pushed to origin, making the older memory's status of 'not pushed' stale."
+    },
+    {
+      "idx": 23,
+      "band": "n/a",
+      "sim": 0.9089,
+      "truth": "DUP",
+      "judged": "DUP",
+      "reason": "The newer memory restates the older one's content with only a minor formatting difference (colon placement and capitalization) and no meaningfully new information."
+    },
+    {
+      "idx": 24,
+      "band": "n/a",
+      "sim": 0.8036,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the same project initialization, adding specific technology stack details (Next.js, TypeScript, Tailwind) and configuration choices that supersede the older memory's generic description of creating a modular frontend structure."
+    },
+    {
+      "idx": 25,
+      "band": "n/a",
+      "sim": 0.9436,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports classifier v3.13 which explicitly supersedes v3.12 from the older memory, making the older version's specific changes and status stale."
+    },
+    {
+      "idx": 26,
+      "band": "n/a",
+      "sim": 0.984,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "Both describe the same UI panel but cover different sections\u2014the older memory focuses on the profile save workflow while the newer adds details about the collapsible Wind sub-section\u2014neither makes the other stale."
+    },
+    {
+      "idx": 27,
+      "band": "n/a",
+      "sim": 0.973,
+      "truth": "LAYER",
+      "judged": "RELATED",
+      "reason": "Both memories describe the same UI section (Pins) but the newer one adds a new subsection introducing two UI paths for creating pins, which is genuinely new information rather than a state update or restatement."
+    },
+    {
+      "idx": 28,
+      "band": "n/a",
+      "sim": 0.9668,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the same file where the type was reverted from ObsPrecioRow back to PrecioRow with updated fields, making the older memory's claim about using ObsPrecioRow stale."
+    },
+    {
+      "idx": 29,
+      "band": "n/a",
+      "sim": 0.9525,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the same file (CONTEXT.md) where the 'Last updated' line and content scope have progressed from filling the site with honest inventory to adding photography exhibitions, making the older status report stale."
+    },
+    {
+      "idx": 30,
+      "band": "n/a",
+      "sim": 0.9248,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the same CONTEXT.md file with an updated timestamp annotation indicating progress on specific case studies, making the older version's status stale."
+    },
+    {
+      "idx": 31,
+      "band": "n/a",
+      "sim": 0.9855,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory reports a later state of the CONTEXT.md file with an updated timestamp annotation indicating progress ('site + CV filled from honest inventory'), which supersedes the older version's status."
+    },
+    {
+      "idx": 32,
+      "band": "n/a",
+      "sim": 0.9705,
+      "truth": "LAYER",
+      "judged": "LAYER",
+      "reason": "The newer memory shows an updated version of the same file that imports an additional module (crossref) and types, representing a later state of the codebase that supersedes the older version."
+    }
+  ]
+}
