@@ -10,6 +10,8 @@ Solid/green = exists in code today. Dashed/yellow = proposed, not built. Red = r
 
 **Revised 2026-11-05:** salience retirement shipped as `salience_pinned` (G0) rather than a blind retirement — see section 2's `SAL` node. `source_quality_w` added as a new, real (code-shipped) node, closing the gap where the original vision's `source_quality` idea had no place in this diagram — see section 2's new `SQ` node and item 4 below.
 
+**Revised 2026-11-06:** section 3's `LAYER`/`STACK1`/`STACK2` nodes are no longer purely proposed — `depth(m)`, `layer_w(m)`, `c(m)` are implemented (`brain/rust/src/layer.rs`) and backed by a real `memory_links(relation_type='layers_on')` table, populated by a full-corpus backfill (6,163 rows) gated through an LLM judgement step (`brain/ingest/layer_judgment.py`, F1 0.851 on 93 independently-labelled pairs — see `docs/architecture/experiments/2026-11-06-layer-judgment-gate/`). Ranking itself is still gated: `score(x,q)` only uses `layer_w` in place of `salience_w` when a request opts in (`SearchFilter::use_layer_confidence`, default off), validated but not yet the default. Section 4's tiers are confirmed still correct as candidate generation only — one real failure mode found there this revision: tier 2 (shared specific entity) can't distinguish a genuine update from two sibling chunks of one re-ingested document; fixed via a `session_id` chunk-group check at candidate generation, not the judgement step (text alone isn't enough to catch it reliably).
+
 ---
 
 ## 1. Full architecture in vision
