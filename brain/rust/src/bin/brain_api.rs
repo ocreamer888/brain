@@ -285,6 +285,10 @@ struct SearchRequest {
     /// comment. Default off.
     #[serde(default)]
     apply_source_quality: bool,
+    /// G8 eval-only opt-in — see SearchFilter::use_layer_confidence's doc
+    /// comment. Default off.
+    #[serde(default)]
+    use_layer_confidence: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -932,6 +936,7 @@ async fn search(
         graph_expand: req.graph_expand,
         salience_neutral: req.salience_neutral,
         apply_source_quality: req.apply_source_quality,
+        use_layer_confidence: req.use_layer_confidence,
         ..SearchFilter::default()
     };
 

@@ -40,8 +40,14 @@ def rank_of(results: list[dict[str, Any]], target_id: str) -> int | None:
     return None
 
 
-def score_one(case: dict[str, Any], n: int) -> dict[str, Any]:
-    results = api_search(query=case["query"], n=n, project=case.get("project"))
+def score_one(case: dict[str, Any], n: int, use_layer_confidence: bool = False) -> dict[str, Any]:
+    results = api_search(
+        query=case["query"],
+        n=n,
+        project=case.get("project"),
+        memory_type=case.get("memory_type"),
+        use_layer_confidence=use_layer_confidence,
+    )
     new_rank = rank_of(results, case["new_id"])
     old_rank = rank_of(results, case["old_id"])
 
@@ -71,6 +77,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--gold", type=Path, default=Path("brain/eval/gold_recency.jsonl"))
     p.add_argument("--n", type=int, default=10)
     p.add_argument("--report", type=Path, default=Path("brain/eval/last_recency_report.json"))
+    p.add_argument(
+        "--use-layer-confidence",
+        action="store_true",
+        help="G8 A/B: substitute layer_w for salience_w for this run (SearchFilter::use_layer_confidence).",
+    )
     args = p.parse_args(argv)
 
     gold_path = args.gold if args.gold.is_absolute() else _REPO_ROOT / args.gold
@@ -79,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     cases = [json.loads(line) for line in gold_path.read_text().splitlines() if line.strip()]
 
     try:
-        rows = [score_one(c, args.n) for c in cases]
+        rows = [score_one(c, args.n, args.use_layer_confidence) for c in cases]
     except BrainApiError as e:
         print(f"API unavailable: {e}", file=sys.stderr)
         return 2
@@ -92,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = {
         "gold_file": str(gold_path),
+        "use_layer_confidence": args.use_layer_confidence,
         "n_pairs": len(rows),
         "new_in_topk_rate": round(new_in_topk / n, 4),
         "new_outranks_old_rate": round(outranks / len(judged), 4) if judged else None,

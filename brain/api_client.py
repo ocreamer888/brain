@@ -81,6 +81,7 @@ def search(
     graph_expand: bool = False,
     salience_neutral: bool = False,
     apply_source_quality: bool = False,
+    use_layer_confidence: bool = False,
 ) -> list[dict]:
     payload: dict = {"query": query, "n": n, "graph_expand": graph_expand}
     if memory_type:
@@ -98,6 +99,11 @@ def search(
         # Eval-only opt-in to A/B source_quality_w before it's ever applied
         # to real traffic. Default off.
         payload["apply_source_quality"] = True
+    if use_layer_confidence:
+        # G8 (cognitive-architecture-spec.md section 8.4): eval-only opt-in
+        # to A/B layer_w (replaces salience_w for the request) against the
+        # recency gold set. Default off.
+        payload["use_layer_confidence"] = True
     return _request("POST", "/search", payload).get("results", [])
 
 

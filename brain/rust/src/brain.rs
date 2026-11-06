@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::embedder::EmbedderBackend;
 use crate::index::VectorIndex;
+use crate::layer;
 use crate::lookups::{CalendarReport, CalendarWindow, EntityReport, FileReport, ProjectBrief};
 use crate::store::MetadataStore;
 use crate::title::derive_memory_title;
@@ -519,8 +520,25 @@ pub fn rank_candidates(
             // salience=0.5 → 1.00 (neutral), salience=1.0 → 1.15 (boost), salience=0.0 → 0.85 (suppress).
             let sal = memory.metadata.salience as f32;
             let request_forces_neutral = filter.map(|f| f.salience_neutral).unwrap_or(false);
-            let salience_w = if memory.metadata.salience_pinned && !request_forces_neutral {
+            let use_layer_confidence = filter.map(|f| f.use_layer_confidence).unwrap_or(false);
+            // G8: layer_w REPLACES salience_w for the request, not alongside
+            // it (spec §8.4: "score = layer_w · recency_w · hybrid ·
+            // knowledge_w (salience_w retired)") -- so salience_w is forced
+            // neutral whenever layer confidence is in play.
+            let salience_w = if use_layer_confidence {
+                1.0
+            } else if memory.metadata.salience_pinned && !request_forces_neutral {
                 (1.0 + 0.3 * (sal - 0.5)).clamp(0.85, 1.15)
+            } else {
+                1.0
+            };
+            let layer_confidence_w = if use_layer_confidence {
+                let depth = layer::depth(
+                    conn,
+                    &memory.id,
+                    memory.metadata.superseded_by.as_deref(),
+                )? as f32;
+                layer::layer_w(depth as f64, layer::DEFAULT_FLOOR, layer::DEFAULT_LAMBDA) as f32
             } else {
                 1.0
             };
@@ -549,7 +567,12 @@ pub fn rank_candidates(
             } else {
                 1.0
             };
-            let final_score = source_quality_w_applied * salience_w * recency_w * hybrid_score * knowledge_w;
+            let final_score = source_quality_w_applied
+                * salience_w
+                * layer_confidence_w
+                * recency_w
+                * hybrid_score
+                * knowledge_w;
 
             scored.push((
                 SearchResult {
@@ -2085,6 +2108,99 @@ mod tests {
         assert!(
             (ratio - 1.15).abs() < 0.01,
             "ratio should equal salience_w's live value (1.15), got {ratio}"
+        );
+    }
+
+    #[test]
+    fn use_layer_confidence_off_by_default_ignores_layer_links() {
+        let brain = test_brain();
+        let old_id = save(
+            &brain,
+            "unique kernel content about scheduling",
+            MemoryType::Solution,
+            "p",
+        );
+        let new_id = save(
+            &brain,
+            "distractor content entirely unrelated",
+            MemoryType::Solution,
+            "p",
+        );
+
+        let before = brain
+            .search("kernel content scheduling", 5, None)
+            .unwrap();
+        let score_before = before.iter().find(|r| r.id == old_id).unwrap().score;
+
+        layer::insert_layer_link(brain.store.conn(), "l1", &new_id, &old_id, 0.9).unwrap();
+
+        let after = brain
+            .search("kernel content scheduling", 5, None)
+            .unwrap();
+        let score_after = after.iter().find(|r| r.id == old_id).unwrap().score;
+
+        assert!(
+            (score_before - score_after).abs() < 1e-6,
+            "default search (flag off) must ignore memory_links entirely: \
+             before={score_before} after={score_after}"
+        );
+    }
+
+    #[test]
+    fn use_layer_confidence_applies_layer_w_and_retires_salience_w() {
+        let brain = test_brain();
+        let old_id = save(
+            &brain,
+            "unique rutabaga content about load balancing",
+            MemoryType::Solution,
+            "p",
+        );
+        let new_id = save(
+            &brain,
+            "distractor content entirely unrelated",
+            MemoryType::Solution,
+            "p",
+        );
+        // Pin salience high so the baseline run actually gets the boost
+        // that use_layer_confidence must then retire.
+        brain.update_salience(&old_id, 1.0, true).unwrap();
+
+        let baseline_filter = SearchFilter {
+            use_layer_confidence: false,
+            ..SearchFilter::default()
+        };
+        let baseline = brain
+            .search("rutabaga content load balancing", 5, Some(baseline_filter))
+            .unwrap();
+        let baseline_score = baseline.iter().find(|r| r.id == old_id).unwrap().score;
+
+        layer::insert_layer_link(brain.store.conn(), "l1", &new_id, &old_id, 0.9).unwrap();
+
+        let layer_filter = SearchFilter {
+            use_layer_confidence: true,
+            ..SearchFilter::default()
+        };
+        let with_layer = brain
+            .search("rutabaga content load balancing", 5, Some(layer_filter))
+            .unwrap();
+        let layer_score = with_layer.iter().find(|r| r.id == old_id).unwrap().score;
+
+        assert!(
+            layer_score < baseline_score,
+            "layer_w (depth=0.9, bounded <=1.0) should pull the score below the \
+             salience_w=1.15-boosted baseline: baseline={baseline_score} layer={layer_score}"
+        );
+
+        // Exact arithmetic check: layer_score/baseline_score must equal
+        // layer_w(0.9)/salience_w(1.15) -- proving salience_w was retired
+        // (not stacked) and layer_w was computed from the real depth, not
+        // an approximation.
+        let expected_layer_w = layer::layer_w(0.9, layer::DEFAULT_FLOOR, layer::DEFAULT_LAMBDA) as f32;
+        let expected_ratio = expected_layer_w / 1.15_f32;
+        let actual_ratio = layer_score / baseline_score;
+        assert!(
+            (actual_ratio - expected_ratio).abs() < 0.01,
+            "ratio mismatch: expected {expected_ratio} got {actual_ratio}"
         );
     }
 

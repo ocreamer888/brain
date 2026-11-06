@@ -1,0 +1,363 @@
+{
+  "gold_file": "/Users/abundancia888/Documents/Code/brain/brain/eval/gold_recency.jsonl",
+  "use_layer_confidence": true,
+  "n_pairs": 44,
+  "new_in_topk_rate": 0.9318,
+  "new_outranks_old_rate": 0.7143,
+  "n_judged": 42,
+  "neither_surfaced": 2,
+  "per_pair": [
+    {
+      "query": "What is the current state of continual-learning-index.json?",
+      "subject": "continual-learning-index.json",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of brain/bootstrap/07_ingest_claude_code.py?",
+      "subject": "brain/bootstrap/07_ingest_claude_code.py",
+      "new_rank": 35,
+      "old_rank": 33,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of cartel_files?",
+      "subject": "cartel_files",
+      "new_rank": 5,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of feat/source-field-ledger-guard?",
+      "subject": "feat/source-field-ledger-guard",
+      "new_rank": 9,
+      "old_rank": 37,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of source-field ledger guard?",
+      "subject": "source-field ledger guard",
+      "new_rank": 21,
+      "old_rank": 4,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of Tendrium Agent OS?",
+      "subject": "Tendrium Agent OS",
+      "new_rank": 2,
+      "old_rank": 12,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of feat/held-bid-line-exposure?",
+      "subject": "feat/held-bid-line-exposure",
+      "new_rank": 37,
+      "old_rank": 6,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of CPHI Shenzhen?",
+      "subject": "CPHI Shenzhen",
+      "new_rank": null,
+      "old_rank": null,
+      "new_in_topk": false,
+      "new_outranks_old": null
+    },
+    {
+      "query": "What is the current state of shard 0?",
+      "subject": "shard 0",
+      "new_rank": 6,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of docs/superpowers/specs/2026-10-10-source-field-ledger-design.md?",
+      "subject": "docs/superpowers/specs/2026-10-10-source-field-ledger-design.md",
+      "new_rank": 6,
+      "old_rank": 1,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of test_molecule_layer_b_rollup.py?",
+      "subject": "test_molecule_layer_b_rollup.py",
+      "new_rank": 5,
+      "old_rank": 6,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of Scalable Health?",
+      "subject": "Scalable Health",
+      "new_rank": 5,
+      "old_rank": 8,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of hydrate?",
+      "subject": "hydrate",
+      "new_rank": 12,
+      "old_rank": 4,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of .cursor/mcp.json?",
+      "subject": ".cursor/mcp.json",
+      "new_rank": 2,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of continual-learning-index.json?",
+      "subject": "continual-learning-index.json",
+      "new_rank": 1,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of alertas_config?",
+      "subject": "alertas_config",
+      "new_rank": 1,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of meddefi_landingpage?",
+      "subject": "meddefi_landingpage",
+      "new_rank": 8,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of cartelNo?",
+      "subject": "cartelNo",
+      "new_rank": 7,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of Law 9634?",
+      "subject": "Law 9634",
+      "new_rank": 2,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of NEXT_PUBLIC_SITE_URL?",
+      "subject": "NEXT_PUBLIC_SITE_URL",
+      "new_rank": 1,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of ocreamerstudio?",
+      "subject": "ocreamerstudio",
+      "new_rank": 3,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of Tendrium Agent OS visual design?",
+      "subject": "What is the current state of Tendrium Agent OS visual design?",
+      "new_rank": 28,
+      "old_rank": 22,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of the biddoc_end_dt null-fill effort?",
+      "subject": "What is the current state of the biddoc_end_dt null-fill effort?",
+      "new_rank": 5,
+      "old_rank": 18,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of feat/obs-warehouse?",
+      "subject": "What is the current state of feat/obs-warehouse?",
+      "new_rank": 1,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of the production CDE drain?",
+      "subject": "What is the current state of the production CDE drain?",
+      "new_rank": null,
+      "old_rank": 15,
+      "new_in_topk": false,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of the claude-code-router configuration?",
+      "subject": "What is the current state of the claude-code-router configuration?",
+      "new_rank": 1,
+      "old_rank": 4,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of feat/source-field-ledger-guard Task 5?",
+      "subject": "What is the current state of feat/source-field-ledger-guard Task 5?",
+      "new_rank": 24,
+      "old_rank": 15,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of magic-portfolio CONTEXT.md?",
+      "subject": "What is the current state of magic-portfolio CONTEXT.md?",
+      "new_rank": 7,
+      "old_rank": null,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of feat/source-field-ledger-guard Task 4?",
+      "subject": "What is the current state of feat/source-field-ledger-guard Task 4?",
+      "new_rank": 1,
+      "old_rank": 4,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of the pharma procurement layer design?",
+      "subject": "What is the current state of the pharma procurement layer design?",
+      "new_rank": 3,
+      "old_rank": 7,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of flywithus.aero DNS configuration?",
+      "subject": "What is the current state of flywithus.aero DNS configuration?",
+      "new_rank": 2,
+      "old_rank": 3,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of ACI market entry volume and competitors?",
+      "subject": "What is the current state of ACI market entry volume and competitors?",
+      "new_rank": 3,
+      "old_rank": 2,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of the ACI SICOP 80-CE drain?",
+      "subject": "What is the current state of the ACI SICOP 80-CE drain?",
+      "new_rank": 9,
+      "old_rank": 4,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of the historic offer-decrypt shards 2011-2020?",
+      "subject": "What is the current state of the historic offer-decrypt shards 2011-2020?",
+      "new_rank": 3,
+      "old_rank": 5,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of the fix/agent-os-latest-topic-licitacion security remediation push?",
+      "subject": "What is the current state of the fix/agent-os-latest-topic-licitacion security remediation push?",
+      "new_rank": 1,
+      "old_rank": 2,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of the materials inventory project setup?",
+      "subject": "What is the current state of the materials inventory project setup?",
+      "new_rank": 1,
+      "old_rank": 2,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of services/etl/classifier.py?",
+      "subject": "What is the current state of services/etl/classifier.py?",
+      "new_rank": 8,
+      "old_rank": 46,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of the Scene Configuration panel documentation?",
+      "subject": "What is the current state of the Scene Configuration panel documentation?",
+      "new_rank": 15,
+      "old_rank": 13,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of the Pin UI documentation?",
+      "subject": "What is the current state of the Pin UI documentation?",
+      "new_rank": 20,
+      "old_rank": 37,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of precios-search.ts PrecioRow type?",
+      "subject": "What is the current state of precios-search.ts PrecioRow type?",
+      "new_rank": 9,
+      "old_rank": 6,
+      "new_in_topk": true,
+      "new_outranks_old": false
+    },
+    {
+      "query": "What is the current state of magic-portfolio CONTEXT.md (photography)?",
+      "subject": "What is the current state of magic-portfolio CONTEXT.md (photography)?",
+      "new_rank": 5,
+      "old_rank": 6,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of magic-portfolio CONTEXT.md (QOL/LifeHub)?",
+      "subject": "What is the current state of magic-portfolio CONTEXT.md (QOL/LifeHub)?",
+      "new_rank": 3,
+      "old_rank": 6,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of magic-portfolio CONTEXT.md (inventory)?",
+      "subject": "What is the current state of magic-portfolio CONTEXT.md (inventory)?",
+      "new_rank": 3,
+      "old_rank": 8,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    },
+    {
+      "query": "What is the current state of sicop-health historical/cache.ts?",
+      "subject": "What is the current state of sicop-health historical/cache.ts?",
+      "new_rank": 2,
+      "old_rank": 9,
+      "new_in_topk": true,
+      "new_outranks_old": true
+    }
+  ]
+}

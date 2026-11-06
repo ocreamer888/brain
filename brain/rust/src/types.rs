@@ -158,6 +158,17 @@ pub struct SearchFilter {
     /// G0 validated salience (A/B on the trustworthy gold set) and this
     /// default is deliberately flipped. Do not flip without that A/B.
     pub apply_source_quality: bool,
+    /// G8 (cognitive-architecture-spec.md §8.4): when true, replace
+    /// salience_w in the final score with layer_w, derived at query time
+    /// from `layer::depth()` (explicit superseded_by + judged `layers_on`
+    /// memory_links, see brain/rust/src/layer.rs). salience_w becomes 1.0
+    /// for the request when this is set -- the spec is explicit that
+    /// layer_w is meant to *replace* salience_w, not stack with it ("score
+    /// = layer_w · recency_w · hybrid · knowledge_w (salience_w retired)").
+    /// Default off, same reasoning as apply_source_quality: exists for the
+    /// gold-set A/B (brain/tools/recency_eval.py), not for real traffic
+    /// until that A/B says otherwise.
+    pub use_layer_confidence: bool,
 }
 
 impl Default for SearchFilter {
@@ -171,6 +182,7 @@ impl Default for SearchFilter {
             exclude_episodes_by_default: true,
             salience_neutral: false,
             apply_source_quality: false,
+            use_layer_confidence: false,
         }
     }
 }
