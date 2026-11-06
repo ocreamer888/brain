@@ -291,8 +291,9 @@ struct SearchRequest {
     #[serde(default = "default_true")]
     use_layer_confidence: bool,
     /// Spec §8.8 open question 1 -- see SearchFilter::
-    /// include_superseded_with_lineage's doc comment. Default off.
-    #[serde(default)]
+    /// include_superseded_with_lineage's doc comment. Default true as of
+    /// 2026-11-06 (owner decision); request-overridable to false.
+    #[serde(default = "default_true")]
     include_superseded_with_lineage: bool,
 }
 

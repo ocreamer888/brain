@@ -190,8 +190,10 @@ pub struct SearchFilter {
     /// through, `SearchResult::lineage` is populated with the resolved
     /// successor and this row's own `layer::depth()`/`layer_w()` — the
     /// "timeline position" the owner asked to see, not just the row.
-    /// Default off; does nothing when `exclude_superseded` is false
-    /// (nothing is being excluded to let back in).
+    /// Default true as of 2026-11-06 (owner decision, after the opt-in
+    /// build was verified live against real production data). Does
+    /// nothing when `exclude_superseded` is false (nothing is being
+    /// excluded to let back in). Still request-overridable to `false`.
     pub include_superseded_with_lineage: bool,
 }
 
@@ -221,7 +223,7 @@ impl Default for SearchFilter {
             salience_neutral: false,
             apply_source_quality: false,
             use_layer_confidence: true,
-            include_superseded_with_lineage: false,
+            include_superseded_with_lineage: true,
         }
     }
 }

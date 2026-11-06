@@ -2155,10 +2155,11 @@ mod tests {
     }
 
     #[test]
-    fn include_superseded_with_lineage_off_by_default_matches_today() {
-        // Regression safety: with the new flag absent/false, a superseded
-        // row with a perfectly resolvable successor must still be fully
-        // excluded, byte-for-byte the same as before this field existed.
+    fn include_superseded_with_lineage_default_true_surfaces_with_lineage() {
+        // Default flipped true 2026-11-06 (owner decision, after the
+        // opt-in build was verified live). SearchFilter::default() now
+        // lets a resolvable superseded row through, with real lineage --
+        // not silently, the field must actually be populated.
         let brain = test_brain();
         let old_id = save(
             &brain,
@@ -2182,11 +2183,17 @@ mod tests {
         let default_results = brain
             .search("turnip content queue draining", 5, Some(default_filter))
             .unwrap();
-        assert!(
-            default_results.iter().all(|r| r.id != old_id),
-            "superseded row must stay excluded under SearchFilter::default()"
+        let surfaced = default_results
+            .iter()
+            .find(|r| r.id == old_id)
+            .expect("superseded row with a resolvable successor must surface under the new default");
+        assert_eq!(
+            surfaced.lineage.as_ref().expect("must carry lineage, not surface bare").superseded_by_id,
+            new_id
         );
 
+        // Explicit opt-out (eval/ops comparison against the pre-flip
+        // baseline) must still fully exclude it.
         let explicit_off_filter = SearchFilter {
             include_superseded_with_lineage: false,
             ..SearchFilter::default()
@@ -2196,7 +2203,7 @@ mod tests {
             .unwrap();
         assert!(
             explicit_off.iter().all(|r| r.id != old_id),
-            "superseded row must stay excluded with the new flag explicitly false"
+            "superseded row must stay excluded with the flag explicitly false"
         );
     }
 
