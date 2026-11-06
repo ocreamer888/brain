@@ -153,6 +153,59 @@ def get_neighbors(memory_id: str, exclude_superseded: bool = True) -> list[str]:
     ).get("ids", [])
 
 
+def list_by_date(
+    since: str,
+    until: str | None = None,
+    memory_type: str | None = None,
+    project: str | None = None,
+    n: int = 8,
+    when: str = "stored",
+) -> dict:
+    """POST /v1/by_date — calendar window on ingest time or event_time."""
+    payload: dict = {"since": since, "n": n, "when": when or "stored"}
+    if until:
+        payload["until"] = until
+    if memory_type:
+        payload["memory_type"] = memory_type
+    if project:
+        payload["project"] = project
+    return _request("POST", "/v1/by_date", payload)
+
+
+def project_brief(project: str, n: int = 5) -> dict:
+    """POST /v1/project_brief — counts, pinned brief, and other project_context rows."""
+    return _request("POST", "/v1/project_brief", {"project": project, "n": n})
+
+
+def pin_project_brief(project: str, memory_id: str) -> dict:
+    """POST /v1/project_brief/pin — one canonical project_context per project tag."""
+    return _request(
+        "POST",
+        "/v1/project_brief/pin",
+        {"project": project, "memory_id": memory_id},
+    )
+
+
+def unpin_project_brief(project: str) -> dict:
+    """POST /v1/project_brief/unpin — clear the pinned brief for a project tag."""
+    return _request("POST", "/v1/project_brief/unpin", {"project": project})
+
+
+def follow_memory(memory_id: str) -> dict:
+    """POST /v1/follow — successor chain, or why there is no live successor."""
+    return _request("POST", "/v1/follow", {"id": memory_id})
+
+
+def memories_for_file(path: str, n: int = 8) -> dict:
+    """POST /v1/by_file — memories whose file_path equals or ends with the path."""
+    return _request("POST", "/v1/by_file", {"path": path, "n": n})
+
+
+def memories_for_entity(name: str, n: int = 8) -> dict:
+    """POST /v1/by_entity — memories that mention an entity name. Sample is capped."""
+    return _request("POST", "/v1/by_entity", {"name": name, "n": n})
+
+
 def timeline(anchor_id: str, before: int = 3, after: int = 3) -> list[dict]:
     return _request(
         "POST",

@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::embedder::EmbedderBackend;
 use crate::index::VectorIndex;
+use crate::lookups::{CalendarReport, CalendarWindow, EntityReport, FileReport, ProjectBrief};
 use crate::store::MetadataStore;
 use crate::title::derive_memory_title;
 use crate::summarizer::{LlmClient, ReflectionResult, Summarizer};
@@ -803,6 +804,55 @@ impl Brain {
         after: u32,
     ) -> Result<Vec<Memory>, BrainError> {
         self.store.timeline_around(anchor_id, before, after)
+    }
+
+    pub fn memories_in_calendar(
+        &self,
+        window: &CalendarWindow,
+        axis: crate::lookups::TimeAxis,
+        memory_type: &str,
+        project: &str,
+        limit: usize,
+    ) -> Result<CalendarReport, BrainError> {
+        crate::lookups::memories_in_calendar(
+            self.store.conn(),
+            window,
+            axis,
+            memory_type,
+            project,
+            limit,
+        )
+    }
+
+    pub fn pin_project_brief(
+        &self,
+        project: &str,
+        memory_id: &str,
+    ) -> Result<crate::lookups::PinOutcome, crate::lookups::LookupReject> {
+        crate::lookups::pin_project_brief(self.store.conn(), project, memory_id)
+    }
+
+    pub fn unpin_project_brief(
+        &self,
+        project: &str,
+    ) -> Result<bool, crate::lookups::LookupReject> {
+        crate::lookups::unpin_project_brief(self.store.conn(), project)
+    }
+
+    pub fn follow_memory(&self, id: &str) -> Result<crate::lookups::FollowReport, BrainError> {
+        crate::lookups::follow_memory(self.store.conn(), id)
+    }
+
+    pub fn project_brief(&self, project: &str, limit: usize) -> Result<ProjectBrief, BrainError> {
+        crate::lookups::project_brief(self.store.conn(), project, limit)
+    }
+
+    pub fn memories_for_file(&self, path: &str, limit: usize) -> Result<FileReport, BrainError> {
+        crate::lookups::memories_for_file(self.store.conn(), path, limit)
+    }
+
+    pub fn memories_for_entity(&self, name: &str, limit: usize) -> Result<EntityReport, BrainError> {
+        crate::lookups::memories_for_entity(self.store.conn(), name, limit)
     }
 
     /// Get top-N most relevant memories for a topic/project.

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use chrono::{DateTime, Datelike, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use uuid::Uuid;
 
@@ -177,6 +177,16 @@ impl MetadataStore {
         // but had no index; Tier 1 same-subject lookups at query time need one.
         let _ = self.conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_memories_file_path ON memories(file_path) WHERE file_path IS NOT NULL;",
+        );
+        let _ = self.conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_memories_event_time ON memories(event_time) WHERE event_time IS NOT NULL;",
+        );
+        let _ = self.conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS project_pins (
+                project TEXT PRIMARY KEY,
+                memory_id TEXT NOT NULL,
+                pinned_at TEXT NOT NULL
+            );",
         );
 
         // FTS5 index for BM25 hybrid search
@@ -507,57 +517,6 @@ impl MetadataStore {
         out.push(anchor);
         out.extend(after_rows);
         Ok(out)
-    }
-
-    /// Memories whose ingest `timestamp` falls in a calendar window.
-    /// Semantic search cannot answer "what was stored in May"; this is that query.
-    /// `since` is inclusive and `until` is exclusive, both `YYYY-MM-DD`.
-    pub fn memories_in_calendar(
-        &self,
-        window: &CalendarWindow,
-        memory_type: &str,
-        project: &str,
-        limit: usize,
-    ) -> Result<CalendarReport, BrainError> {
-        let (stored, active) = calendar_counts(
-            &self.conn,
-            &window.since,
-            &window.until,
-            memory_type,
-            project,
-        )?;
-        Ok(CalendarReport {
-            since: window.since.clone(),
-            until: window.until.clone(),
-            stored,
-            active,
-            by_type: calendar_buckets(
-                &self.conn,
-                "SELECT TRIM(type, '\"') AS k, COUNT(*) AS n FROM memories WHERE ",
-                " GROUP BY k ORDER BY n DESC, k ASC",
-                &window.since,
-                &window.until,
-                memory_type,
-                project,
-            )?,
-            by_day: calendar_buckets(
-                &self.conn,
-                "SELECT substr(timestamp, 1, 10) AS k, COUNT(*) AS n FROM memories WHERE ",
-                " GROUP BY k ORDER BY k ASC",
-                &window.since,
-                &window.until,
-                memory_type,
-                project,
-            )?,
-            memories: calendar_sample(
-                &self.conn,
-                &window.since,
-                &window.until,
-                memory_type,
-                project,
-                limit,
-            )?,
-        })
     }
 
     pub fn delete_memories(&self, ids: &[&str]) -> Result<usize, BrainError> {
@@ -1287,168 +1246,6 @@ pub fn fts_search_conn(conn: &Connection, query: &str, n: usize) -> Result<Vec<S
     Ok(ids)
 }
 
-/// Inclusive `since` and exclusive `until`, both `YYYY-MM-DD`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CalendarWindow {
-    pub since: String,
-    pub until: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CalendarCount {
-    pub key: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CalendarMemory {
-    pub id: String,
-    pub timestamp: String,
-    pub memory_type: String,
-    pub project: String,
-    pub snippet: String,
-    pub active: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CalendarReport {
-    pub since: String,
-    pub until: String,
-    pub stored: usize,
-    pub active: usize,
-    pub by_type: Vec<CalendarCount>,
-    pub by_day: Vec<CalendarCount>,
-    pub memories: Vec<CalendarMemory>,
-}
-
-const CALENDAR_WHERE: &str = "timestamp >= ?1 AND timestamp < ?2 \
-     AND (?3 = '' OR TRIM(type, '\"') = ?3) \
-     AND (?4 = '' OR project = ?4)";
-
-/// `since` is `YYYY-MM` (that month) or `YYYY-MM-DD` (that day).
-/// `until`, when set, is the exclusive bound in the same two shapes.
-pub fn resolve_calendar_window(since: &str, until: Option<&str>) -> Result<CalendarWindow, String> {
-    let since = since.trim();
-    if since.is_empty() {
-        return Err("since is required (YYYY-MM or YYYY-MM-DD)".into());
-    }
-    let since_date = parse_calendar_start(since)?;
-    let until_date = match until.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(raw) => parse_calendar_start(raw)?,
-        None if since.len() == 7 => next_month(since_date)?,
-        None => since_date
-            .checked_add_days(chrono::Days::new(1))
-            .ok_or_else(|| "date overflow".to_string())?,
-    };
-    if until_date <= since_date {
-        return Err("until must be after since".into());
-    }
-    Ok(CalendarWindow {
-        since: since_date.format("%Y-%m-%d").to_string(),
-        until: until_date.format("%Y-%m-%d").to_string(),
-    })
-}
-
-fn parse_calendar_start(raw: &str) -> Result<NaiveDate, String> {
-    let text = if raw.len() == 7 {
-        format!("{raw}-01")
-    } else if raw.len() == 10 {
-        raw.to_string()
-    } else {
-        return Err(format!("use YYYY-MM or YYYY-MM-DD, got {raw}"));
-    };
-    NaiveDate::parse_from_str(&text, "%Y-%m-%d").map_err(|_| format!("invalid date: {raw}"))
-}
-
-fn next_month(day: NaiveDate) -> Result<NaiveDate, String> {
-    let (y, m) = if day.month() == 12 {
-        (day.year() + 1, 1)
-    } else {
-        (day.year(), day.month() + 1)
-    };
-    NaiveDate::from_ymd_opt(y, m, 1).ok_or_else(|| "date overflow".to_string())
-}
-
-fn calendar_counts(
-    conn: &Connection,
-    since: &str,
-    until: &str,
-    memory_type: &str,
-    project: &str,
-) -> Result<(usize, usize), BrainError> {
-    let sql = format!(
-        "SELECT COUNT(*), \
-            COALESCE(SUM(CASE WHEN superseded_by IS NULL OR superseded_by = '' THEN 1 ELSE 0 END), 0) \
-         FROM memories WHERE {CALENDAR_WHERE}"
-    );
-    conn.query_row(&sql, params![since, until, memory_type, project], |row| {
-        Ok((row.get::<_, i64>(0)? as usize, row.get::<_, i64>(1)? as usize))
-    })
-    .map_err(|e| BrainError::Database(e.to_string()))
-}
-
-fn calendar_buckets(
-    conn: &Connection,
-    select_sql: &str,
-    tail_sql: &str,
-    since: &str,
-    until: &str,
-    memory_type: &str,
-    project: &str,
-) -> Result<Vec<CalendarCount>, BrainError> {
-    let sql = format!("{select_sql}{CALENDAR_WHERE}{tail_sql}");
-    let mut stmt = conn
-        .prepare(&sql)
-        .map_err(|e| BrainError::Database(e.to_string()))?;
-    let rows = stmt
-        .query_map(params![since, until, memory_type, project], |row| {
-            Ok(CalendarCount {
-                key: row.get(0)?,
-                count: row.get::<_, i64>(1)? as usize,
-            })
-        })
-        .map_err(|e| BrainError::Database(e.to_string()))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| BrainError::Database(e.to_string()))
-}
-
-fn calendar_sample(
-    conn: &Connection,
-    since: &str,
-    until: &str,
-    memory_type: &str,
-    project: &str,
-    limit: usize,
-) -> Result<Vec<CalendarMemory>, BrainError> {
-    let sql = format!(
-        "SELECT id, timestamp, TRIM(type, '\"'), project, \
-            substr(replace(replace(content, char(10), ' '), char(13), ' '), 1, 180), \
-            CASE WHEN superseded_by IS NULL OR superseded_by = '' THEN 1 ELSE 0 END \
-         FROM memories WHERE {CALENDAR_WHERE} \
-         ORDER BY timestamp DESC, id ASC LIMIT ?5"
-    );
-    let mut stmt = conn
-        .prepare(&sql)
-        .map_err(|e| BrainError::Database(e.to_string()))?;
-    let rows = stmt
-        .query_map(
-            params![since, until, memory_type, project, limit as i64],
-            |row| {
-                Ok(CalendarMemory {
-                    id: row.get(0)?,
-                    timestamp: row.get(1)?,
-                    memory_type: row.get(2)?,
-                    project: row.get(3)?,
-                    snippet: row.get(4)?,
-                    active: row.get::<_, i64>(5)? == 1,
-                })
-            },
-        )
-        .map_err(|e| BrainError::Database(e.to_string()))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| BrainError::Database(e.to_string()))
-}
-
 /// See get_memory_conn's doc comment -- same rationale: lets the /stats fast
 /// path (brain_api.rs) read through a pooled connection instead of the
 /// Arc<Mutex<Brain>> lock.
@@ -1653,70 +1450,6 @@ mod tests {
         assert_eq!(fetched.content, "hello world");
         assert_eq!(fetched.metadata.project, "test");
         assert_eq!(fetched.metadata.memory_type, MemoryType::Solution);
-    }
-
-    #[test]
-    fn calendar_window_resolves_month_and_day() {
-        let month = resolve_calendar_window("2026-05", None).unwrap();
-        assert_eq!(month.since, "2026-05-01");
-        assert_eq!(month.until, "2026-06-01");
-        let day = resolve_calendar_window("2026-05-23", None).unwrap();
-        assert_eq!(day.since, "2026-05-23");
-        assert_eq!(day.until, "2026-05-24");
-        let span = resolve_calendar_window("2026-05-01", Some("2026-06-01")).unwrap();
-        assert_eq!(span, month);
-        assert!(resolve_calendar_window("May", None).is_err());
-        assert!(resolve_calendar_window("2026-05-02", Some("2026-05-02")).is_err());
-    }
-
-    #[test]
-    fn memories_in_calendar_counts_the_window_only() {
-        let store = MetadataStore::open_in_memory().unwrap();
-        let mut may_fact = test_metadata();
-        may_fact.memory_type = MemoryType::Fact;
-        may_fact.timestamp = DateTime::parse_from_rfc3339("2026-05-02T12:00:00+00:00")
-            .unwrap()
-            .with_timezone(&Utc);
-        let mut may_old = test_metadata();
-        may_old.timestamp = DateTime::parse_from_rfc3339("2026-05-03T08:00:00+00:00")
-            .unwrap()
-            .with_timezone(&Utc);
-        may_old.superseded_by = Some("quarantine:test".into());
-        let mut june = test_metadata();
-        june.memory_type = MemoryType::Fact;
-        june.timestamp = DateTime::parse_from_rfc3339("2026-06-01T00:00:00+00:00")
-            .unwrap()
-            .with_timezone(&Utc);
-        for (id, content, meta) in [
-            ("may-fact", "fact body", may_fact),
-            ("may-old", "old solution\nsecond line", may_old),
-            ("june-fact", "june", june),
-        ] {
-            store
-                .upsert_memory(&Memory {
-                    id: id.into(),
-                    content: content.into(),
-                    metadata: meta,
-                    embedding: None,
-                })
-                .unwrap();
-        }
-        let window = resolve_calendar_window("2026-05", None).unwrap();
-        let report = store
-            .memories_in_calendar(&window, "", "", 8)
-            .unwrap();
-        assert_eq!(report.stored, 2);
-        assert_eq!(report.active, 1);
-        assert_eq!(report.by_type.len(), 2);
-        assert_eq!(report.by_day[0].key, "2026-05-02");
-        assert_eq!(report.memories[0].id, "may-old");
-        assert!(!report.memories[0].active);
-        assert!(!report.memories[0].snippet.contains('\n'));
-        let facts = store
-            .memories_in_calendar(&window, "fact", "", 8)
-            .unwrap();
-        assert_eq!(facts.stored, 1);
-        assert_eq!(facts.memories[0].id, "may-fact");
     }
 
     #[test]

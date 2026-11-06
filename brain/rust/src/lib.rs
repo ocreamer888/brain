@@ -6,6 +6,7 @@ pub mod embedder;
 pub mod error;
 pub mod index;
 pub mod ingest;
+pub mod lookups;
 pub mod instances;
 pub mod memory_atlas;
 pub mod migrate;

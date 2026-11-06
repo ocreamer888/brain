@@ -29,6 +29,7 @@ if _ai_dir not in sys.path:
     sys.path.insert(0, _ai_dir)
 
 from brain.api_client import (
+    BrainApiError,
     backend_mode,
     get_context as api_get_context,
     get_episode as api_get_episode,
@@ -41,6 +42,13 @@ from brain.api_client import (
     search as api_search,
     search_index as api_search_index,
     template_search as api_template_search,
+    list_by_date as api_list_by_date,
+    project_brief as api_project_brief,
+    pin_project_brief as api_pin_project_brief,
+    unpin_project_brief as api_unpin_project_brief,
+    follow_memory as api_follow_memory,
+    memories_for_file as api_memories_for_file,
+    memories_for_entity as api_memories_for_entity,
     timeline as api_timeline,
     update_salience as api_update_salience,
 )
@@ -295,6 +303,274 @@ def search_index(query: str, n: int = 10, memory_type: str = "", project: str = 
         return line
 
     return "\n".join(_fmt(r) for r in rows)
+
+
+def _memory_sample(rows: list) -> list[str]:
+    lines = []
+    if not rows:
+        lines.append("  (none)")
+        return lines
+    for row in rows:
+        flag = "" if row.get("active", True) else " | superseded"
+        lines.append(
+            f"[#{row.get('id', '')}] {row.get('timestamp', '')} | "
+            f"{row.get('memory_type', '?')} | {row.get('project', '?')}{flag}"
+        )
+        snippet = (row.get("snippet") or "").strip()
+        if row.get("event_time"):
+            lines.append(f"    event_time: {row.get('event_time')}")
+        if snippet:
+            lines.append(f"    {snippet}")
+    return lines
+
+
+def _format_by_date(data: dict) -> str:
+    lines = [
+        f"Window: {data.get('since', '')} inclusive .. {data.get('until', '')} exclusive",
+        f"When: {data.get('when', 'stored')}",
+        f"Stored: {data.get('stored', 0)}",
+        f"Active (not superseded): {data.get('active', 0)}",
+        f"Saved in this window with no event_time: {data.get('saved_without_event_time', 0)}",
+        "By type:",
+    ]
+    for row in data.get("by_type") or []:
+        lines.append(f"  {row.get('key', '?')}  {row.get('count', 0)}")
+    if not data.get("by_type"):
+        lines.append("  (none)")
+    days = data.get("by_day") or []
+    if len(days) > 62:
+        months: dict[str, int] = {}
+        for row in days:
+            key = str(row.get("key", ""))[:7]
+            months[key] = months.get(key, 0) + int(row.get("count") or 0)
+        lines.append("By month:")
+        for key in sorted(months):
+            lines.append(f"  {key}  {months[key]}")
+    else:
+        lines.append("By day:")
+        for row in days:
+            lines.append(f"  {row.get('key', '?')}  {row.get('count', 0)}")
+        if not days:
+            lines.append("  (none)")
+    memories = data.get("memories") or []
+    lines.append(f"Newest {len(memories)}:")
+    lines.extend(_memory_sample(memories))
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "List memories in a calendar window. since is YYYY-MM (that month) or "
+    "YYYY-MM-DD (that day). until is optional and exclusive. when=stored (default) "
+    "uses the save timestamp. when=event uses event_time and drops rows that have "
+    "none; the reply also counts how many rows were saved in the window with no "
+    "event_time. Not semantic search. Then call get_observations_tool for full text."
+))
+def list_by_date(
+    since: str,
+    until: str = "",
+    memory_type: str = "",
+    project: str = "",
+    n: int = 8,
+    when: str = "stored",
+) -> str:
+    if backend_mode() == "python":
+        return "list_by_date requires BRAIN_BACKEND=api (Rust brain_api)."
+    try:
+        data = api_list_by_date(
+            since, until or None, memory_type or None, project or None, n, when or "stored"
+        )
+    except BrainApiError as e:
+        return str(e)
+    if not data.get("stored"):
+        clock = data.get("when") or when or "stored"
+        extra = ""
+        missing = data.get("saved_without_event_time") or 0
+        if clock == "event" and missing:
+            extra = f" {missing} were saved in this window with no event_time."
+        return (
+            f"No memories with {clock} time in "
+            f"{data.get('since', since)} .. {data.get('until', until)}.{extra}"
+        )
+    return _format_by_date(data)
+
+
+_BRIEF_STATUS = {
+    "missing": "No memories use this project tag.",
+    "ambiguous": "Several project tags differ only by case. They were not merged.",
+    "no_brief": "Memories exist for this tag, and none are project_context.",
+    "thin": "Fewer than 3 project_context rows. This is not a full brief.",
+    "ok": "Project context rows follow.",
+}
+
+
+@mcp.tool(description=(
+    "What is this project, from the project tag. Returns how many memories use "
+    "the tag, the type breakdown, and the newest project_context rows. Status is "
+    "missing, ambiguous (case variants), no_brief, thin (under 3 project_context "
+    "rows), or ok. A pinned project_context, when set, is returned separately "
+    "from the other rows. Case-insensitive when only one stored spelling exists."
+))
+def project_brief(project: str, n: int = 5) -> str:
+    if backend_mode() == "python":
+        return "project_brief requires BRAIN_BACKEND=api (Rust brain_api)."
+    try:
+        data = api_project_brief(project, n)
+    except BrainApiError as e:
+        return str(e)
+    status = data.get("status") or "missing"
+    lines = [
+        f"Project query: {data.get('query', project)}",
+        f"Status: {status}. {_BRIEF_STATUS.get(status, '')}",
+    ]
+    matched = data.get("matched_project")
+    if matched:
+        lines.append(f"Matched tag: {matched}")
+    candidates = data.get("candidates") or []
+    if len(candidates) > 1 or status == "ambiguous":
+        lines.append("Tags:")
+        for row in candidates:
+            lines.append(f"  {row.get('project', '?')}  {row.get('stored', 0)}")
+    if status not in ("missing", "ambiguous"):
+        lines.append(f"Stored: {data.get('stored', 0)}")
+        lines.append(f"Active (not superseded): {data.get('active', 0)}")
+        lines.append("By type:")
+        for row in data.get("by_type") or []:
+            lines.append(f"  {row.get('key', '?')}  {row.get('count', 0)}")
+        pinned = data.get("pinned")
+        if pinned:
+            lines.append(
+                f"Pinned brief: {pinned.get('memory_id', '')} ({pinned.get('state', '')})"
+            )
+            memory = pinned.get("memory")
+            if memory:
+                lines.extend(_memory_sample([memory]))
+            elif pinned.get("state") == "missing":
+                lines.append("  Pinned memory no longer exists.")
+        else:
+            lines.append("Pinned brief: none. Call pin_project_brief with a project_context id.")
+        briefs = data.get("briefs") or []
+        lines.append(f"Other project_context ({len(briefs)}):")
+        lines.extend(_memory_sample(briefs))
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Pin one project_context memory as the canonical brief for a project. "
+    "Replaces any previous pin for that tag. Refuses facts and other types. "
+    "Pass the exact project spelling when several casings exist."
+))
+def pin_project_brief(project: str, memory_id: str) -> str:
+    if backend_mode() == "python":
+        return "pin_project_brief requires BRAIN_BACKEND=api (Rust brain_api)."
+    try:
+        data = api_pin_project_brief(project, memory_id)
+    except BrainApiError as e:
+        return str(e)
+    previous = data.get("previous_memory_id")
+    extra = f" Replaced {previous}." if previous else ""
+    return (
+        f"Pinned {data.get('memory_id', memory_id)} for {data.get('project', project)}.{extra}"
+    )
+
+
+@mcp.tool(description="Remove the pinned project brief for a project tag.")
+def unpin_project_brief(project: str) -> str:
+    if backend_mode() == "python":
+        return "unpin_project_brief requires BRAIN_BACKEND=api (Rust brain_api)."
+    try:
+        data = api_unpin_project_brief(project)
+    except BrainApiError as e:
+        return str(e)
+    if data.get("removed"):
+        return f"Unpinned the brief for {project}."
+    return f"No pinned brief for {project}."
+
+
+@mcp.tool(description=(
+    "Follow a memory to the row that replaced it. Status is current, replaced, "
+    "quarantined, hidden, dangling, cycle, or missing. Quarantine and hidden "
+    "labels are not memories. Returns the chain (max 8) and rows that point at this id."
+))
+def follow_memory(memory_id: str) -> str:
+    if backend_mode() == "python":
+        return "follow_memory requires BRAIN_BACKEND=api (Rust brain_api)."
+    try:
+        data = api_follow_memory(memory_id)
+    except BrainApiError as e:
+        return str(e)
+    lines = [
+        f"Id: {data.get('id', memory_id)}",
+        f"Status: {data.get('status', '')}",
+        data.get("detail") or "",
+        "Chain:",
+    ]
+    lines.extend(_memory_sample(data.get("chain") or []))
+    preds = data.get("predecessors") or []
+    if preds:
+        lines.append("Points here:")
+        lines.extend(_memory_sample(preds))
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Memories saved about a file. path may be absolute or a repo-relative suffix. "
+    "Matches file_path exactly or ending with /path. If more than 8 distinct paths "
+    "match, returns the paths and no bodies — pass a longer path. Newest first."
+))
+def memories_for_file(path: str, n: int = 8) -> str:
+    if backend_mode() == "python":
+        return "memories_for_file requires BRAIN_BACKEND=api (Rust brain_api)."
+    try:
+        data = api_memories_for_file(path, n)
+    except BrainApiError as e:
+        return str(e)
+    status = data.get("status") or "missing"
+    if status == "missing":
+        return f"No memories stored for path {data.get('query', path)}."
+    lines = [f"Path: {data.get('query', path)}", f"Status: {status}", f"Stored: {data.get('stored', 0)}"]
+    paths = data.get("paths") or []
+    if paths:
+        lines.append(f"Paths ({data.get('path_count', len(paths))}):")
+        for item in paths:
+            lines.append(f"  {item}")
+    if status == "ambiguous":
+        lines.append("Too many paths. Pass a longer suffix.")
+        return "\n".join(lines)
+    memories = data.get("memories") or []
+    lines.append(f"Newest {len(memories)}:")
+    lines.extend(_memory_sample(memories))
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "What memories mention this entity name. Lookup is lowercase, exact after "
+    "whitespace fold. Returns the full degree and a newest-first sample (capped). "
+    "status=hub means degree >= 40: the sample is not the whole set. This does not "
+    "turn on graph expansion in search."
+))
+def entity_lookup(name: str, n: int = 8) -> str:
+    if backend_mode() == "python":
+        return "entity_lookup requires BRAIN_BACKEND=api (Rust brain_api)."
+    try:
+        data = api_memories_for_entity(name, n)
+    except BrainApiError as e:
+        return str(e)
+    status = data.get("status") or "missing"
+    if status == "missing":
+        return f"No entity named {data.get('query', name)}."
+    lines = [
+        f"Entity: {data.get('name', name)}",
+        f"Status: {status}",
+        f"Degree: {data.get('degree', 0)}",
+    ]
+    if status == "hub":
+        lines.append("Hub. The sample is not the full set.")
+    if data.get("capped"):
+        lines.append("Sample capped. Pass a larger n (max 12) or open one id.")
+    memories = data.get("memories") or []
+    lines.append(f"Newest {len(memories)}:")
+    lines.extend(_memory_sample(memories))
+    return "\n".join(lines)
 
 
 @mcp.tool(description="Layer 2: get chronological context around an observation ID.")

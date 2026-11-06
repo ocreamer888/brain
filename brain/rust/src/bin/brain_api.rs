@@ -322,6 +322,51 @@ fn default_three() -> u32 {
 }
 
 #[derive(Debug, Deserialize)]
+struct ByDateRequest {
+    since: String,
+    #[serde(default)]
+    until: Option<String>,
+    #[serde(default)]
+    memory_type: Option<String>,
+    #[serde(default)]
+    project: Option<String>,
+    /// `stored` (ingest time, default) or `event` (event_time; undated rows drop out).
+    #[serde(default)]
+    when: Option<String>,
+    #[serde(default = "default_by_date_n")]
+    n: usize,
+}
+
+fn default_by_date_n() -> usize {
+    8
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectBriefRequest {
+    project: String,
+    #[serde(default = "default_brief_n")]
+    n: usize,
+}
+
+fn default_brief_n() -> usize {
+    5
+}
+
+#[derive(Debug, Deserialize)]
+struct ByFileRequest {
+    path: String,
+    #[serde(default = "default_by_date_n")]
+    n: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct ByEntityRequest {
+    name: String,
+    #[serde(default = "default_by_date_n")]
+    n: usize,
+}
+
+#[derive(Debug, Deserialize)]
 struct FeedbackRequest {
     event_type: String,
     #[serde(default)]
@@ -560,6 +605,13 @@ fn build_router(state: AppState) -> Router {
         .route("/v1/search_index", post(search_index_handler))
         .route("/v1/get_observations", post(get_observations_handler))
         .route("/v1/timeline", post(timeline_handler))
+        .route("/v1/by_date", post(by_date_handler))
+        .route("/v1/project_brief", post(project_brief_handler))
+        .route("/v1/project_brief/pin", post(pin_project_brief_handler))
+        .route("/v1/project_brief/unpin", post(unpin_project_brief_handler))
+        .route("/v1/follow", post(follow_handler))
+        .route("/v1/by_file", post(by_file_handler))
+        .route("/v1/by_entity", post(by_entity_handler))
         .route("/v1/stream", get(stream_handler))
         .route("/get-episode", get(get_episode_handler))
         .route("/entities", get(entities_handler))
@@ -1429,6 +1481,242 @@ async fn timeline_handler(
     let results: Vec<serde_json::Value> = rows.iter().map(api_memory_json).collect();
     log_request("POST", "/v1/timeline", StatusCode::OK, start);
     Ok(Json(serde_json::json!({ "results": results })))
+}
+
+fn lookup_memory_json(m: &brain::lookups::CalendarMemory) -> serde_json::Value {
+    serde_json::json!({
+        "id": m.id,
+        "timestamp": m.timestamp,
+        "memory_type": m.memory_type,
+        "project": m.project,
+        "snippet": m.snippet,
+        "active": m.active,
+        "event_time": m.event_time,
+    })
+}
+
+fn count_json(rows: &[brain::lookups::CalendarCount]) -> Vec<serde_json::Value> {
+    rows.iter()
+        .map(|c| serde_json::json!({"key": c.key, "count": c.count}))
+        .collect()
+}
+
+async fn by_date_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<ByDateRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    reject_if_switching(&state)?;
+    let window = brain::lookups::resolve_calendar_window(&req.since, req.until.as_deref())
+        .map_err(|e| bad_request(&e))?;
+    let memory_type = req.memory_type.unwrap_or_default();
+    if !memory_type.is_empty() && parse_memory_type(&memory_type).is_none() {
+        return Err(bad_request("invalid memory_type"));
+    }
+    let axis = brain::lookups::TimeAxis::parse(req.when.as_deref().unwrap_or("stored"))
+        .map_err(|e| bad_request(&e))?;
+    let project = req.project.unwrap_or_default();
+    let n = req.n.clamp(1, 20);
+    let brain = lock_brain(&state);
+    let report = brain
+        .memories_in_calendar(&window, axis, &memory_type, &project, n)
+        .map_err(brain_err)?;
+    log_request("POST", "/v1/by_date", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({
+        "since": report.since,
+        "until": report.until,
+        "when": report.when,
+        "stored": report.stored,
+        "active": report.active,
+        "saved_without_event_time": report.saved_without_event_time,
+        "by_type": count_json(&report.by_type),
+        "by_day": count_json(&report.by_day),
+        "memories": report.memories.iter().map(lookup_memory_json).collect::<Vec<_>>(),
+    })))
+}
+
+async fn project_brief_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<ProjectBriefRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    reject_if_switching(&state)?;
+    let project = req.project.trim();
+    if project.is_empty() {
+        return Err(bad_request("project is required"));
+    }
+    let n = req.n.clamp(1, 8);
+    let brain = lock_brain(&state);
+    let report = brain.project_brief(project, n).map_err(brain_err)?;
+    log_request("POST", "/v1/project_brief", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({
+        "query": report.query,
+        "matched_project": report.matched_project,
+        "candidates": report.candidates.iter().map(|c| serde_json::json!({
+            "project": c.project,
+            "stored": c.stored,
+        })).collect::<Vec<_>>(),
+        "status": report.status,
+        "stored": report.stored,
+        "active": report.active,
+        "by_type": count_json(&report.by_type),
+        "pinned": report.pinned.as_ref().map(pinned_json),
+        "briefs": report.briefs.iter().map(lookup_memory_json).collect::<Vec<_>>(),
+    })))
+}
+
+fn pinned_json(pin: &brain::lookups::PinnedBrief) -> serde_json::Value {
+    serde_json::json!({
+        "memory_id": pin.memory_id,
+        "pinned_at": pin.pinned_at,
+        "state": pin.state,
+        "memory": pin.memory.as_ref().map(lookup_memory_json),
+    })
+}
+
+fn reject_lookup(err: brain::lookups::LookupReject) -> (StatusCode, Json<ApiError>) {
+    match err {
+        brain::lookups::LookupReject::Bad(msg) => bad_request(&msg),
+        brain::lookups::LookupReject::Db(e) => brain_err(e),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct PinBriefRequest {
+    project: String,
+    memory_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UnpinBriefRequest {
+    project: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FollowRequest {
+    id: String,
+}
+
+async fn pin_project_brief_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<PinBriefRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
+    reject_if_switching(&state)?;
+    if req.memory_id.trim().is_empty() {
+        return Err(bad_request("memory_id is required"));
+    }
+    let brain = lock_brain(&state);
+    let outcome = brain
+        .pin_project_brief(req.project.trim(), req.memory_id.trim())
+        .map_err(reject_lookup)?;
+    log_request("POST", "/v1/project_brief/pin", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({
+        "project": outcome.project,
+        "memory_id": outcome.memory_id,
+        "pinned_at": outcome.pinned_at,
+        "previous_memory_id": outcome.previous_memory_id,
+    })))
+}
+
+async fn unpin_project_brief_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<UnpinBriefRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
+    reject_if_switching(&state)?;
+    if req.project.trim().is_empty() {
+        return Err(bad_request("project is required"));
+    }
+    let brain = lock_brain(&state);
+    let removed = brain
+        .unpin_project_brief(req.project.trim())
+        .map_err(reject_lookup)?;
+    log_request("POST", "/v1/project_brief/unpin", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({ "removed": removed })))
+}
+
+async fn follow_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<FollowRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    reject_if_switching(&state)?;
+    if req.id.trim().is_empty() {
+        return Err(bad_request("id is required"));
+    }
+    let brain = lock_brain(&state);
+    let report = brain.follow_memory(req.id.trim()).map_err(brain_err)?;
+    log_request("POST", "/v1/follow", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({
+        "id": report.id,
+        "status": report.status,
+        "detail": report.detail,
+        "chain": report.chain.iter().map(lookup_memory_json).collect::<Vec<_>>(),
+        "predecessors": report.predecessors.iter().map(lookup_memory_json).collect::<Vec<_>>(),
+    })))
+}
+
+async fn by_file_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<ByFileRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    reject_if_switching(&state)?;
+    let path = req.path.trim();
+    if path.is_empty() {
+        return Err(bad_request("path is required"));
+    }
+    let n = req.n.clamp(1, 12);
+    let brain = lock_brain(&state);
+    let report = brain.memories_for_file(path, n).map_err(brain_err)?;
+    log_request("POST", "/v1/by_file", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({
+        "query": report.query,
+        "status": report.status,
+        "path_count": report.path_count,
+        "paths": report.paths,
+        "stored": report.stored,
+        "memories": report.memories.iter().map(lookup_memory_json).collect::<Vec<_>>(),
+    })))
+}
+
+async fn by_entity_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<ByEntityRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    reject_if_switching(&state)?;
+    let name = req.name.trim();
+    if name.is_empty() {
+        return Err(bad_request("name is required"));
+    }
+    let n = req.n.clamp(1, 12);
+    let brain = lock_brain(&state);
+    let report = brain.memories_for_entity(name, n).map_err(brain_err)?;
+    log_request("POST", "/v1/by_entity", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({
+        "query": report.query,
+        "name": report.name,
+        "status": report.status,
+        "degree": report.degree,
+        "capped": report.capped,
+        "memories": report.memories.iter().map(lookup_memory_json).collect::<Vec<_>>(),
+    })))
 }
 
 fn api_memory_json(m: &Memory) -> serde_json::Value {
