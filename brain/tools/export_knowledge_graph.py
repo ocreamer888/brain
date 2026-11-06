@@ -14,7 +14,7 @@ Options:
     --types TYPE,...    Comma-separated types to include (default: all)
     --limit N           Max notes to export, 0 = all (default: 0)
     --db PATH           SQLite path (default: BRAIN_DB_PATH env or brain/rust/brain.db)
-    --no-clean          Skip wiping the output directory before regenerating
+    --clean             Wipe the output directory before regenerating (default: off)
 """
 from __future__ import annotations
 
@@ -176,14 +176,26 @@ def main() -> int:
     p.add_argument("--types", default="")
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--db", default="")
-    p.add_argument("--no-clean", action="store_true", help="Skip wiping output dir before regenerating")
+    # Security audit 2026-11-05 (finding #8): this used to wipe out_dir by
+    # DEFAULT, needing --no-clean to opt out of the destructive path --
+    # backwards from this repo's convention (every other mutating tool here
+    # is opt-in to the dangerous action, not opt-out). --clean is now the
+    # explicit opt-in; nothing is deleted unless asked.
+    p.add_argument("--clean", action="store_true", help="Wipe output dir before regenerating")
     args = p.parse_args()
 
     import os
     db_path = args.db or os.environ.get("BRAIN_DB_PATH") or str(
         Path(__file__).resolve().parents[2] / "brain/rust/brain.db"
     )
-    out_dir = _VAULT / args.out
+    out_dir = (_VAULT / args.out).resolve()
+    if not out_dir.is_relative_to(_VAULT.resolve()):
+        # --out accepted an absolute path or `../` escape, and pathlib's
+        # `/` operator silently discards the left side for an absolute
+        # right side -- `_VAULT / "/tmp/x"` is just `/tmp/x`. Refuse rather
+        # than let --clean rmtree something outside the vault.
+        print(f"error: --out must resolve inside {_VAULT}, got {out_dir}", file=sys.stderr)
+        return 1
     types = [t.strip() for t in args.types.split(",") if t.strip()] or None
 
     print(f"[graph] db         : {db_path}", file=sys.stderr)
@@ -207,7 +219,7 @@ def main() -> int:
         m["type"] = _strip_quotes(m["type"])
         m["source"] = _strip_quotes(m["source"])
 
-    if not args.no_clean and out_dir.exists():
+    if args.clean and out_dir.exists():
         print(f"[graph] cleaning   : {out_dir}", file=sys.stderr)
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

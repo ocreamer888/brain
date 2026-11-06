@@ -92,6 +92,16 @@ def main() -> int:
         conn.close()
         return 0
 
+    if args.dry_run:
+        # Security audit 2026-11-05: this used to write the full unredacted
+        # backup (real plaintext secret keys) to disk even on a dry run,
+        # which is supposed to be read-only. A preview should never persist
+        # anything -- the backup is only needed, and only written, right
+        # before the actual mutation below.
+        print("dry-run: no writes")
+        conn.close()
+        return 0
+
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     _BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     backup = _BACKUP_DIR / f"redact_openrouter_keys_{ts}.json"
@@ -101,11 +111,6 @@ def main() -> int:
     }
     backup.write_text(json.dumps(payload, indent=2))
     print(f"backup={backup}")
-
-    if args.dry_run:
-        print("dry-run: no writes")
-        conn.close()
-        return 0
 
     for r, _ in to_fix:
         new_content = _REAL_KEY_RE.sub(_REDACTED, r["content"])

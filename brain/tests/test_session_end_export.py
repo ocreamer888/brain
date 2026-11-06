@@ -54,3 +54,19 @@ def test_different_sessions_create_separate_files():
         _do_export(p, "session-bbb", 5)
         files = list(p.glob("session_*.json"))
         assert len(files) == 2
+
+
+def test_is_safe_transcript_path_rejects_outside_claude_projects():
+    # Security audit 2026-11-05: transcript_path came straight from hook
+    # stdin and was opened with no validation -- a crafted path could read
+    # any file this process can see.
+    from brain.hooks.session_end import is_safe_transcript_path, TRANSCRIPTS_ROOT
+
+    real = TRANSCRIPTS_ROOT / "some-project" / "abc123.jsonl"
+    assert is_safe_transcript_path(str(real))
+    assert not is_safe_transcript_path("/etc/passwd")
+    assert not is_safe_transcript_path(str(Path.home() / ".ssh" / "id_rsa"))
+    # traversal out of the allowed root, even if it starts inside it
+    assert not is_safe_transcript_path(str(TRANSCRIPTS_ROOT / ".." / ".." / ".ssh" / "id_rsa"))
+    # right directory, wrong extension
+    assert not is_safe_transcript_path(str(TRANSCRIPTS_ROOT / "some-project" / "notes.txt"))

@@ -1,4 +1,6 @@
+import json
 import sys
+import time
 import uuid
 from pathlib import Path
 from datetime import datetime, timezone
@@ -10,6 +12,12 @@ import brain.core.db as db
 from config import REFLECT_EVERY_N
 
 _save_count = 0
+
+# Security audit 2026-11-05 (see brain/core/memory.py, the live-wired
+# twin of this module, for the full rationale): never delete more than
+# this fraction of a reflection batch, and never delete without a backup.
+MAX_REFLECTION_DELETE_FRACTION = 0.3
+BACKUP_DIR = Path(__file__).resolve().parent / "bootstrap" / "junk_scrub_backups"
 
 
 def save_memory(
@@ -98,9 +106,21 @@ def _trigger_reflection():
         result = reflect_memories(texts)
 
         # Delete near-duplicates
-        to_delete = [ids[i] for i in result.get("to_delete_indices", []) if i < len(ids)]
-        if to_delete:
-            db.delete_memories(to_delete)
+        to_delete_idx = [i for i in result.get("to_delete_indices", []) if i < len(ids)]
+        max_allowed = max(1, int(len(ids) * MAX_REFLECTION_DELETE_FRACTION))
+        if len(to_delete_idx) > max_allowed:
+            print(
+                f"[brain] Reflection wanted to delete {len(to_delete_idx)}/{len(ids)} "
+                f"memories (max allowed {max_allowed}) -- refusing, not truncating",
+                file=sys.stderr,
+            )
+        elif to_delete_idx:
+            rows = [{"id": ids[i], "content": texts[i]} for i in to_delete_idx]
+            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+            (BACKUP_DIR / f"reflection_delete_{int(time.time())}.json").write_text(
+                json.dumps(rows, indent=2)
+            )
+            db.delete_memories([ids[i] for i in to_delete_idx])
 
         # Save consolidated memories
         for consolidated_text in result.get("consolidated", []):

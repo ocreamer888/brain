@@ -30,7 +30,25 @@ __all__ = [
     "save_session_summary",
     "save_memory_fn",
     "find_or_create_export_path",
+    "is_safe_transcript_path",
 ]
+
+# Security audit 2026-11-05: transcript_path came straight from hook stdin
+# with no validation, then was opened directly -- a crafted transcript_path
+# could read any file this process can see and copy it into the session
+# export (and from there, ingestion). Claude Code only ever writes real
+# transcripts under here (mirrors brain/tools/mine_eval_queries.py's
+# PROJECTS_DIR), so anything else is rejected rather than opened.
+TRANSCRIPTS_ROOT = Path.home() / ".claude" / "projects"
+
+
+def is_safe_transcript_path(transcript_path: str) -> bool:
+    try:
+        resolved = Path(transcript_path).resolve()
+        root = TRANSCRIPTS_ROOT.resolve()
+    except OSError:
+        return False
+    return resolved.is_relative_to(root) and resolved.suffix == ".jsonl"
 
 
 def find_or_create_export_path(export_dir: Path, session_id: str) -> tuple[Path, bool]:
@@ -74,13 +92,19 @@ try:
     message_count = 0
     if transcript_path:
         try:
-            transcript_file = Path(transcript_path)
-            if not transcript_file.exists():
+            if not is_safe_transcript_path(transcript_path):
+                print(
+                    f"[session_end] WARN transcript_path outside {TRANSCRIPTS_ROOT}, refusing to read: {transcript_path}",
+                    file=sys.stderr,
+                )
+                transcript_path = None
+            transcript_file = Path(transcript_path) if transcript_path else None
+            if transcript_file is not None and not transcript_file.exists():
                 print(
                     f"[session_end] WARN transcript_path does not exist: {transcript_path}",
                     file=sys.stderr,
                 )
-            else:
+            elif transcript_file is not None:
                 # JSONL: one JSON object per line
                 with open(transcript_file) as f:
                     for line in f:

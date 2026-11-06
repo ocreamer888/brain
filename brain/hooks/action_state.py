@@ -39,6 +39,20 @@ SKIP_FILE_PATTERNS = [
     re.compile(r"node_modules/"),
     re.compile(r"__pycache__/"),
     re.compile(r"\.DS_Store$"),
+    # Security audit 2026-11-05: without these, a Write to a secret file
+    # still got its first 500 chars sent to Ollama for summarization
+    # (post_tool_use.py's content_preview) and stored as a plaintext
+    # episode memory in brain.db (no encryption at rest, V-09). Same
+    # secret-shaped paths .gitignore already excludes from version
+    # control, mirrored here for the capture path. `.env.example` /
+    # `.env.sample` are intentionally not matched -- those hold no real
+    # secrets and are the one `.env*` variant worth capturing.
+    re.compile(r"(^|/)\.env(\.(?!example$|sample$)[^.]+)?$"),
+    re.compile(r"\.(pem|key|p12|pfx)$"),
+    re.compile(r"(^|/)id_(rsa|ed25519|ecdsa|dsa)(\.pub)?$"),
+    re.compile(r"(^|/)(\.npmrc|\.netrc)$"),
+    re.compile(r"(^|/)credentials(\.json)?$"),
+    re.compile(r"(^|/)secrets?\.(json|ya?ml|toml)$"),
 ]
 
 ACTION_CONFIDENCE = {

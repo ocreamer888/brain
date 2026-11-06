@@ -64,3 +64,53 @@ def test_get_stats_returns_counts():
     stats = m.get_stats()
     assert "total_memories" in stats
     assert "total_sessions" in stats
+
+
+def _seed_memories(m, n, tmp_path):
+    with patch('brain.core.memory.embed', return_value=[0.1] * 768):
+        for i in range(n):
+            m.save_memory(f"memory number {i}", "fact", [], "p")
+
+
+def test_reflection_refuses_oversized_delete(tmp_path):
+    # Security audit 2026-11-05: reflection used to delete whatever indices
+    # the LLM returned with no limit -- a hallucinated response could wipe
+    # most of the batch. 8/10 is well over MAX_REFLECTION_DELETE_FRACTION.
+    import brain.core.memory as m
+    import brain.core.db as db
+    _patch_db(m)
+    m.BACKUP_DIR = tmp_path / "backups"
+    _seed_memories(m, 10, tmp_path)
+    before = db.count_memories()
+
+    with patch(
+        'brain.core.memory.reflect_memories',
+        return_value={"to_delete_indices": list(range(8)), "consolidated": []},
+    ):
+        m._trigger_reflection()
+
+    assert db.count_memories() == before, "oversized delete request must be refused, not truncated"
+    assert not list(m.BACKUP_DIR.glob("*.json")), "no backup should be written for a refused delete"
+
+
+def test_reflection_deletes_within_cap_and_backs_up(tmp_path):
+    import brain.core.memory as m
+    import brain.core.db as db
+    _patch_db(m)
+    m.BACKUP_DIR = tmp_path / "backups"
+    _seed_memories(m, 10, tmp_path)
+    before = db.count_memories()
+
+    with patch(
+        'brain.core.memory.reflect_memories',
+        return_value={"to_delete_indices": [0, 1], "consolidated": []},
+    ):
+        m._trigger_reflection()
+
+    assert db.count_memories() == before - 2
+    backups = list(m.BACKUP_DIR.glob("reflection_delete_*.json"))
+    assert len(backups) == 1
+    import json
+    rows = json.loads(backups[0].read_text())
+    assert len(rows) == 2
+    assert all("content" in r and "id" in r for r in rows)

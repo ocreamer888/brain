@@ -1,4 +1,6 @@
+import json
 import sys
+import time
 import uuid
 from pathlib import Path
 from datetime import datetime, timezone
@@ -10,6 +12,16 @@ import brain.core.db as db
 from config import REFLECT_EVERY_N
 
 _save_count = 0
+
+# Security audit 2026-11-05: reflection used to delete whatever indices the
+# LLM returned with no limit and no backup -- a hallucinated response could
+# wipe the whole batch with no recovery path. A reflection pass over a
+# handful of recent saves should only ever be removing a few near-dupes;
+# anything beyond this fraction of the batch is treated as a bad response
+# and the delete is refused entirely rather than silently truncated (so it
+# fails loud, not quiet-and-wrong).
+MAX_REFLECTION_DELETE_FRACTION = 0.3
+BACKUP_DIR = Path(__file__).resolve().parents[1] / "bootstrap" / "junk_scrub_backups"
 
 
 def save_memory(
@@ -155,6 +167,24 @@ def save_memory(
     return memory_id
 
 
+def _backup_before_delete(recent: list, to_delete_idx: list[int]) -> None:
+    """Back up full rows before an LLM-driven delete, same convention as
+    brain/tools/redact_leaked_openrouter_keys.py and the recategorize_*.py
+    scripts -- additive, reversible, never trusts the delete to be right."""
+    rows = [
+        {"id": recent[i][0], "content": recent[i][1], "metadata": recent[i][2]}
+        for i in to_delete_idx
+    ]
+    try:
+        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        path = BACKUP_DIR / f"reflection_delete_{int(time.time())}.json"
+        path.write_text(json.dumps(rows, indent=2))
+    except OSError as e:
+        # Backup failing is not a reason to skip it silently, but it IS a
+        # reason to refuse the delete -- never delete without a backup.
+        raise RuntimeError(f"could not write reflection delete backup: {e}") from e
+
+
 def _trigger_reflection():
     """Consolidate recent memories."""
     recent = db.get_all_memory_documents(limit=50)
@@ -168,8 +198,17 @@ def _trigger_reflection():
         result = reflect_memories(texts)
 
         # Delete near-duplicates
-        to_delete = [ids[i] for i in result.get("to_delete_indices", []) if i < len(ids)]
-        if to_delete:
+        to_delete_idx = [i for i in result.get("to_delete_indices", []) if i < len(ids)]
+        max_allowed = max(1, int(len(ids) * MAX_REFLECTION_DELETE_FRACTION))
+        if len(to_delete_idx) > max_allowed:
+            print(
+                f"[BRAIN] Reflection wanted to delete {len(to_delete_idx)}/{len(ids)} "
+                f"memories (max allowed {max_allowed}) -- refusing, not truncating",
+                file=sys.stderr,
+            )
+        elif to_delete_idx:
+            to_delete = [ids[i] for i in to_delete_idx]
+            _backup_before_delete(recent, to_delete_idx)
             db.delete_memories(to_delete)
             print(f"[BRAIN] Removed {len(to_delete)} duplicate memories during reflection", file=sys.stderr)
 

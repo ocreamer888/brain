@@ -437,13 +437,32 @@ async fn static_handler(State(state): State<AppState>, Path(path): Path<String>)
     match StaticAssets::get(path) {
         Some(content) => {
             // Inject API key into index.html so browser JS can authenticate requests.
+            //
+            // Security audit 2026-11-05 (V-01 / docs/SECURITY_AUDIT_2026-11-05.md
+            // #1-3): this route never called authorize_and_rate_limit, so the
+            // live key was handed to ANYONE who could reach the server, even
+            // with auth_required=true -- the one route that defeated the auth
+            // model entirely. Only inject the key when auth_required is false:
+            // that's the operator's own explicit choice to run without auth
+            // (today's documented LAN/dev posture, not something to silently
+            // change here), and in that mode there's no auth boundary for this
+            // page to bypass. When auth_required is true, serve the page
+            // without the key -- the dashboard's own fetches will 401 until a
+            // real login/session flow exists (the audit's own long-term fix;
+            // out of scope for this pass), which is strictly safer than
+            // leaking the credential that auth_required was turned on to
+            // protect.
             if path == "index.html" {
                 let html = String::from_utf8_lossy(&content.data).into_owned();
-                let key_js = format!(
-                    "<script>window.__BRAIN_API_KEY__={};</script>",
-                    serde_json::to_string(&state.settings.api_key).unwrap_or_else(|_| "\"\"".to_string())
-                );
-                let html = html.replacen("</head>", &format!("{}</head>", key_js), 1);
+                let html = if state.settings.auth_required {
+                    html
+                } else {
+                    let key_js = format!(
+                        "<script>window.__BRAIN_API_KEY__={};</script>",
+                        serde_json::to_string(&state.settings.api_key).unwrap_or_else(|_| "\"\"".to_string())
+                    );
+                    html.replacen("</head>", &format!("{}</head>", key_js), 1)
+                };
                 return Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -2458,6 +2477,33 @@ fn authorize_and_rate_limit(
     headers: &HeaderMap,
     class: RateClass,
 ) -> Result<(), (StatusCode, Json<ApiError>)> {
+    // Rate-limit BEFORE checking auth (not after) -- otherwise a failed
+    // auth attempt returns 401 without ever touching `limiter`, so bad API
+    // keys could be brute-forced with no throttling at all (security audit
+    // 2026-11-05, finding #4's sibling issue: client_key spoofability).
+    let client_key = client_key(headers);
+    let now = Instant::now();
+    {
+        let mut limiter = state
+            .limiter
+            .lock()
+            .map_err(|_| internal_err("rate limit state poisoned"))?;
+        let window = limiter.entry((client_key, class)).or_insert(ClientWindow {
+            count: 0,
+            window_started: now,
+        });
+        if now.duration_since(window.window_started)
+            >= Duration::from_secs(state.settings.rate_limit_window_seconds)
+        {
+            window.count = 0;
+            window.window_started = now;
+        }
+        if window.count >= state.settings.rate_limit_max_requests {
+            return Err((StatusCode::TOO_MANY_REQUESTS, Json(ApiError { error: "rate limit exceeded".to_string() })));
+        }
+        window.count += 1;
+    }
+
     if state.settings.auth_required {
         let token = extract_token(headers);
         let unauthorized = token
@@ -2469,26 +2515,6 @@ fn authorize_and_rate_limit(
         }
     }
 
-    let client_key = client_key(headers);
-    let now = Instant::now();
-    let mut limiter = state
-        .limiter
-        .lock()
-        .map_err(|_| internal_err("rate limit state poisoned"))?;
-    let window = limiter.entry((client_key, class)).or_insert(ClientWindow {
-        count: 0,
-        window_started: now,
-    });
-    if now.duration_since(window.window_started)
-        >= Duration::from_secs(state.settings.rate_limit_window_seconds)
-    {
-        window.count = 0;
-        window.window_started = now;
-    }
-    if window.count >= state.settings.rate_limit_max_requests {
-        return Err((StatusCode::TOO_MANY_REQUESTS, Json(ApiError { error: "rate limit exceeded".to_string() })));
-    }
-    window.count += 1;
     Ok(())
 }
 
@@ -2514,12 +2540,18 @@ fn extract_token(headers: &HeaderMap) -> Option<String> {
         .map(str::to_string)
 }
 
-fn client_key(headers: &HeaderMap) -> String {
-    headers
-        .get("x-forwarded-for")
-        .and_then(|h| h.to_str().ok())
-        .map(str::to_string)
-        .unwrap_or_else(|| "local".to_string())
+/// Security audit 2026-11-05, finding #4: `x-forwarded-for` used to be
+/// trusted directly, but this deployment has no reverse proxy in front of
+/// it (bound straight to the listener, see `BRAIN_API_BIND`) -- the header
+/// is entirely client-supplied here, not proxy-set, so trusting it let any
+/// client rotate a fresh value per request to dodge its own rate limit, or
+/// set it to another client's value to get that client throttled instead.
+/// All callers on this deployment share one bucket per RateClass; that's
+/// the same effective behavior the old code already had for the common
+/// case (no header sent -> "local"), just without the spoofable escape
+/// hatch. Revisit if a real reverse proxy is ever placed in front of this.
+fn client_key(_headers: &HeaderMap) -> String {
+    "local".to_string()
 }
 
 #[cfg(test)]
@@ -3247,6 +3279,86 @@ mod tests {
             app.clone().oneshot(save_req).await.unwrap().status(),
             StatusCode::OK,
             "write was starved by the read flood — V-17 regression"
+        );
+    }
+
+    // Security audit 2026-11-05, finding #4's sibling issue: failed-auth
+    // requests used to skip the rate limiter entirely (auth was checked
+    // before the limiter ran), so a bad API key could be brute-forced with
+    // no throttling. Rate-limiting now happens first.
+    #[tokio::test]
+    async fn failed_auth_attempts_consume_the_rate_limit_budget() {
+        let (state, _guard) = test_state(); // rate_limit_max_requests = 2
+        let app = build_router(state);
+        let bad_key_req = || {
+            axum::http::Request::builder()
+                .uri("/stats")
+                .header("x-api-key", "wrong-key")
+                .body(Body::empty())
+                .unwrap()
+        };
+
+        let r1 = app.clone().oneshot(bad_key_req()).await.unwrap();
+        let r2 = app.clone().oneshot(bad_key_req()).await.unwrap();
+        let r3 = app.clone().oneshot(bad_key_req()).await.unwrap();
+
+        assert_eq!(r1.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(r2.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            r3.status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "a third bad-key attempt should be throttled, not given another 401 \
+             (brute force would otherwise be unthrottled)"
+        );
+    }
+
+    // Security audit (V-01 / docs/SECURITY_AUDIT_2026-11-05.md #1-3): the
+    // static dashboard used to inject the live API key into index.html with
+    // no auth check at all, even when auth_required=true, defeating the
+    // auth model for the one page that carries the credential.
+    #[tokio::test]
+    async fn static_index_html_omits_key_when_auth_required() {
+        let (state, _guard) = test_state(); // auth_required = true
+        let app = build_router(state);
+        let res = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/static/index.html")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        let html = String::from_utf8_lossy(&bytes);
+        assert!(
+            !html.contains("__BRAIN_API_KEY__"),
+            "index.html must not carry the live key when auth is required"
+        );
+    }
+
+    #[tokio::test]
+    async fn static_index_html_includes_key_when_auth_not_required() {
+        let (mut state, _guard) = test_state();
+        state.settings.auth_required = false;
+        let app = build_router(state);
+        let res = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/static/index.html")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        let html = String::from_utf8_lossy(&bytes);
+        assert!(
+            html.contains("__BRAIN_API_KEY__"),
+            "when the operator has explicitly disabled auth, the viewer must \
+             still get the key so its own fetches work"
         );
     }
 }

@@ -237,6 +237,30 @@ class TestPatternMatching:
         assert not is_skip_file("brain/hooks/session_end.py")
         assert not is_skip_file("src/components/App.tsx")
 
+    def test_is_skip_file_excludes_secrets(self):
+        # Security audit 2026-11-05: a Write to one of these used to still
+        # get its first 500 chars sent to Ollama and stored in brain.db.
+        from brain.hooks.action_state import is_skip_file
+        assert is_skip_file(".env")
+        assert is_skip_file(".env.local")
+        assert is_skip_file(".env.production")
+        assert is_skip_file("path/to/.env")
+        assert is_skip_file("id_rsa")
+        assert is_skip_file("keys/id_ed25519.pub")
+        assert is_skip_file("private.pem")
+        assert is_skip_file("cert.key")
+        assert is_skip_file("bundle.p12")
+        assert is_skip_file(".npmrc")
+        assert is_skip_file(".netrc")
+        assert is_skip_file("credentials")
+        assert is_skip_file("credentials.json")
+        assert is_skip_file("secrets.json")
+        assert is_skip_file("secrets.yaml")
+        # .env.example / .env.sample hold no real secrets -- still captured.
+        assert not is_skip_file(".env.example")
+        assert not is_skip_file(".env.sample")
+        assert not is_skip_file("path/to/.env.example")
+
     def test_is_test_pass(self):
         from brain.hooks.action_state import is_test_pass
         assert is_test_pass("6 passed in 8.24s")

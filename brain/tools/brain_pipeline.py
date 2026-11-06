@@ -145,7 +145,11 @@ def step_dashboard() -> str:
 
 
 def step_graph() -> str:
-    out = _run_script("brain/tools/export_knowledge_graph.py", timeout=900)
+    # export_knowledge_graph.py's wipe-before-regenerate is opt-in now
+    # (security audit 2026-11-05, finding #8); pass --clean explicitly so
+    # this pipeline step keeps its prior behavior (no stale notes left
+    # behind from a previous run) instead of silently changing.
+    out = _run_script("brain/tools/export_knowledge_graph.py", "--clean", timeout=900)
     for line in reversed(out.splitlines()):
         if line.strip():
             return line.strip()[:80]
