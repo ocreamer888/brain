@@ -81,7 +81,7 @@ def search(
     graph_expand: bool = False,
     salience_neutral: bool = False,
     apply_source_quality: bool = False,
-    use_layer_confidence: bool = False,
+    use_layer_confidence: bool | None = None,
 ) -> list[dict]:
     payload: dict = {"query": query, "n": n, "graph_expand": graph_expand}
     if memory_type:
@@ -99,11 +99,13 @@ def search(
         # Eval-only opt-in to A/B source_quality_w before it's ever applied
         # to real traffic. Default off.
         payload["apply_source_quality"] = True
-    if use_layer_confidence:
-        # G8 (cognitive-architecture-spec.md section 8.4): eval-only opt-in
-        # to A/B layer_w (replaces salience_w for the request) against the
-        # recency gold set. Default off.
-        payload["use_layer_confidence"] = True
+    if use_layer_confidence is not None:
+        # G8 (cognitive-architecture-spec.md section 8.4): layer_w is on by
+        # default server-side as of 2026-11-06. Tri-state so callers can
+        # explicitly force it False for an eval/ops comparison against the
+        # pre-G8 baseline -- omitting this entirely (None) just takes
+        # whatever the server defaults to, same as every other field here.
+        payload["use_layer_confidence"] = use_layer_confidence
     return _request("POST", "/search", payload).get("results", [])
 
 

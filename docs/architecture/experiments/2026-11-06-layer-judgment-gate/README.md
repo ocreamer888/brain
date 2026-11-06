@@ -123,11 +123,40 @@ was labelled -- `layer_w` demoted the designated "new" side because
 correctly, not a defect. Zero unexplained regressions on the largest,
 highest-coverage version of this test run yet.
 
+## Default flipped on (2026-11-06, owner decision)
+
+Before flipping, caught and fixed a real correctness bug: the ranking
+code forced `salience_w` to `1.0` whenever `use_layer_confidence` was set,
+unconditionally discarding every deliberate human pin (G0's "Promote",
+19 live rows) -- `layer_w` is supposed to replace the *automatic*
+LLM-assigned salience score, not a human's explicit override. Fixed so
+pin and `layer_w` apply independently and multiplicatively; added a
+regression test (`use_layer_confidence_does_not_discard_a_deliberate_pin`)
+and a new dominance-invariant proof for the combined band (widens from
+1.942x to ~2.284x with both active -- still bounded, documented).
+
+Also found the actual live-traffic control point wasn't where it looked:
+`SearchFilter::default()` in Rust has no effect on real HTTP requests,
+because `brain_api.rs`'s `SearchRequest` deserializes with
+`#[serde(default)]` (always `false`) regardless of the Rust-level
+default. Fixed with `#[serde(default = "default_true")]`, the same
+pattern `exclude_superseded` already uses.
+
+Re-ran the full existing eval suite (`eval_suite.py --all`), not just the
+recency set, to check for regressions in *general* retrieval quality now
+that every request gets `layer_w` by default: `quick_gate` P@1=1.000
+across all 4 types (unchanged), `mcp_path` P@1=0.1875/MRR=0.2708/gap=
+-0.0478 (matches the pre-existing historical baseline exactly). Zero
+regression outside the recency-specific behavior this was built for.
+
+Final live-default confirmation on the 44-pair gold set: baseline 65.1%
+→ live default 69.0% new-outranks-old. 3 pairs fixed, 2 non-regressions
+fully explained by gold-label staleness (same root cause documented
+above), 0 unexplained regressions.
+
 ## Status
 
-`SearchFilter::use_layer_confidence` remains off by default. This is real,
-validated evidence on 42-43 independent judged pairs at ~95% gold-set
-coverage -- a much stronger sample than the 17-18 pair run this backfill
-started from, with every apparent regression traced to an explained,
-non-ranking cause -- but not yet a case for flipping the default without
-a product decision.
+`SearchFilter::use_layer_confidence` is **on by default** as of
+2026-11-06, after the validated A/B above and the pin-interaction fix.
+Request-overridable to `false` (`recency_eval.py --no-layer-confidence`)
+for eval/ops work that needs the pre-G8 baseline.

@@ -218,7 +218,7 @@
     {
       "query": "What is the current state of feat/source-field-ledger-guard Task 5?",
       "subject": "What is the current state of feat/source-field-ledger-guard Task 5?",
-      "new_rank": 23,
+      "new_rank": 24,
       "old_rank": 13,
       "new_in_topk": true,
       "new_outranks_old": false
@@ -299,7 +299,7 @@
       "query": "What is the current state of services/etl/classifier.py?",
       "subject": "What is the current state of services/etl/classifier.py?",
       "new_rank": 5,
-      "old_rank": 19,
+      "old_rank": 21,
       "new_in_topk": true,
       "new_outranks_old": true
     },

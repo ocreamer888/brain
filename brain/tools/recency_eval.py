@@ -40,7 +40,7 @@ def rank_of(results: list[dict[str, Any]], target_id: str) -> int | None:
     return None
 
 
-def score_one(case: dict[str, Any], n: int, use_layer_confidence: bool = False) -> dict[str, Any]:
+def score_one(case: dict[str, Any], n: int, use_layer_confidence: bool | None = None) -> dict[str, Any]:
     results = api_search(
         query=case["query"],
         n=n,
@@ -77,10 +77,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--gold", type=Path, default=Path("brain/eval/gold_recency.jsonl"))
     p.add_argument("--n", type=int, default=10)
     p.add_argument("--report", type=Path, default=Path("brain/eval/last_recency_report.json"))
-    p.add_argument(
+    layer_group = p.add_mutually_exclusive_group()
+    layer_group.add_argument(
         "--use-layer-confidence",
+        dest="use_layer_confidence",
         action="store_true",
-        help="G8 A/B: substitute layer_w for salience_w for this run (SearchFilter::use_layer_confidence).",
+        default=None,
+        help="G8: force layer_w on for this run (this is the server's own default as of 2026-11-06, "
+             "so this flag is mostly a no-op unless the server default ever changes).",
+    )
+    layer_group.add_argument(
+        "--no-layer-confidence",
+        dest="use_layer_confidence",
+        action="store_false",
+        help="G8: force the pre-G8 baseline (salience_w only, no layer_w) for an eval/ops comparison.",
     )
     args = p.parse_args(argv)
 

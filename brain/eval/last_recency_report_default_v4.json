@@ -1,9 +1,9 @@
 {
   "gold_file": "/Users/abundancia888/Documents/Code/brain/brain/eval/gold_recency.jsonl",
-  "use_layer_confidence": true,
+  "use_layer_confidence": null,
   "n_pairs": 44,
   "new_in_topk_rate": 0.9318,
-  "new_outranks_old_rate": 0.7143,
+  "new_outranks_old_rate": 0.6905,
   "n_judged": 42,
   "neither_surfaced": 2,
   "per_pair": [
@@ -35,7 +35,7 @@
       "query": "What is the current state of feat/source-field-ledger-guard?",
       "subject": "feat/source-field-ledger-guard",
       "new_rank": 9,
-      "old_rank": 37,
+      "old_rank": 38,
       "new_in_topk": true,
       "new_outranks_old": true
     },
@@ -51,7 +51,7 @@
       "query": "What is the current state of Tendrium Agent OS?",
       "subject": "Tendrium Agent OS",
       "new_rank": 2,
-      "old_rank": 12,
+      "old_rank": 13,
       "new_in_topk": true,
       "new_outranks_old": true
     },
@@ -82,7 +82,7 @@
     {
       "query": "What is the current state of docs/superpowers/specs/2026-10-10-source-field-ledger-design.md?",
       "subject": "docs/superpowers/specs/2026-10-10-source-field-ledger-design.md",
-      "new_rank": 6,
+      "new_rank": 5,
       "old_rank": 1,
       "new_in_topk": true,
       "new_outranks_old": false
@@ -90,10 +90,10 @@
     {
       "query": "What is the current state of test_molecule_layer_b_rollup.py?",
       "subject": "test_molecule_layer_b_rollup.py",
-      "new_rank": 5,
-      "old_rank": 6,
+      "new_rank": 6,
+      "old_rank": 5,
       "new_in_topk": true,
-      "new_outranks_old": true
+      "new_outranks_old": false
     },
     {
       "query": "What is the current state of Scalable Health?",
@@ -178,7 +178,7 @@
     {
       "query": "What is the current state of Tendrium Agent OS visual design?",
       "subject": "What is the current state of Tendrium Agent OS visual design?",
-      "new_rank": 28,
+      "new_rank": 29,
       "old_rank": 22,
       "new_in_topk": true,
       "new_outranks_old": false
@@ -187,7 +187,7 @@
       "query": "What is the current state of the biddoc_end_dt null-fill effort?",
       "subject": "What is the current state of the biddoc_end_dt null-fill effort?",
       "new_rank": 5,
-      "old_rank": 18,
+      "old_rank": 19,
       "new_in_topk": true,
       "new_outranks_old": true
     },
@@ -235,7 +235,7 @@
       "query": "What is the current state of feat/source-field-ledger-guard Task 4?",
       "subject": "What is the current state of feat/source-field-ledger-guard Task 4?",
       "new_rank": 1,
-      "old_rank": 4,
+      "old_rank": 5,
       "new_in_topk": true,
       "new_outranks_old": true
     },
@@ -298,8 +298,8 @@
     {
       "query": "What is the current state of services/etl/classifier.py?",
       "subject": "What is the current state of services/etl/classifier.py?",
-      "new_rank": 8,
-      "old_rank": 46,
+      "new_rank": 7,
+      "old_rank": 45,
       "new_in_topk": true,
       "new_outranks_old": true
     },
@@ -338,7 +338,7 @@
     {
       "query": "What is the current state of magic-portfolio CONTEXT.md (QOL/LifeHub)?",
       "subject": "What is the current state of magic-portfolio CONTEXT.md (QOL/LifeHub)?",
-      "new_rank": 3,
+      "new_rank": 2,
       "old_rank": 6,
       "new_in_topk": true,
       "new_outranks_old": true
@@ -355,7 +355,7 @@
       "query": "What is the current state of sicop-health historical/cache.ts?",
       "subject": "What is the current state of sicop-health historical/cache.ts?",
       "new_rank": 2,
-      "old_rank": 9,
+      "old_rank": 10,
       "new_in_topk": true,
       "new_outranks_old": true
     }
