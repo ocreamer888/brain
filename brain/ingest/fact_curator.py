@@ -144,6 +144,7 @@ Return ONLY valid JSON:
             "model": OLLAMA_SUMMARIZE_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
+            "think": False,
             "options": {"temperature": 0.0},
         },
         timeout=60,

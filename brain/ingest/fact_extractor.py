@@ -60,13 +60,16 @@ class FactDraft:
 
 
 def _call_llm(prompt: str) -> str:
-    """Call local Ollama (non-reasoning model) for fact extraction."""
+    """Call local Ollama for fact extraction. think:false so a reasoning
+    model's output still lands in message.content (see entity_extractor.py's
+    _call_llm for the failure mode this guards against)."""
     resp = requests.post(
         f"{OLLAMA_URL}/api/chat",
         json={
             "model": OLLAMA_SUMMARIZE_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
+            "think": False,
             "options": {"temperature": 0.0},
         },
         timeout=120,

@@ -221,6 +221,13 @@ def _call_llm(prompt: str, timeout: tuple[float, float] | None = None) -> str:
             "model": OLLAMA_SUMMARIZE_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
+            # Always sent, regardless of which model is configured: a no-op
+            # for non-reasoning models, but required for any reasoning/
+            # thinking model (e.g. ornith) -- without it, the reasoning goes
+            # into message.thinking and message.content comes back empty,
+            # exactly the failure mode verified 2026-11-05 (brain memory
+            # 5d5ed144) before this flag was added.
+            "think": False,
             "options": {"temperature": 0.0},
         },
         timeout=timeout or LIVE_TIMEOUT,

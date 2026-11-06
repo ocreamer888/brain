@@ -341,6 +341,11 @@ impl LlmClient for OllamaClient {
             "model": self.model,
             "messages": [{"role": "user", "content": user_msg}],
             "stream": false,
+            // No-op for non-reasoning models; required for a reasoning model
+            // (e.g. ornith) so its output lands in message.content instead
+            // of message.thinking. See entity_extractor.py's _call_llm for
+            // the same guard on the Python side.
+            "think": false,
             "options": {"num_predict": max_tokens}
         });
 

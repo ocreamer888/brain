@@ -35,12 +35,22 @@ SQL_PATH = Path(
 # so Python-extracted facts share the same vector space as API-saved memories.
 EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
-# qwen3-coder:30b is deliberately chosen, not a placeholder: Brain's Ollama
-# calls (summarize/fact-extract/curator/entity-extract) don't send
-# think:false, and fact_extractor.py rejects reasoning models because they
-# leave message.content empty. ornith:35b is a thinking/agentic model and
-# is not a safe substitute here -- see brain memory 5d5ed144.
-OLLAMA_SUMMARIZE_MODEL = os.environ.get("OLLAMA_SUMMARIZE_MODEL", "qwen3-coder:30b")
+# 2026-11-05: switched from qwen3-coder:30b to ornith-35b-eval:latest.
+# brain memory 5d5ed144 (2026-11-05 or earlier) found ornith:35b -- a
+# thinking/agentic model -- unsafe here because Brain's Ollama calls
+# (summarize/fact-extract/curator/entity-extract) didn't send think:false,
+# so reasoning went into message.thinking and message.content came back
+# empty. That's now fixed: every call site (entity_extractor.py,
+# fact_extractor.py, fact_curator.py, core/summarizer.py, and the Rust
+# OllamaClient) sends "think": false unconditionally. Verified live:
+# ornith-35b-eval:latest with think:false parsed cleanly through Brain's
+# real JSON parsers (markdown-fence stripping included) on both the
+# entity-extraction and title/summary prompts, 6/6 runs, 0.6-1.0s each
+# once Ollama wasn't contended by another session -- actually faster than
+# qwen3-coder's benchmarked ~4s. Known caveat: the model's llama-server
+# runs with -np 1 (one concurrent request), so Brain's calls queue behind
+# any other active use of this same model.
+OLLAMA_SUMMARIZE_MODEL = os.environ.get("OLLAMA_SUMMARIZE_MODEL", "ornith-35b-eval:latest")
 
 
 MEMORIES_COLLECTION = "memories"

@@ -17,6 +17,7 @@ def _openrouter_chat(model: str, messages: list[dict], max_tokens: int) -> str:
             "model": model,
             "messages": messages,
             "stream": False,
+            "think": False,
             "options": {"num_predict": max_tokens, "temperature": 0.0},
         },
         timeout=120,
