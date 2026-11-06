@@ -283,7 +283,27 @@ impl MetadataStore {
                     UNIQUE(src_memory_id, dst_entity_id, relation_type)
                 );
                 CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src_memory_id);
-                CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst_entity_id);",
+                CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst_entity_id);
+
+                -- Memory-to-memory links (spec §7.2/§8.4). Deliberately NOT
+                -- folded into `edges`, whose dst_entity_id is memory-to-ENTITY
+                -- only (see cognitive-architecture-diagram.md item 2) -- reusing
+                -- that column for a different target type is exactly the
+                -- superseded_by overload G2 already had to clean up once.
+                -- relation_type is 'layers_on' today (src=newer memory m',
+                -- dst=older memory m, weight=w(m,m') per spec §8.4); room for
+                -- 'similar_to' (G7) later without conflating the two shapes.
+                CREATE TABLE IF NOT EXISTS memory_links (
+                    id TEXT PRIMARY KEY,
+                    src_memory_id TEXT NOT NULL,
+                    dst_memory_id TEXT NOT NULL,
+                    relation_type TEXT NOT NULL,
+                    weight REAL NOT NULL DEFAULT 1.0,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(src_memory_id, dst_memory_id, relation_type)
+                );
+                CREATE INDEX IF NOT EXISTS idx_memory_links_dst ON memory_links(dst_memory_id, relation_type);
+                CREATE INDEX IF NOT EXISTS idx_memory_links_src ON memory_links(src_memory_id, relation_type);",
             )
             .map_err(|e| BrainError::Database(e.to_string()))
     }

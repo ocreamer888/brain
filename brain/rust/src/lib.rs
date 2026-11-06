@@ -8,6 +8,7 @@ pub mod index;
 pub mod ingest;
 pub mod lookups;
 pub mod instances;
+pub mod layer;
 pub mod memory_atlas;
 pub mod migrate;
 pub mod privacy;
