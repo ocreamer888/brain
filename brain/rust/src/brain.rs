@@ -521,13 +521,19 @@ pub fn rank_candidates(
             let sal = memory.metadata.salience as f32;
             let request_forces_neutral = filter.map(|f| f.salience_neutral).unwrap_or(false);
             let use_layer_confidence = filter.map(|f| f.use_layer_confidence).unwrap_or(false);
-            // G8: layer_w REPLACES salience_w for the request, not alongside
-            // it (spec §8.4: "score = layer_w · recency_w · hybrid ·
-            // knowledge_w (salience_w retired)") -- so salience_w is forced
-            // neutral whenever layer confidence is in play.
-            let salience_w = if use_layer_confidence {
-                1.0
-            } else if memory.metadata.salience_pinned && !request_forces_neutral {
+            // G8 note (corrected 2026-11-06): layer_w replaces the
+            // AUTOMATIC LLM-assigned salience signal (spec §8.4's "salience_w
+            // retired" is about that majority-neutral auto-score, which G0
+            // already found anti-correlates with quality). It does NOT
+            // override a human's deliberate pin (salience_pinned, G0,
+            // Curate.jsx's Promote) -- that is a different, orthogonal,
+            // intentional signal and silently discarding it when
+            // use_layer_confidence is on would regress live pinned rows.
+            // Earlier code forced salience_w to 1.0 whenever the flag was
+            // set, unconditionally defeating every existing pin; fixed here
+            // so pin and layer confidence apply independently and
+            // multiplicatively, same as every other modulator pair.
+            let salience_w = if memory.metadata.salience_pinned && !request_forces_neutral {
                 (1.0 + 0.3 * (sal - 0.5)).clamp(0.85, 1.15)
             } else {
                 1.0
@@ -2147,7 +2153,7 @@ mod tests {
     }
 
     #[test]
-    fn use_layer_confidence_applies_layer_w_and_retires_salience_w() {
+    fn use_layer_confidence_applies_layer_w_independently_of_salience() {
         let brain = test_brain();
         let old_id = save(
             &brain,
@@ -2161,10 +2167,8 @@ mod tests {
             MemoryType::Solution,
             "p",
         );
-        // Pin salience high so the baseline run actually gets the boost
-        // that use_layer_confidence must then retire.
-        brain.update_salience(&old_id, 1.0, true).unwrap();
-
+        // Not pinned here -- this test is about layer_w alone. The
+        // pin-survives case is covered separately below.
         let baseline_filter = SearchFilter {
             use_layer_confidence: false,
             ..SearchFilter::default()
@@ -2188,19 +2192,60 @@ mod tests {
         assert!(
             layer_score < baseline_score,
             "layer_w (depth=0.9, bounded <=1.0) should pull the score below the \
-             salience_w=1.15-boosted baseline: baseline={baseline_score} layer={layer_score}"
+             unmodulated baseline: baseline={baseline_score} layer={layer_score}"
         );
 
         // Exact arithmetic check: layer_score/baseline_score must equal
-        // layer_w(0.9)/salience_w(1.15) -- proving salience_w was retired
-        // (not stacked) and layer_w was computed from the real depth, not
-        // an approximation.
+        // layer_w(0.9) exactly -- salience_w is 1.0 in both arms here (no
+        // pin), so the ratio isolates layer_confidence_w precisely.
         let expected_layer_w = layer::layer_w(0.9, layer::DEFAULT_FLOOR, layer::DEFAULT_LAMBDA) as f32;
-        let expected_ratio = expected_layer_w / 1.15_f32;
         let actual_ratio = layer_score / baseline_score;
         assert!(
-            (actual_ratio - expected_ratio).abs() < 0.01,
-            "ratio mismatch: expected {expected_ratio} got {actual_ratio}"
+            (actual_ratio - expected_layer_w).abs() < 0.01,
+            "ratio mismatch: expected {expected_layer_w} got {actual_ratio}"
+        );
+    }
+
+    #[test]
+    fn use_layer_confidence_does_not_discard_a_deliberate_pin() {
+        // Regression test: an earlier version of this code forced
+        // salience_w to 1.0 whenever use_layer_confidence was set,
+        // unconditionally overriding every pinned ("Promote") row -- G0's
+        // whole point was that the pin is a trustworthy, deliberate human
+        // signal, orthogonal to the auto-score layer_w actually replaces.
+        let brain = test_brain();
+        let old_id = save(
+            &brain,
+            "unique parsnip content about cache invalidation",
+            MemoryType::Solution,
+            "p",
+        );
+        brain.update_salience(&old_id, 1.0, true).unwrap(); // pinned, salience_w -> 1.15
+
+        let layer_filter = SearchFilter {
+            use_layer_confidence: true,
+            ..SearchFilter::default()
+        };
+        let with_layer = brain
+            .search("parsnip content cache invalidation", 5, Some(layer_filter))
+            .unwrap();
+        let layer_score = with_layer.iter().find(|r| r.id == old_id).unwrap().score;
+
+        let neutral_filter = SearchFilter {
+            use_layer_confidence: true,
+            salience_neutral: true,
+            ..SearchFilter::default()
+        };
+        let neutral = brain
+            .search("parsnip content cache invalidation", 5, Some(neutral_filter))
+            .unwrap();
+        let neutral_score = neutral.iter().find(|r| r.id == old_id).unwrap().score;
+
+        let ratio = layer_score / neutral_score;
+        assert!(
+            (ratio - 1.15).abs() < 0.01,
+            "the pin's 1.15 boost must still show up even with layer confidence \
+             active (depth=0 here, so layer_w=1.0 and shouldn't mask this): got ratio {ratio}"
         );
     }
 

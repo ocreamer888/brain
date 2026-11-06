@@ -285,9 +285,10 @@ struct SearchRequest {
     /// comment. Default off.
     #[serde(default)]
     apply_source_quality: bool,
-    /// G8 eval-only opt-in — see SearchFilter::use_layer_confidence's doc
-    /// comment. Default off.
-    #[serde(default)]
+    /// G8 — see SearchFilter::use_layer_confidence's doc comment. Default
+    /// true as of 2026-11-06; set explicitly false for eval/ops work that
+    /// needs the pre-G8 baseline.
+    #[serde(default = "default_true")]
     use_layer_confidence: bool,
 }
 
@@ -1006,6 +1007,7 @@ async fn search_index_handler(
         exclude_superseded: req.exclude_superseded,
         alpha: req.alpha,
         graph_expand: req.graph_expand,
+        use_layer_confidence: req.use_layer_confidence,
         ..SearchFilter::default()
     };
     let full = brain

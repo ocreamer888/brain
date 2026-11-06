@@ -201,6 +201,39 @@ mod tests {
         assert!((layer_ratio - 1.6879_f64).abs() < 1e-3, "sanity: {layer_ratio}");
     }
 
+    /// Corrected 2026-11-06: brain.rs no longer forces salience_w to 1.0
+    /// when use_layer_confidence is set (that discarded every deliberate
+    /// human pin, G0's "Promote" -- see the brain.rs regression test
+    /// `use_layer_confidence_does_not_discard_a_deliberate_pin`). Pin and
+    /// layer_w now apply independently and multiplicatively, so the real
+    /// worst-case combined band is wider than either factor's band alone --
+    /// this proves it is still bounded and still much tighter than an
+    /// unconstrained additive sum, just not as tight as the single-factor
+    /// comparison above. §2.1's dominance invariant requires the hybrid
+    /// relevance ratio to exceed this number, not the old 1.942x, whenever
+    /// a pinned row and a deep-layer row are being compared under
+    /// use_layer_confidence.
+    #[test]
+    fn combined_pin_and_layer_w_band_stays_bounded_and_documented() {
+        let recency_w_range = (0.85_f64, 1.0_f64);
+        let knowledge_w_range = (1.0_f64, 1.22_f64);
+        let salience_w_range = (0.85_f64, 1.15_f64); // pin can still apply
+        let layer_w_range = (DEFAULT_FLOOR, 1.0_f64);
+
+        let combined_ratio = (salience_w_range.1 * layer_w_range.1 * recency_w_range.1 * knowledge_w_range.1)
+            / (salience_w_range.0 * layer_w_range.0 * recency_w_range.0 * knowledge_w_range.0);
+
+        assert!(
+            (combined_ratio - 2.2841_f64).abs() < 1e-3,
+            "sanity: {combined_ratio}"
+        );
+        assert!(
+            combined_ratio < 3.0,
+            "four independent bounded multiplicative factors must still \
+             produce a modest, bounded band, not blow up: {combined_ratio}"
+        );
+    }
+
     #[test]
     fn depth_is_zero_with_no_links_and_no_supersede() {
         let store = MetadataStore::open_in_memory().unwrap();

@@ -158,16 +158,21 @@ pub struct SearchFilter {
     /// G0 validated salience (A/B on the trustworthy gold set) and this
     /// default is deliberately flipped. Do not flip without that A/B.
     pub apply_source_quality: bool,
-    /// G8 (cognitive-architecture-spec.md §8.4): when true, replace
-    /// salience_w in the final score with layer_w, derived at query time
-    /// from `layer::depth()` (explicit superseded_by + judged `layers_on`
-    /// memory_links, see brain/rust/src/layer.rs). salience_w becomes 1.0
-    /// for the request when this is set -- the spec is explicit that
-    /// layer_w is meant to *replace* salience_w, not stack with it ("score
-    /// = layer_w · recency_w · hybrid · knowledge_w (salience_w retired)").
-    /// Default off, same reasoning as apply_source_quality: exists for the
-    /// gold-set A/B (brain/tools/recency_eval.py), not for real traffic
-    /// until that A/B says otherwise.
+    /// G8 (cognitive-architecture-spec.md §8.4): when true, multiply
+    /// layer_w into the final score, derived at query time from
+    /// `layer::depth()` (explicit superseded_by + judged `layers_on`
+    /// memory_links, see brain/rust/src/layer.rs). Independent of
+    /// salience_w -- a deliberate human pin (G0) still applies on top; only
+    /// the automatic, majority-neutral LLM auto-score is what layer_w
+    /// actually targets, not the pin (fixed 2026-11-06 after an earlier
+    /// version of this flag unconditionally zeroed salience_w, which would
+    /// have discarded every pinned "Promote" row — see
+    /// `use_layer_confidence_does_not_discard_a_deliberate_pin`, brain.rs).
+    /// **Default true as of 2026-11-06**, after validating 0 unexplained
+    /// regressions / 4 fixes on a 42-pair real A/B
+    /// (docs/architecture/experiments/2026-11-06-layer-judgment-gate/).
+    /// Still request-overridable to `false` for eval/ops work that needs
+    /// the pre-G8 baseline for comparison.
     pub use_layer_confidence: bool,
 }
 
@@ -182,7 +187,7 @@ impl Default for SearchFilter {
             exclude_episodes_by_default: true,
             salience_neutral: false,
             apply_source_quality: false,
-            use_layer_confidence: false,
+            use_layer_confidence: true,
         }
     }
 }
