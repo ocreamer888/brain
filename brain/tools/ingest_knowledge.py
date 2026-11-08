@@ -10,8 +10,12 @@ chunk as ``memory_type=knowledge`` with provenance:
                       chunk ordinal (for future sibling expansion), content hash
 
 Idempotent by content hash: re-running on an unchanged file adds zero rows;
-changed chunks are saved fresh and their stale predecessors marked superseded
-(same direct-SQLite path fact_curator uses — run on the machine hosting the DB).
+changed chunks are saved fresh and their stale predecessors marked superseded.
+Save, existence-check, and supersede all go through ``brain.api_client`` (HTTP
+to ``BRAIN_API_URL``) — never direct SQLite. A client machine (e.g. a MacBook
+pointed at a remote Mac Studio brain_api) has no reliable local brain.db, so a
+direct-SQLite existence/supersede path would silently look at the wrong
+database and never retire stale chunks.
 
 This is the ONLY sanctioned writer of type=knowledge besides explicit agent/MCP
 saves. Session recycling and fact extraction are guarded against it.
@@ -19,7 +23,7 @@ saves. Session recycling and fact extraction are guarded against it.
 Usage:
     python3 brain/tools/ingest_knowledge.py PATH [PATH ...] \
         [--project NAME] [--corpus NAME] [--source obsidian] \
-        [--entities] [--dry-run]
+        [--entities] [--dry-run] [--on-db-host]
 """
 
 from __future__ import annotations
@@ -27,14 +31,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
-import sqlite3
 import sys
+import urllib.parse
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from brain import api_client  # noqa: E402
 from brain.api_client import save_memory  # noqa: E402
 from brain.ingest.payloads import (  # noqa: E402
     format_bracketed_memory,
@@ -49,6 +54,8 @@ from brain.ingest.text_chunking import (  # noqa: E402
 
 TEXT_SUFFIXES = {".md", ".markdown", ".txt", ".rst"}
 
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
 
 def _int_env(name: str, default: int) -> int:
     try:
@@ -60,8 +67,33 @@ def _int_env(name: str, default: int) -> int:
 CHUNK_WORD_THRESHOLD = max(200, _int_env("OBSIDIAN_CHUNK_WORDS", 1500))
 
 
-def _db_path() -> str:
-    return os.environ.get("BRAIN_DB_PATH", str(Path.home() / ".brain" / "brain.db"))
+def _api_url() -> str:
+    return os.environ.get("BRAIN_API_URL", "http://127.0.0.1:8787")
+
+
+def guard_api_host(on_db_host: bool) -> None:
+    """Refuse to run against a non-loopback BRAIN_API_URL unless --on-db-host.
+
+    Defense in depth: existence-check + supersede now go through the API (not
+    direct SQLite), so pointing at a remote brain_api is *correct*. But this
+    CLI is a bulk, potentially slow corpus job — running it unattended against
+    a shared remote Studio API from a stale env var or wrong shell is easy to
+    do by accident. Forcing an explicit flag for any non-loopback
+    BRAIN_API_URL makes that a deliberate choice instead of a silent default.
+    """
+    if on_db_host:
+        return
+    url = _api_url()
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    if host in _LOOPBACK_HOSTS:
+        return
+    raise SystemExit(
+        f"Refusing to run: BRAIN_API_URL={url!r} is not loopback "
+        f"(127.0.0.1/localhost). ingest_knowledge is a bulk corpus job — "
+        f"running it against a remote brain_api by accident (stale env var, "
+        f"wrong shell) is the exact footgun this guard exists for. "
+        f"Pass --on-db-host to confirm this is deliberate."
+    )
 
 
 def _sha(text: str) -> str:
@@ -99,33 +131,19 @@ def build_chunks(text: str, stem: str) -> list[tuple[str, str, str]]:
 
 
 def existing_chunks(file_path: str) -> list[tuple[str, str | None]]:
-    """[(id, extracted_by)] of live knowledge rows for this file.
+    """[(id, extracted_by)] of live knowledge rows for this file, via the API.
 
-    The ``type`` column stores the serde JSON encoding — quotes included.
+    Routed through ``brain.api_client`` (GET /knowledge/existing) — never
+    direct SQLite — so it works correctly whether this CLI runs on the DB
+    host or a remote client machine.
     """
-    conn = sqlite3.connect(_db_path(), timeout=30)
-    try:
-        rows = conn.execute(
-            """SELECT id, extracted_by FROM memories
-               WHERE type = '"knowledge"' AND file_path = ?
-                 AND superseded_by IS NULL""",
-            (file_path,),
-        ).fetchall()
-    finally:
-        conn.close()
-    return [(r[0], r[1]) for r in rows]
+    rows = api_client.knowledge_chunks_for_file(file_path)
+    return [(r.get("id", ""), r.get("extracted_by")) for r in rows]
 
 
 def mark_superseded(old_id: str, new_id: str) -> None:
-    conn = sqlite3.connect(_db_path(), timeout=30)
-    try:
-        conn.execute(
-            "UPDATE memories SET superseded_by = ? WHERE id = ?",
-            (new_id, old_id),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    """Mark ``old_id`` superseded by ``new_id`` via the API (PATCH /memories/:id)."""
+    api_client.mark_superseded(old_id, new_id)
 
 
 def ingest_file(
@@ -215,7 +233,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--entities", action="store_true",
                         help="Extract entities per chunk at save time (slow; backfill covers this later)")
     parser.add_argument("--dry-run", action="store_true", help="Print plan, do not save")
+    parser.add_argument(
+        "--on-db-host", action="store_true",
+        help="Confirm BRAIN_API_URL intentionally points at a remote (non-loopback) "
+             "host; required to run this bulk ingest against anything but 127.0.0.1/localhost",
+    )
     args = parser.parse_args(argv)
+
+    guard_api_host(args.on_db_host)
 
     files = collect_files(args.paths)
     if not files:

@@ -960,15 +960,44 @@ impl MetadataStore {
         Ok(rows)
     }
 
-    /// Mark a fact as superseded by a newer fact (soft-delete for audit trail).
-    pub fn mark_superseded(&self, old_id: &str, new_id: &str) -> Result<(), BrainError> {
-        self.conn
+    /// Mark a memory as superseded by a newer one (soft-delete for audit trail).
+    /// Returns `false` if `old_id` did not match any row.
+    pub fn mark_superseded(&self, old_id: &str, new_id: &str) -> Result<bool, BrainError> {
+        let rows = self
+            .conn
             .execute(
                 "UPDATE memories SET superseded_by = ?1 WHERE id = ?2",
                 params![new_id, old_id],
             )
             .map_err(|e| BrainError::Database(e.to_string()))?;
-        Ok(())
+        Ok(rows > 0)
+    }
+
+    /// (id, extracted_by) for all active (non-superseded) `knowledge` rows with
+    /// the given `file_path` — powers `ingest_knowledge.py`'s idempotent
+    /// re-ingest (content-hash skip/supersede) over the API instead of direct
+    /// SQLite, so it works correctly against a remote `brain_api` host.
+    /// `extracted_by`, not the legacy `derived_from` column (G1) -- rows saved
+    /// through `/save` since the G1 migration carry provenance there.
+    pub fn get_active_knowledge_by_file_path(
+        &self,
+        file_path: &str,
+    ) -> Result<Vec<(String, Option<String>)>, BrainError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, extracted_by FROM memories
+                 WHERE type = '\"knowledge\"' AND file_path = ?1 AND superseded_by IS NULL",
+            )
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        let rows = stmt
+            .query_map(params![file_path], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+            })
+            .map_err(|e| BrainError::Database(e.to_string()))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        Ok(rows)
     }
 
     /// `pinned`: see MemoryMetadata::salience_pinned's doc comment (G0). This
@@ -2087,9 +2116,74 @@ mod tests {
             metadata: fact_metadata("ep-1"),
             embedding: None,
         }).unwrap();
-        store.mark_superseded("old-fact", "new-fact").unwrap();
+        let updated = store.mark_superseded("old-fact", "new-fact").unwrap();
+        assert!(updated);
         let fetched = store.get_memory("old-fact").unwrap().unwrap();
         assert_eq!(fetched.metadata.superseded_by.as_deref(), Some("new-fact"));
+    }
+
+    #[test]
+    fn mark_superseded_returns_false_for_unknown_id() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        let updated = store.mark_superseded("does-not-exist", "new-fact").unwrap();
+        assert!(!updated);
+    }
+
+    fn knowledge_metadata(file_path: &str) -> MemoryMetadata {
+        MemoryMetadata {
+            memory_type: MemoryType::Knowledge,
+            project: "test".into(),
+            tags: "knowledge,brain/ingest".into(),
+            timestamp: Utc::now(),
+            source: MemorySource::Obsidian,
+            session_id: String::new(),
+            importance: 0.5,
+            file_path: Some(file_path.to_string()),
+            thread_id: None,
+            title: Some("Manual — Webhooks".into()),
+            parent_id: None,
+            event_time: None,
+            salience: 0.5,
+            salience_pinned: false,
+            superseded_by: None,
+            extracted_by: Some("corpus:doc1:c0:sha:aaaaaaaaaaaaaaaa".into()),
+        }
+    }
+
+    #[test]
+    fn get_active_knowledge_by_file_path_excludes_superseded_and_other_files() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        store.upsert_memory(&Memory {
+            id: "k-active".into(),
+            content: "active chunk".into(),
+            metadata: knowledge_metadata("/docs/manual.md"),
+            embedding: None,
+        }).unwrap();
+
+        let mut stale = knowledge_metadata("/docs/manual.md");
+        stale.superseded_by = Some("k-active".into());
+        stale.extracted_by = Some("corpus:doc1:c0:sha:bbbbbbbbbbbbbbbb".into());
+        store.upsert_memory(&Memory {
+            id: "k-stale".into(),
+            content: "stale chunk".into(),
+            metadata: stale,
+            embedding: None,
+        }).unwrap();
+
+        store.upsert_memory(&Memory {
+            id: "k-other-file".into(),
+            content: "other doc chunk".into(),
+            metadata: knowledge_metadata("/docs/other.md"),
+            embedding: None,
+        }).unwrap();
+
+        let rows = store.get_active_knowledge_by_file_path("/docs/manual.md").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "k-active");
+        assert_eq!(rows[0].1.as_deref(), Some("corpus:doc1:c0:sha:aaaaaaaaaaaaaaaa"));
+
+        let none = store.get_active_knowledge_by_file_path("/docs/missing.md").unwrap();
+        assert!(none.is_empty());
     }
 
     #[test]

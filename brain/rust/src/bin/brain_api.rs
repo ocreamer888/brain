@@ -676,6 +676,7 @@ fn build_router(state: AppState) -> Router {
         .route("/linked", get(linked_handler))
         .route("/list", get(list_memories))
         .route("/delete", post(delete_memories))
+        .route("/knowledge/existing", get(knowledge_existing_handler))
         .route("/feedback", post(feedback))
         .route("/reflect", post(reflect))
         .route("/memories/:id", patch(patch_memory))
@@ -2051,6 +2052,7 @@ async fn reflect(
 
 #[derive(Debug, Deserialize)]
 struct PatchMemoryRequest {
+    #[serde(default)]
     salience: Option<f64>,
     /// G0: defaults true when omitted -- a PATCH is always a deliberate human
     /// action (only the UI's Promote/Undo flow calls this endpoint today), so
@@ -2058,6 +2060,12 @@ struct PatchMemoryRequest {
     /// behavior. Undo-promote explicitly sends `false` to un-pin.
     #[serde(default = "default_true")]
     salience_pinned: bool,
+    /// Set to mark this memory superseded by the given memory id — the API-routed
+    /// replacement for direct-SQLite `UPDATE memories SET superseded_by = ...`
+    /// (see `ingest_knowledge.py`; a client on a different host than the DB
+    /// must never write SQLite directly).
+    #[serde(default)]
+    superseded_by: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -2074,18 +2082,26 @@ async fn patch_memory(
     let start = Instant::now();
     authorize_and_rate_limit(&state, &headers, RateClass::Write)?;
     reject_if_switching(&state)?;
-    if req.salience.is_none() {
+    if req.salience.is_none() && req.superseded_by.is_none() {
         return Err(bad_request("no patchable fields provided"));
     }
-    let salience = req.salience.unwrap();
-    if !(0.0..=1.0).contains(&salience) {
-        return Err(bad_request("salience must be 0.0–1.0"));
+    if let Some(salience) = req.salience {
+        if !(0.0..=1.0).contains(&salience) {
+            return Err(bad_request("salience must be 0.0–1.0"));
+        }
     }
     let pinned = req.salience_pinned;
     let brain = state.brain.clone();
     let updated = tokio::task::spawn_blocking(move || -> Result<bool, String> {
         let brain = brain.lock().unwrap_or_else(|p| p.into_inner());
-        brain.update_salience(&id, salience, pinned).map_err(|e| e.to_string())
+        let mut any_match = true;
+        if let Some(salience) = req.salience {
+            any_match &= brain.update_salience(&id, salience, pinned).map_err(|e| e.to_string())?;
+        }
+        if let Some(ref new_id) = req.superseded_by {
+            any_match &= brain.mark_superseded(&id, new_id).map_err(|e| e.to_string())?;
+        }
+        Ok(any_match)
     })
     .await
     .map_err(|e| internal_err(format!("patch task join failed: {e}")))?
@@ -2095,6 +2111,46 @@ async fn patch_memory(
     }
     log_request("PATCH", "/memories/:id", StatusCode::OK, start);
     Ok(Json(PatchMemoryResponse { updated }))
+}
+
+#[derive(Debug, Deserialize)]
+struct KnowledgeExistingQuery {
+    file_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct KnowledgeChunkRef {
+    id: String,
+    extracted_by: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct KnowledgeExistingResponse {
+    chunks: Vec<KnowledgeChunkRef>,
+}
+
+/// Active (non-superseded) `knowledge` rows for a `file_path` — id + extracted_by.
+/// Powers `ingest_knowledge.py`'s idempotent re-ingest (content-hash skip/supersede)
+/// over the API instead of direct SQLite (see spec 2026-08-06).
+async fn knowledge_existing_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<KnowledgeExistingQuery>,
+) -> Result<Json<KnowledgeExistingResponse>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    let file_path = q
+        .file_path
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| bad_request("file_path is required"))?;
+    let brain = lock_brain(&state);
+    let rows = brain.knowledge_chunks_for_file(&file_path).map_err(brain_err)?;
+    let chunks = rows
+        .into_iter()
+        .map(|(id, extracted_by)| KnowledgeChunkRef { id, extracted_by })
+        .collect();
+    log_request("GET", "/knowledge/existing", StatusCode::OK, start);
+    Ok(Json(KnowledgeExistingResponse { chunks }))
 }
 
 fn reject_if_switching(state: &AppState) -> Result<(), (StatusCode, Json<ApiError>)> {
@@ -2910,6 +2966,77 @@ mod tests {
             hit2["metadata"]["salience_pinned"], false,
             "explicit salience_pinned:false must un-pin"
         );
+    }
+
+    // API-routed knowledge supersede: save two chunks for the same file_path,
+    // PATCH the first superseded via the new endpoint (never direct SQLite),
+    // confirm /knowledge/existing only returns the live one.
+    #[tokio::test]
+    async fn knowledge_supersede_round_trip_via_api() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+
+        let save = |content: &'static str| {
+            let app = app.clone();
+            let body = serde_json::json!({
+                "content": content,
+                "memory_type": "knowledge",
+                "file_path": "/docs/manual.md",
+                "extracted_by": "corpus:doc1:c0:sha:aaaaaaaaaaaaaaaa",
+            });
+            async move {
+                let res = app.oneshot(json_request("POST", "/save", body)).await.unwrap();
+                assert_eq!(res.status(), StatusCode::OK);
+                body_json(res).await["id"].as_str().unwrap().to_string()
+            }
+        };
+
+        let old_id = save("old chunk body").await;
+        let new_id = save("new chunk body").await;
+
+        // Supersede the old chunk via PATCH /memories/:id (API-routed, not SQLite).
+        let patch_res = app
+            .clone()
+            .oneshot(json_request(
+                "PATCH",
+                &format!("/memories/{old_id}"),
+                serde_json::json!({ "superseded_by": new_id }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(patch_res.status(), StatusCode::OK);
+
+        // /knowledge/existing must exclude the superseded row and include the new one.
+        let existing_res = app
+            .oneshot(get_request("/knowledge/existing?file_path=%2Fdocs%2Fmanual.md"))
+            .await
+            .unwrap();
+        assert_eq!(existing_res.status(), StatusCode::OK);
+        let body = body_json(existing_res).await;
+        let ids: Vec<&str> = body["chunks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec![new_id.as_str()]);
+    }
+
+    #[tokio::test]
+    async fn patch_memory_unknown_id_returns_not_found() {
+        let (mut state, _guard) = test_state();
+        state.settings.rate_limit_max_requests = 50;
+        let app = build_router(state);
+        let res = app
+            .oneshot(json_request(
+                "PATCH",
+                "/memories/does-not-exist",
+                serde_json::json!({ "superseded_by": "whatever" }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

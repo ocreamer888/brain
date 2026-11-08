@@ -485,6 +485,24 @@ def update_salience(memory_id: str, salience: float) -> bool:
     return result.get("updated", False)
 
 
+def mark_superseded(memory_id: str, superseded_by: str) -> bool:
+    """PATCH /memories/:id — mark a memory superseded by another (soft-delete
+    pointer excluded by exclude_superseded search filters). API-routed
+    replacement for direct-SQLite ``UPDATE memories SET superseded_by = ...``
+    — required for any client that isn't co-located with brain.db (spec
+    2026-08-06 knowledge ingest). Returns True if updated."""
+    result = _request("PATCH", f"/memories/{memory_id}", {"superseded_by": superseded_by})
+    return result.get("updated", False)
+
+
+def knowledge_chunks_for_file(file_path: str) -> list[dict]:
+    """GET /knowledge/existing — active (non-superseded) ``knowledge`` rows for
+    a file_path: [{"id": ..., "extracted_by": ...}, ...]. Powers idempotent
+    corpus re-ingest (content-hash skip/supersede) without direct SQLite."""
+    path = "/knowledge/existing?" + urllib.parse.urlencode({"file_path": file_path})
+    return _request("GET", path).get("chunks", [])
+
+
 # ---------------------------------------------------------------------------
 # Query Template Integration (AlphaFold3 template-search pattern)
 # ---------------------------------------------------------------------------

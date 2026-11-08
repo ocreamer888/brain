@@ -108,3 +108,69 @@ def test_dry_run_never_writes(tmp_path):
     save.assert_not_called()
     sup.assert_not_called()
     assert saved > 0
+
+
+# ---------------------------------------------------------------------------
+# existing_chunks / mark_superseded are API-routed (never direct SQLite) —
+# spec 2026-08-06 footgun fix. These mock brain.api_client, not sqlite3.
+# ---------------------------------------------------------------------------
+
+def test_existing_chunks_calls_api_not_sqlite():
+    api_rows = [
+        {"id": "m-1", "extracted_by": "corpus:abc:c0:sha:deadbeef00112233"},
+        {"id": "m-2", "extracted_by": None},
+    ]
+    with patch.object(ik.api_client, "knowledge_chunks_for_file", return_value=api_rows) as call:
+        result = ik.existing_chunks("/docs/manual.md")
+    call.assert_called_once_with("/docs/manual.md")
+    assert result == [
+        ("m-1", "corpus:abc:c0:sha:deadbeef00112233"),
+        ("m-2", None),
+    ]
+
+
+def test_mark_superseded_calls_api_not_sqlite():
+    with patch.object(ik.api_client, "mark_superseded") as call:
+        ik.mark_superseded("old-id", "new-id")
+    call.assert_called_once_with("old-id", "new-id")
+
+
+def test_no_direct_sqlite_usage_in_module():
+    """Acceptance criterion: the CLI must never open brain.db directly."""
+    src = Path(ik.__file__).read_text(encoding="utf-8")
+    assert "sqlite3" not in src
+
+
+# ---------------------------------------------------------------------------
+# --on-db-host guard: refuse non-loopback BRAIN_API_URL unless explicitly
+# overridden. Loopback always runs freely.
+# ---------------------------------------------------------------------------
+
+def test_guard_allows_loopback_without_flag(monkeypatch):
+    monkeypatch.setenv("BRAIN_API_URL", "http://127.0.0.1:8787")
+    ik.guard_api_host(on_db_host=False)  # must not raise
+
+
+def test_guard_allows_localhost_without_flag(monkeypatch):
+    monkeypatch.setenv("BRAIN_API_URL", "http://localhost:8787")
+    ik.guard_api_host(on_db_host=False)  # must not raise
+
+
+def test_guard_allows_missing_env_default_loopback(monkeypatch):
+    monkeypatch.delenv("BRAIN_API_URL", raising=False)
+    ik.guard_api_host(on_db_host=False)  # must not raise
+
+
+def test_guard_refuses_remote_host_without_flag(monkeypatch):
+    monkeypatch.setenv("BRAIN_API_URL", "http://192.168.1.50:8787")
+    try:
+        ik.guard_api_host(on_db_host=False)
+        assert False, "expected SystemExit"
+    except SystemExit as e:
+        assert "192.168.1.50" in str(e)
+        assert "--on-db-host" in str(e)
+
+
+def test_guard_allows_remote_host_with_flag(monkeypatch):
+    monkeypatch.setenv("BRAIN_API_URL", "http://192.168.1.50:8787")
+    ik.guard_api_host(on_db_host=True)  # must not raise

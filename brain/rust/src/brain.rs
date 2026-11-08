@@ -1129,6 +1129,21 @@ impl Brain {
         self.store.update_salience(id, salience, pinned)
     }
 
+    /// Mark a memory as superseded by another (soft-delete pointer excluded by
+    /// `exclude_superseded` search filters). Returns false if `old_id` was not found.
+    pub fn mark_superseded(&self, old_id: &str, new_id: &str) -> Result<bool, BrainError> {
+        self.store.mark_superseded(old_id, new_id)
+    }
+
+    /// Active (non-superseded) `knowledge` rows for a `file_path` — (id, extracted_by).
+    /// Powers `ingest_knowledge.py`'s idempotent re-ingest over the API.
+    pub fn knowledge_chunks_for_file(
+        &self,
+        file_path: &str,
+    ) -> Result<Vec<(String, Option<String>)>, BrainError> {
+        self.store.get_active_knowledge_by_file_path(file_path)
+    }
+
     /// Link a memory to named entities (upsert entity rows + `mentions` edges).
     pub fn link_entities(
         &self,
