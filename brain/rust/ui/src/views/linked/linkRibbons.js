@@ -17,6 +17,18 @@ export const RIBBON = {
   maxPx: 6,
 }
 
+/**
+ * Flat point-index pairs: the forest edges, plus any extra tiers that have
+ * something in them. `edges` may be a Uint32Array (ReferenceAtlas's binary
+ * geometry has no .concat) rather than a plain array (the memory atlas's
+ * JSON edges) -- spread handles both. Skips building a new array when
+ * there's nothing to add, so the common one-tier case is a plain pass-through.
+ */
+export function concatPairs(edges, extra, similar) {
+  if (!extra?.length && !similar?.length) return edges
+  return [...edges, ...(extra ?? []), ...(similar ?? [])]
+}
+
 const vertexShader = /* glsl */ `
   attribute float side;     // -1 / +1 across the ribbon
   attribute float t;        // 0..1 along the link

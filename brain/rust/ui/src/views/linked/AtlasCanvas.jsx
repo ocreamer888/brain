@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { pointScale } from '../../lib/atlas'
-import { makeRibbons } from './linkRibbons'
+import { concatPairs, makeRibbons } from './linkRibbons'
 import { recall, remember } from './viewMemory'
 import styles from './AtlasCanvas.module.css'
 
@@ -15,7 +15,10 @@ const MAX_PX = 26 // near points stop growing here (no marbles)
 const DIM = 0.14 // brightness of points outside a highlight
 // Link opacity: the atlas's 0.8 at rest (long links fade further on screen, in
 // the ribbon shader); greyed-out links drop to 10% of that, like cosmos.gl.
-const LINK = { rest: 0.8, extra: 0.55, lit: 1, focus: 1, greyout: 0.08 }
+// similar: dimmest tier -- an order of magnitude more of these than entity
+// mentions (every memory has up to 10, vs. needing a shared hub), so kept
+// faint by default; still readable close up, fades fastest in the crowd.
+const LINK = { rest: 0.8, extra: 0.55, similar: 0.3, lit: 1, focus: 1, greyout: 0.08 }
 const LINK_TO_POINT = 0.24 // link width as a share of a point
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -107,10 +110,11 @@ function createWorld(host, atlas, handlers, viewKey) {
   controls.dampingFactor = 0.08
 
   const { points, material, sizes, faint } = makePoints(atlas)
-  // One ribbon batch: the forest first, then every other real link.
+  // One ribbon batch: the forest first, then every other real mention link, then similar_to.
   const forestCount = atlas.edges.length / 2
+  const extraCount = (atlas.extra?.length ?? 0) / 2
   const unit = (atlas.pointToSpacing ?? POINT_TO_SPACING) * typicalSpacing(atlas.positions)
-  const links = makeRibbons(atlas.extra?.length ? atlas.edges.concat(atlas.extra) : atlas.edges, atlas.positions, unit * LINK_TO_POINT)
+  const links = makeRibbons(concatPairs(atlas.edges, atlas.extra, atlas.similar), atlas.positions, unit * LINK_TO_POINT)
   scene.add(links.mesh)
   let pxScale = 1
   scene.add(points)
@@ -218,7 +222,8 @@ function createWorld(host, atlas, handlers, viewKey) {
       if (colors) {
         let k = 0
         links.style((a, b) => {
-          const rest = k++ < forestCount ? LINK.rest : LINK.extra
+          const idx = k++
+          const rest = idx < forestCount ? LINK.rest : idx < forestCount + extraCount ? LINK.extra : LINK.similar
           if (focus != null && (a === focus || b === focus)) return LINK.focus
           if (!highlight) return rest
           return highlight[a] && highlight[b] ? LINK.lit : rest * LINK.greyout

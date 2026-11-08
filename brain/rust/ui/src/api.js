@@ -60,6 +60,11 @@ export function getNeighbors(memoryId) {
   return api(`/neighbors?memory_id=${encodeURIComponent(memoryId)}`)
 }
 
+/** Nearest other memories by embedding similarity (G7, spec §7) -- not a shared-entity edge. */
+export function getRelated(memoryId, n = 10) {
+  return api('/v1/related', { method: 'POST', body: JSON.stringify({ id: memoryId, n }) })
+}
+
 export function getEntities(memoryId) {
   return api(`/entities?memory_id=${encodeURIComponent(memoryId)}`)
 }

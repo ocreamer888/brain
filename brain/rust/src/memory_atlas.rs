@@ -71,6 +71,9 @@ pub struct Forest {
     pub tree: Vec<(usize, usize)>,
     /// Every other real mention link.
     pub extra: Vec<(usize, usize)>,
+    /// `similar_to` links (G7): memory-memory only, decorative like `extra` --
+    /// never fed into `layout()`'s spring simulation, same as `extra` already isn't.
+    pub similar: Vec<(usize, usize)>,
     /// Point size input: shared entities per memory, tree children per hub.
     pub size: Vec<usize>,
     /// Memory → its parent hub point (None for free memories).
@@ -114,6 +117,7 @@ pub fn build_forest(conn: &Connection, with_embeddings: bool) -> Result<Forest, 
         projects: vec![],
         tree: vec![],
         extra: vec![],
+        similar: vec![],
         size: vec![],
         parent: vec![],
     };
@@ -223,6 +227,24 @@ pub fn build_forest(conn: &Connection, with_embeddings: bool) -> Result<Forest, 
                 if let Some(&h) = hub_index.get(e.as_str()) {
                     f.extra.push((m, h));
                 }
+            }
+        }
+    }
+
+    // similar_to links (G7 backfill): memory-memory only. The table is written
+    // from each side's own KNN query, so a mutual pair stores both directions --
+    // dedupe by unordered pair so it draws as one line, not two stacked ones.
+    let mut seen_similar: HashSet<(usize, usize)> = HashSet::new();
+    let mut stmt = conn
+        .prepare("SELECT src_memory_id, dst_memory_id FROM memory_links WHERE relation_type = 'similar_to'")
+        .map_err(db)?;
+    let mut rows = stmt.query([]).map_err(db)?;
+    while let Some(r) = rows.next().map_err(db)? {
+        let src: String = r.get(0).map_err(db)?;
+        let dst: String = r.get(1).map_err(db)?;
+        if let (Some(&a), Some(&b)) = (mindex.get(src.as_str()), mindex.get(dst.as_str())) {
+            if a != b && seen_similar.insert((a.min(b), a.max(b))) {
+                f.similar.push((a.min(b), a.max(b)));
             }
         }
     }
@@ -740,6 +762,7 @@ pub fn read(conn: &Connection) -> Result<Value, BrainError> {
             "entities": f.hub_id.len(),
             "edges": f.tree.len(),
             "extra_edges": f.extra.len(),
+            "similar_edges": f.similar.len(),
             "projects": f.projects.len(),
             "unplaced": f.n() - placed_count,
             "layout": ALGORITHM,
@@ -757,6 +780,7 @@ pub fn read(conn: &Connection) -> Result<Value, BrainError> {
         },
         "edges": flat(&f.tree),
         "extra": flat(&f.extra),
+        "similar": flat(&f.similar),
     }))
 }
 
@@ -820,6 +844,23 @@ mod tests {
         assert_eq!(f.parent[b2], Some(f.mem_id.len() + 1));
         assert!(f.tree.contains(&(f.mem_id.len() + 1, f.mem_id.len())), "NEXT hangs off REACT");
         assert_eq!(f.projects[0].0, "alpha");
+    }
+
+    #[test]
+    fn forest_dedupes_similar_to_and_skips_superseded() {
+        let (_d, path) = fixture();
+        let conn = Connection::open(&path).unwrap();
+        // a1<->a2 mutual (both directions stored, same as a real mutual top-k
+        // pair) must draw once. old<->a1 touches a superseded memory and must
+        // be dropped entirely, same as every other edge type here.
+        crate::similar::insert_similar_link(&conn, "s1", "a1", "a2", 0.9).unwrap();
+        crate::similar::insert_similar_link(&conn, "s2", "a2", "a1", 0.9).unwrap();
+        crate::similar::insert_similar_link(&conn, "s3", "old", "a1", 0.8).unwrap();
+        let f = build_forest(&conn, false).unwrap();
+        assert_eq!(f.similar.len(), 1, "mutual pair drawn once, superseded pair dropped");
+        let a1 = f.mem_id.iter().position(|m| m == "a1").unwrap();
+        let a2 = f.mem_id.iter().position(|m| m == "a2").unwrap();
+        assert_eq!(f.similar[0], (a1.min(a2), a1.max(a2)));
     }
 
     #[test]

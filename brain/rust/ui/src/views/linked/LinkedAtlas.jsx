@@ -242,7 +242,7 @@ function AtlasCard({ atlas, mode, onMode, palette, onHome, rebuild }) {
     <section className={`glass ${styles.card}`} aria-label="Atlas">
       <h2 className={`t-h2 ${styles.title}`}>Memory atlas</h2>
       <p className={`t-small ${styles.secondary}`}>
-        {fmt.format(m.memories)} memories · {fmt.format(m.entities)} hub entities · {fmt.format(m.edges + (m.extra_edges ?? 0))} real links
+        {fmt.format(m.memories)} memories · {fmt.format(m.entities)} hub entities · {fmt.format(m.edges + (m.extra_edges ?? 0) + (m.similar_edges ?? 0))} real links
       </p>
       {m.superseded > 0 && (
         <p className={`t-small ${styles.secondary}`}>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getEntities, getNeighbors, getObservations, getTimeline } from '../../api'
+import { getEntities, getNeighbors, getObservations, getRelated, getTimeline } from '../../api'
 import { parseTags, toRow } from '../../lib/memoryRows'
 import { useLoad } from '../../lib/useLoad'
 import Icon from './Icon'
@@ -36,6 +36,7 @@ export default function MemoryReading({ id, onOpen }) {
       <p className={`t-body ${styles.body}`}>{obs.data.content}</p>
       <Tags tags={parseTags(m.tags)} />
       <Linked id={id} onOpen={onOpen} />
+      <Related id={id} onOpen={onOpen} />
       <Around id={id} onOpen={onOpen} />
     </article>
   )
@@ -139,6 +140,28 @@ function Linked({ id, onOpen }) {
           </Button>
         </div>
       )}
+    </section>
+  )
+}
+
+/**
+ * Nearest other memories by embedding similarity (G7, spec §7.3) -- distinct from
+ * Linked's shared-entity edges: no entity in common required, just close in meaning.
+ * Response rows already match MemoryRow's shape, so no toRow/getObservations round-trip.
+ */
+function Related({ id, onOpen }) {
+  const related = useLoad(async () => (await getRelated(id)).related || [], id)
+  const rows = related.data ?? []
+  return (
+    <section className={styles.section} aria-label="Related memories">
+      <div className={styles.sectionHead}>
+        <h3 className="t-label">Related</h3>
+        {rows.length > 0 && <span className="t-small">{rows.length} by similarity</span>}
+      </div>
+      {related.loading && <p className={`t-small ${styles.quiet}`}>Loading related memories…</p>}
+      {related.error && <LoadError what="related memories" message={related.error} onRetry={related.retry} />}
+      {related.data && rows.length === 0 && <p className={`t-small ${styles.quiet}`}>No close matches yet.</p>}
+      <MemoryList rows={rows} onOpen={onOpen} />
     </section>
   )
 }

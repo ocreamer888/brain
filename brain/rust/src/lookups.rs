@@ -386,6 +386,13 @@ pub struct RelatedMemory {
 /// `similar::find_similar`), but a k-NN relation is not guaranteed
 /// symmetric -- A's nearest neighbor is not always B when B's nearest
 /// neighbor is A. Reads both directions rather than assuming one.
+///
+/// Cosine similarity itself IS symmetric, so a mutual top-k pair (common:
+/// the backfill writes from both sides) produces two rows for the same
+/// neighbor -- (src=?1,dst=B) and (src=B,dst=?1) both resolve to neighbor
+/// B above. GROUP BY the resolved neighbor id collapses that duplicate;
+/// MAX(weight) is a no-op for the normal case (both rows carry the same
+/// cosine value) and just picks a value if they ever drifted.
 pub fn related_memories(
     conn: &Connection,
     memory_id: &str,
@@ -393,11 +400,12 @@ pub fn related_memories(
 ) -> Result<Vec<RelatedMemory>, BrainError> {
     let sql = format!(
         "SELECT m.id, m.timestamp, COALESCE(m.event_time, ''), TRIM(m.type, '\"'), m.project, \
-            {SNIPPET}, {ACTIVE}, ml.weight \
+            {SNIPPET}, {ACTIVE}, MAX(ml.weight) AS weight \
          FROM memory_links ml \
          JOIN memories m ON m.id = (CASE WHEN ml.src_memory_id = ?1 THEN ml.dst_memory_id ELSE ml.src_memory_id END) \
          WHERE ml.relation_type = 'similar_to' AND (ml.src_memory_id = ?1 OR ml.dst_memory_id = ?1) \
-         ORDER BY ml.weight DESC LIMIT ?2"
+         GROUP BY m.id \
+         ORDER BY weight DESC LIMIT ?2"
     );
     let mut stmt = conn.prepare(&sql).map_err(db)?;
     let rows = stmt
@@ -1246,6 +1254,24 @@ mod tests {
         assert_eq!(ids, vec!["b", "c"], "ordered by weight desc, both directions included");
         assert_eq!(related[0].memory.snippet, "memory b");
         assert!((related[0].weight - 0.9).abs() < 1e-9);
+    }
+
+    #[test]
+    fn related_memories_dedupes_a_mutual_top_k_pair() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        save(&store, "a", "memory a", meta(MemoryType::Fact, "p", "2026-01-01T00:00:00+00:00", None));
+        save(&store, "b", "memory b", meta(MemoryType::Fact, "p", "2026-01-02T00:00:00+00:00", None));
+
+        // Cosine similarity is symmetric, so the backfill commonly writes both
+        // directions for a close pair: a's own KNN query finds b, and b's own
+        // KNN query (run separately, same corpus) finds a right back. Querying
+        // "a" must surface b once, not twice.
+        crate::similar::insert_similar_link(store.conn(), "s1", "a", "b", 0.9).unwrap();
+        crate::similar::insert_similar_link(store.conn(), "s2", "b", "a", 0.9).unwrap();
+
+        let related = related_memories(store.conn(), "a", 10).unwrap();
+        assert_eq!(related.len(), 1, "b must appear once despite rows in both directions");
+        assert_eq!(related[0].memory.id, "b");
     }
 
     #[test]

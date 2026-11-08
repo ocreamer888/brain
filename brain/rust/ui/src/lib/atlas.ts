@@ -1,7 +1,7 @@
 /** The memory atlas (GET /v1/memory-atlas/:id: stored layout + live memories), decoded for the GPU. */
 
 export type AtlasFile = {
-  meta: { built_at: string; memories: number; superseded?: number; entities: number; edges: number; extra_edges?: number; projects: number; layout: string }
+  meta: { built_at: string; memories: number; superseded?: number; entities: number; edges: number; extra_edges?: number; similar_edges?: number; projects: number; layout: string }
   types: string[]
   projects: { name: string; count: number }[]
   points: {
@@ -15,6 +15,10 @@ export type AtlasFile = {
   }
   edges: number[] // the forest that shapes the layout, flat [a, b, a, b, …]
   extra?: number[] // every other real mention link, same format
+  /** similar_to (G7): memory-memory embedding links, same format. Decorative,
+   *  same as extra -- deliberately not folded into the adjacency below, so
+   *  entity-based neighbor counts (Reading, Finder, Tip) stay unaffected. */
+  similar?: number[]
 }
 
 export type Atlas = AtlasFile & {
