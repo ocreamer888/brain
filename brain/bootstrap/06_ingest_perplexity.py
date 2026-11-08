@@ -5,7 +5,7 @@ Each JSON file from perplexport -> extract/summary -> /save.
 Checkpoint ensures resumable runs (one API call per thread).
 
 Usage:
-    OPENROUTER_API_KEY="sk-or-..." python brain/bootstrap/06_ingest_perplexity.py
+    OPENROUTER_API_KEY="<your-openrouter-api-key>" python brain/bootstrap/06_ingest_perplexity.py
     python brain/bootstrap/06_ingest_perplexity.py --no-llm  # skip summarization
 """
 import argparse

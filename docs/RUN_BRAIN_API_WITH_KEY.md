@@ -10,7 +10,7 @@ From repo root:
 cd /Users/macm1air/Documents/AI
 BRAIN_API_BIND=127.0.0.1:8787 \
 BRAIN_API_AUTH_REQUIRED=true \
-BRAIN_API_KEY=local-dev-key \
+BRAIN_API_KEY=<your-own-secret> \
 ./brain/rust/target/debug/brain_api
 ```
 
@@ -20,7 +20,7 @@ If you prefer `cargo run`:
 cd /Users/macm1air/Documents/AI
 BRAIN_API_BIND=127.0.0.1:8787 \
 BRAIN_API_AUTH_REQUIRED=true \
-BRAIN_API_KEY=local-dev-key \
+BRAIN_API_KEY=<your-own-secret> \
 cargo run --manifest-path brain/rust/Cargo.toml --bin brain_api
 ```
 
@@ -39,7 +39,7 @@ Expected: `401 Unauthorized`.
 ```bash
 curl -i -X POST "http://127.0.0.1:8787/v1/search_index" \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"query":"code","n":5}'
 ```
 
@@ -47,12 +47,16 @@ Expected: `200 OK` + JSON results.
 
 ## 4) Viewer note
 
-The browser viewer at `http://127.0.0.1:8787/` works with auth enabled. The Rust server injects
-`window.__BRAIN_API_KEY__` into `index.html` at serve time; the React app reads it and sends
-`x-api-key` on every request. SSE (`/v1/stream`) accepts the key via `?key=` query param since
-`EventSource` can't send custom headers.
+**Out of date as of the 2026-11-05 security fix — corrected here, not restored.** The server
+used to inject `window.__BRAIN_API_KEY__` into `index.html` on every request, which meant anyone
+who could load the page got the live key handed to them for free, auth or no auth. It now only
+injects the key when `BRAIN_API_AUTH_REQUIRED=0` (today's documented loopback/LAN-dev posture).
 
-**`BRAIN_API_AUTH_REQUIRED=0` is no longer needed for the viewer.**
+**With auth enabled, the viewer does NOT work yet** — its own fetches get `401` until a real
+login/session flow exists (not built; tracked as a known gap, see
+`docs/SECURITY_AUDIT_2026-11-05.md`). SSE (`/v1/stream`) still accepts the key via `?key=` query
+param since `EventSource` can't send custom headers, but that's moot while the page itself can't
+authenticate its other calls.
 
 ## 5) Stop process on port 8787
 

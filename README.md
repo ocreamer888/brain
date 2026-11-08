@@ -133,12 +133,12 @@ Add to your shell profile (or a supervised unit env file):
 ```bash
 export BRAIN_BACKEND=api
 export BRAIN_API_URL=http://127.0.0.1:8787
-export BRAIN_API_KEY=local-dev-key          # pick your own secret
+export BRAIN_API_KEY=<your-own-secret>       # generate with: openssl rand -hex 32
 export BRAIN_API_BIND=127.0.0.1:8787
 export BRAIN_DB_PATH=<REPO>/brain/rust/brain.db
 export BRAIN_ONNX_PATH=<REPO>/brain/rust/models/all-mpnet-base-v2-onnx
 export BRAIN_LLM_PROVIDER=openrouter
-export OPENROUTER_API_KEY=sk-or-...        # if you use LLM features
+export OPENROUTER_API_KEY=<your-openrouter-api-key>  # if you use LLM features; never commit a real key
 # Local viewer + API with a key: server injects the key into the SPA.
 # For loopback-only experiments you may set BRAIN_API_AUTH_REQUIRED=0
 ```
@@ -148,7 +148,7 @@ export OPENROUTER_API_KEY=sk-or-...        # if you use LLM features
 ```bash
 cd <REPO>
 BRAIN_DB_PATH=<REPO>/brain/rust/brain.db \
-BRAIN_API_KEY=local-dev-key \
+BRAIN_API_KEY=<your-own-secret> \
 BRAIN_API_BIND=127.0.0.1:8787 \
 ./brain/rust/target/release/brain_api
 ```
@@ -157,7 +157,7 @@ Verify:
 
 ```bash
 curl -s http://127.0.0.1:8787/health
-curl -s -H "x-api-key: local-dev-key" http://127.0.0.1:8787/stats
+curl -s -H "x-api-key: <your-own-secret>" http://127.0.0.1:8787/stats
 # Open viewer: http://127.0.0.1:8787/
 ```
 
@@ -178,7 +178,7 @@ Example:
       "env": {
         "BRAIN_BACKEND": "api",
         "BRAIN_API_URL": "http://127.0.0.1:8787",
-        "BRAIN_API_KEY": "local-dev-key"
+        "BRAIN_API_KEY": "<your-own-secret>"
       }
     }
   }

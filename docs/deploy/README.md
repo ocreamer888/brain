@@ -268,7 +268,7 @@ With this guardrail, any accidental `BRAIN_BACKEND=python` is forced to `api` at
 ### Cutover verification command
 
 ```bash
-export BRAIN_API_KEY="local-dev-key"
+export BRAIN_API_KEY="<your-own-secret>"
 python3 brain/tools/verify_cutover.py
 ```
 

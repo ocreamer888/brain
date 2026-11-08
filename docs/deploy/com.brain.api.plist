@@ -18,12 +18,17 @@
 		<string>/Users/abundancia888/Documents/Code/brain/brain/rust/models/all-mpnet-base-v2-onnx</string>
 		<key>ORT_DYLIB_PATH</key>
 		<string>/Users/abundancia888/Documents/Code/brain/.venv/lib/python3.14/site-packages/onnxruntime/capi/libonnxruntime.1.28.0.dylib</string>
+		<!-- 0.0.0.0 is deliberate: other machines on the LAN (e.g. a MacBook/iMac)
+		     connect to this Mac Studio's brain_api as remote API clients -- see
+		     AGENTS.md. Auth (below), not network binding, is the real boundary. -->
 		<key>BRAIN_API_BIND</key>
 		<string>0.0.0.0:8787</string>
+		<!-- Generate with: openssl rand -hex 32 -- never commit a real key here.
+		     Must match the BRAIN_API_KEY in every client's brain/.env / .mcp.json. -->
 		<key>BRAIN_API_KEY</key>
-		<string>local-dev-key</string>
+		<string>REPLACE_ME</string>
 		<key>BRAIN_API_AUTH_REQUIRED</key>
-		<string>0</string>
+		<string>1</string>
 		<key>BRAIN_LLM_PROVIDER</key>
 		<string>ollama</string>
 		<key>OLLAMA_URL</key>

@@ -138,23 +138,23 @@ Response: `{ "linked": 2 }`
 ```bash
 # save a fact with entities
 curl -sS -X POST http://127.0.0.1:8787/save \
-  -H "content-type: application/json" -H "x-api-key: local-dev-key" \
+  -H "content-type: application/json" -H "x-api-key: <your-own-secret>" \
   -d '{"content":"Chose SQLite for the brain graph","memory_type":"decision","project":"brain","entities":["SQLite","brain"]}'
 
 # search with graph expansion
 curl -sS -X POST http://127.0.0.1:8787/search \
-  -H "content-type: application/json" -H "x-api-key: local-dev-key" \
+  -H "content-type: application/json" -H "x-api-key: <your-own-secret>" \
   -d '{"query":"cognee graph","n":5,"graph_expand":true}'
 
 # entities for a memory
-curl -sS "http://127.0.0.1:8787/entities?memory_id=<id>" -H "x-api-key: local-dev-key"
+curl -sS "http://127.0.0.1:8787/entities?memory_id=<id>" -H "x-api-key: <your-own-secret>"
 
 # 1-hop neighbors
-curl -sS "http://127.0.0.1:8787/neighbors?memory_id=<id>&exclude_superseded=true" -H "x-api-key: local-dev-key"
+curl -sS "http://127.0.0.1:8787/neighbors?memory_id=<id>&exclude_superseded=true" -H "x-api-key: <your-own-secret>"
 
 # link entities onto an existing memory
 curl -sS -X POST http://127.0.0.1:8787/link-entities \
-  -H "content-type: application/json" -H "x-api-key: local-dev-key" \
+  -H "content-type: application/json" -H "x-api-key: <your-own-secret>" \
   -d '{"memory_id":"<id>","entities":["Ollama","Rust"]}'
 ```
 

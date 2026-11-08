@@ -6,13 +6,14 @@ Run from AI/ dir:
     python3 brain/tools/merge_macbook_brain.py
 """
 import json
+import os
 import sys
 import urllib.request
 import urllib.error
 
 MACBOOK_URL = "http://127.0.0.1:18787"
 STUDIO_URL  = "http://127.0.0.1:8787"
-API_KEY     = "local-dev-key"
+API_KEY     = os.environ.get("BRAIN_API_KEY", "local-dev-key")
 BATCH_SIZE  = 50
 
 

@@ -18,7 +18,7 @@
 | Embeddings | `BRAIN_ONNX_PATH=.../Documents/AI/brain/rust/models/all-mpnet-base-v2-onnx` (~417MB) |
 | ORT dylib | `ORT_DYLIB_PATH=.../Documents/AI/.venv/.../libonnxruntime.*.dylib` (`ort` crate loads ONNX Runtime dynamically) |
 | Bind | `BRAIN_API_BIND=0.0.0.0:8787` |
-| Auth | `BRAIN_API_AUTH_REQUIRED=true` + `BRAIN_API_KEY=local-dev-key` (browser viewer needs `0` — JS does not send the key) |
+| Auth | `BRAIN_API_AUTH_REQUIRED=true` + `BRAIN_API_KEY=<your-own-secret>` (browser viewer needs `0` — JS does not send the key) |
 | LLM | `BRAIN_LLM_PROVIDER=ollama`, `OLLAMA_URL`, `OLLAMA_MODEL` |
 
 **Build command (old tree):**
@@ -86,7 +86,7 @@ export BRAIN_DB_PATH="/Users/abundancia888/Documents/Code/brain/brain/rust/brain
 export BRAIN_ONNX_PATH="/Users/abundancia888/Documents/Code/brain/brain/rust/models/all-mpnet-base-v2-onnx"
 export ORT_DYLIB_PATH="/Users/abundancia888/Documents/Code/brain/.venv/lib/python3.14/site-packages/onnxruntime/capi/libonnxruntime.1.28.0.dylib"
 export BRAIN_API_BIND="127.0.0.1:8787"
-export BRAIN_API_KEY="local-dev-key"
+export BRAIN_API_KEY="<your-own-secret>"
 export BRAIN_API_AUTH_REQUIRED="0"   # browser Linked/Dashboard
 export BRAIN_LLM_PROVIDER="ollama"
 export OLLAMA_URL="http://127.0.0.1:11434"

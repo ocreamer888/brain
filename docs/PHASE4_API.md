@@ -20,7 +20,7 @@ BRAIN_DB_PATH=/Users/macm1air/Documents/AI/brain/rust/brain.db \
 BRAIN_INDEX_PATH=/Users/macm1air/Documents/AI/brain/rust/brain_index.bin \
 BRAIN_ONNX_PATH=/Users/macm1air/Documents/AI/brain/rust/models/all-mpnet-base-v2-onnx \
 BRAIN_API_BIND=127.0.0.1:8787 \
-BRAIN_API_KEY=local-dev-key \
+BRAIN_API_KEY=<your-own-secret> \
 BRAIN_API_AUTH_REQUIRED=true \
 BRAIN_API_RATE_LIMIT_MAX_REQUESTS=120 \
 BRAIN_API_RATE_LIMIT_WINDOW_SECONDS=60 \
@@ -269,7 +269,7 @@ Use this after `search_index` returns a row with a non-null `parent_id` to read 
 
 ```bash
 curl -s "http://127.0.0.1:8787/get-episode?id=<fact-or-episode-id>" \
-  -H "x-api-key: local-dev-key"
+  -H "x-api-key: <your-own-secret>"
 ```
 
 Response: full memory JSON (same shape as a `/search` hit). Returns `{"error": "..."}` if ID not found.
@@ -381,67 +381,67 @@ curl -sS http://127.0.0.1:8787/stats
 # save
 curl -sS -X POST http://127.0.0.1:8787/save \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"content":"api test","memory_type":"solution","tags":["api"],"project":"AI"}'
 
 # search
 curl -sS -X POST http://127.0.0.1:8787/search \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"query":"api test","n":3}'
 
 # save batch
 curl -sS -X POST http://127.0.0.1:8787/save-batch \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"items":[{"content":"batch-1","memory_type":"solution","tags":["batch"],"project":"AI"},{"content":"batch-2","memory_type":"pattern","tags":["batch"],"project":"AI"}]}'
 
 # reflect
 curl -sS -X POST http://127.0.0.1:8787/reflect \
-  -H "x-api-key: local-dev-key"
+  -H "x-api-key: <your-own-secret>"
 
 # progressive disclosure — layer 1 (superseded excluded by default)
 curl -sS -X POST http://127.0.0.1:8787/v1/search_index \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"query":"save_memory","n":10}'
 
 # expand a fact to its source episode
 curl -sS "http://127.0.0.1:8787/get-episode?id=<fact-id>" \
-  -H "x-api-key: local-dev-key"
+  -H "x-api-key: <your-own-secret>"
 
 # include superseded facts in search (audit/backfill review)
 curl -sS -X POST http://127.0.0.1:8787/v1/search_index \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"query":"wallet auth","n":10,"exclude_superseded":false}'
 
 # layer 3: fetch full content for specific IDs
 curl -sS -X POST http://127.0.0.1:8787/v1/get_observations \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"ids":["uuid-1","uuid-2"]}'
 
 # timeline around an anchor
 curl -sS -X POST http://127.0.0.1:8787/v1/timeline \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"anchor_id":"uuid-1","before":3,"after":3}'
 
 # admin: list (paginated)
 curl -sS -X POST http://127.0.0.1:8787/list \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"source":"perplexity","limit":10,"offset":0}'
 
 # admin: delete
 curl -sS -X POST http://127.0.0.1:8787/delete \
   -H "content-type: application/json" \
-  -H "x-api-key: local-dev-key" \
+  -H "x-api-key: <your-own-secret>" \
   -d '{"ids":["uuid-1"]}'
 
 # SSE live stream (keep connection open)
-curl -N -H "x-api-key: local-dev-key" http://127.0.0.1:8787/v1/stream
+curl -N -H "x-api-key: <your-own-secret>" http://127.0.0.1:8787/v1/stream
 ```
 
 ## Background Worker

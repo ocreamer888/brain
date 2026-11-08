@@ -15,7 +15,7 @@ Run the ingest script to process accumulated session exports:
 
 ```bash
 # With LLM summarization (default, requires OpenRouter API)
-OPENROUTER_API_KEY="sk-or-..." python3 brain/bootstrap/07_ingest_claude_code.py
+OPENROUTER_API_KEY="<your-openrouter-api-key>" python3 brain/bootstrap/07_ingest_claude_code.py
 
 # Without summarization (faster, less rich)
 python3 brain/bootstrap/07_ingest_claude_code.py --no-llm

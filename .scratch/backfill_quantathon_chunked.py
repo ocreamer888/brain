@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 from pathlib import Path
@@ -12,7 +13,7 @@ from brain.tools.backfill_entities import run, select_edgeless_durable
 QUANTATHON_DB = Path("/Users/abundancia888/.brain/instances/quantathon-lifehub/brain.db")
 CHECKPOINT = Path("brain/bootstrap/checkpoint_entity_backfill_quantathon_lifehub.json")
 API = "http://127.0.0.1:8787"
-HEADERS = {"x-api-key": "local-dev-key", "content-type": "application/json"}
+HEADERS = {"x-api-key": os.environ.get("BRAIN_API_KEY", "local-dev-key"), "content-type": "application/json"}
 CHUNK = 20
 
 
