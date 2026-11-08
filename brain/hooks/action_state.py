@@ -13,7 +13,6 @@ from pathlib import Path
 SPOOL_DIR = Path(__file__).parent / "spool"
 STATE_FILE = SPOOL_DIR / "session_state.json"
 MAX_RECENT_ERRORS = 5
-MAX_FIX_DISTANCE = 3  # tool calls between error and fix for proximity fallback
 
 ERROR_PATTERNS = [
     re.compile(r"(?i)(traceback|exception|error|failed|fatal|panic)"),
