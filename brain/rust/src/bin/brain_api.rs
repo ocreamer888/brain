@@ -58,6 +58,16 @@ struct AppState {
     /// Set while an instance switch is in flight, so concurrent requests can
     /// be rejected instead of racing the Brain swap (Task 5).
     switching: Arc<AtomicBool>,
+    /// Security audit 2026-11-05, finding #6: EventSource cannot set custom
+    /// headers, so /v1/stream has always taken the real API key on its
+    /// query string (?key=), which can land in browser history/extensions.
+    /// Short-lived, single-use stream tokens close that: a client fetches
+    /// one via POST /v1/stream/token (normal header-authenticated call),
+    /// then opens the stream with ?token= instead of the real key. Token
+    /// -> issued_at; checked against STREAM_TOKEN_TTL and removed on first
+    /// use in stream_handler. No new DB table -- this is intentionally as
+    /// ephemeral as the rate limiter's ClientWindow map just above.
+    stream_tokens: Arc<Mutex<HashMap<String, Instant>>>,
     /// G6: handles for the lock-free read path (/search without graph_expand,
     /// /stats), bypassing `brain` (and its Arc<Mutex<Brain>>) entirely.
     /// Profiling found the single lock genuinely serializes every request --
@@ -352,6 +362,13 @@ fn default_by_date_n() -> usize {
 }
 
 #[derive(Debug, Deserialize)]
+struct RelatedRequest {
+    id: String,
+    #[serde(default = "default_by_date_n")]
+    n: usize,
+}
+
+#[derive(Debug, Deserialize)]
 struct ProjectBriefRequest {
     project: String,
     #[serde(default = "default_brief_n")]
@@ -570,6 +587,7 @@ async fn main() {
         bind_addr: bind.clone(),
         settings,
         limiter: Arc::new(Mutex::new(HashMap::new())),
+        stream_tokens: Arc::new(Mutex::new(HashMap::new())),
         memory_tx,
         brain,
         registry_path: reg_path,
@@ -640,8 +658,10 @@ fn build_router(state: AppState) -> Router {
         .route("/v1/project_brief/unpin", post(unpin_project_brief_handler))
         .route("/v1/follow", post(follow_handler))
         .route("/v1/by_file", post(by_file_handler))
+        .route("/v1/related", post(related_handler))
         .route("/v1/by_entity", post(by_entity_handler))
         .route("/v1/stream", get(stream_handler))
+        .route("/v1/stream/token", post(stream_token_handler))
         .route("/get-episode", get(get_episode_handler))
         .route("/entities", get(entities_handler))
         .route("/entities/top", get(top_entities_handler))
@@ -676,21 +696,67 @@ fn build_router(state: AppState) -> Router {
         .with_state(state)
 }
 
+/// Stream tokens live this long after issuance if never used. Short enough
+/// that a token sitting in browser history/extension logs is useless within
+/// seconds of being issued; long enough to cover one fetch-then-connect
+/// round trip, including the ~1.5s FeedContext.jsx reconnect backoff.
+const STREAM_TOKEN_TTL: Duration = Duration::from_secs(30);
+
+#[derive(Debug, Serialize)]
+struct StreamTokenResponse {
+    token: String,
+    expires_in_seconds: u64,
+}
+
+/// Security audit 2026-11-05, finding #6. Requires normal header-based auth
+/// (authorize_and_rate_limit), same as every other endpoint -- this is not
+/// itself reachable without the real API key, it just issues something
+/// disposable for the one endpoint that can't use the real key safely.
+async fn stream_token_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<StreamTokenResponse>, (StatusCode, Json<ApiError>)> {
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    let token = uuid::Uuid::new_v4().to_string();
+    {
+        let mut tokens = state
+            .stream_tokens
+            .lock()
+            .map_err(|_| internal_err("stream token state poisoned"))?;
+        tokens.insert(token.clone(), Instant::now());
+    }
+    Ok(Json(StreamTokenResponse {
+        token,
+        expires_in_seconds: STREAM_TOKEN_TTL.as_secs(),
+    }))
+}
+
 async fn stream_handler(
     State(state): State<AppState>,
-    mut headers: HeaderMap,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<
     Sse<impl Stream<Item = Result<Event, Infallible>> + Send>,
     (StatusCode, Json<ApiError>),
 > {
-    // EventSource can't send custom headers; accept API key via ?key= query param.
-    if let Some(key) = params.get("key") {
-        if let Ok(v) = HeaderValue::from_str(key) {
-            headers.insert("x-api-key", v);
-        }
+    // EventSource can't send custom headers or the real API key safely (V-06);
+    // a short-lived, single-use token from POST /v1/stream/token is the only
+    // thing this endpoint accepts now -- the old ?key= bypass is gone.
+    let token = params.get("token").ok_or_else(|| {
+        (StatusCode::UNAUTHORIZED, Json(ApiError { error: "missing stream token".to_string() }))
+    })?;
+    let issued_at = {
+        let mut tokens = state
+            .stream_tokens
+            .lock()
+            .map_err(|_| internal_err("stream token state poisoned"))?;
+        tokens.remove(token) // single-use: removed whether valid or not
+    };
+    let valid = issued_at
+        .map(|t| Instant::now().duration_since(t) < STREAM_TOKEN_TTL)
+        .unwrap_or(false);
+    if !valid {
+        return Err((StatusCode::UNAUTHORIZED, Json(ApiError { error: "invalid or expired stream token".to_string() })));
     }
-    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
     let rx = state.memory_tx.subscribe();
     let stream = BroadcastStream::new(rx).filter_map(|item| {
         std::future::ready(match item {
@@ -1726,6 +1792,36 @@ async fn by_file_handler(
     })))
 }
 
+/// G7 (cognitive-architecture-spec.md §7.3): read-only `similar_to`
+/// browsing. No ranking effect -- this exists so `Brain::related_memories`
+/// (and the data G7's backfill writes) is actually reachable from outside
+/// the Rust crate, matching every other `lookups` function's own endpoint.
+async fn related_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<RelatedRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let start = Instant::now();
+    authorize_and_rate_limit(&state, &headers, RateClass::Read)?;
+    reject_if_switching(&state)?;
+    let id = req.id.trim();
+    if id.is_empty() {
+        return Err(bad_request("id is required"));
+    }
+    let n = req.n.clamp(1, 50);
+    let brain = lock_brain(&state);
+    let related = brain.related_memories(id, n).map_err(brain_err)?;
+    log_request("POST", "/v1/related", StatusCode::OK, start);
+    Ok(Json(serde_json::json!({
+        "id": id,
+        "related": related.iter().map(|r| {
+            let mut v = lookup_memory_json(&r.memory);
+            v["weight"] = serde_json::json!(r.weight);
+            v
+        }).collect::<Vec<_>>(),
+    })))
+}
+
 async fn by_entity_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -2671,6 +2767,7 @@ mod tests {
                 rate_limit_window_seconds: 60,
             },
             limiter: Arc::new(Mutex::new(HashMap::new())),
+            stream_tokens: Arc::new(Mutex::new(HashMap::new())),
             memory_tx,
             brain,
             registry_path,
@@ -3373,6 +3470,120 @@ mod tests {
             html.contains("__BRAIN_API_KEY__"),
             "when the operator has explicitly disabled auth, the viewer must \
              still get the key so its own fetches work"
+        );
+    }
+
+    // Security audit 2026-11-05, finding #6: /v1/stream can't use the real
+    // API key safely (EventSource can't set headers, so it went on the
+    // query string). These three tests cover the stream-token replacement.
+
+    #[tokio::test]
+    async fn stream_token_issuance_rejects_missing_api_key() {
+        let (state, _guard) = test_state(); // auth_required = true
+        let app = build_router(state);
+        let res = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/v1/stream/token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            res.status(),
+            StatusCode::UNAUTHORIZED,
+            "issuing a stream token must require the same auth as everything else"
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_token_issuance_succeeds_with_valid_api_key() {
+        let (state, _guard) = test_state();
+        let app = build_router(state);
+        let res = app
+            .oneshot(method_request("POST", "/v1/stream/token"))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = body_json(res).await;
+        assert!(body["token"].as_str().is_some_and(|t| !t.is_empty()));
+        assert!(body["expires_in_seconds"].as_u64().is_some());
+    }
+
+    #[tokio::test]
+    async fn stream_rejects_missing_or_invalid_token() {
+        let (state, _guard) = test_state();
+        let app = build_router(state);
+
+        let missing = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v1/stream")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
+
+        let bogus = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v1/stream?token=not-a-real-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bogus.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn stream_accepts_a_freshly_issued_token_exactly_once() {
+        let (state, _guard) = test_state();
+        let app = build_router(state);
+
+        let issued = app
+            .clone()
+            .oneshot(method_request("POST", "/v1/stream/token"))
+            .await
+            .unwrap();
+        assert_eq!(issued.status(), StatusCode::OK);
+        let token = body_json(issued).await["token"]
+            .as_str()
+            .expect("token field present")
+            .to_string();
+
+        let first = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(format!("/v1/stream?token={token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(first.status(), StatusCode::OK, "a freshly issued token must open the stream");
+
+        // Single-use: the same token must not work a second time, even
+        // though it hasn't expired yet.
+        let second = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(format!("/v1/stream?token={token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            second.status(),
+            StatusCode::UNAUTHORIZED,
+            "a stream token must not be reusable after its first successful use"
         );
     }
 }

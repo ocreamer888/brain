@@ -47,10 +47,21 @@ export function FeedProvider({ children }) {
     let retryTimer
     let closed = false
 
-    function connect() {
+    async function connect() {
       if (closed) return
       setStatus((s) => (s === 'live' ? 'reconnecting' : 'connecting'))
-      es = new EventSource(streamUrl())
+      let url
+      try {
+        // Fetches a fresh single-use token every (re)connect -- see
+        // streamUrl's doc comment. A stale token from a previous attempt
+        // would be rejected by the server anyway.
+        url = await streamUrl()
+      } catch {
+        if (!closed) retryTimer = setTimeout(connect, 1500)
+        return
+      }
+      if (closed) return
+      es = new EventSource(url)
       es.onopen = () => setStatus('live')
       es.onmessage = (e) => {
         try {

@@ -642,6 +642,8 @@ Once the retrieval analytics log (RTK T17) exists, session-level memory access e
 | [deep6nick/neurolinked](https://github.com/deep6nick/neurolinked) | Biologically-inspired neuromorphic memory system with 100K spiking neurons, STDP learning, MCP integration (Python) | 2026-05-01 |
 | [MemPalace/mempalace](https://github.com/MemPalace/mempalace) | Local-first AI memory system, 96.6% R@5 on LongMemEval, hybrid BM25+cosine, temporal knowledge graph, 4-layer context stack (Python) | 2026-05-01 |
 | [PacktPublishing/Machine-Learning-in-Biotechnology-and-Life-Sciences](https://github.com/PacktPublishing/Machine-Learning-in-Biotechnology-and-Life-Sciences) | Packt textbook: 12-chapter ML pipeline in Jupyter (Biopython, RDKit, SVM, clustering, NLP/transformers, LSTM, Flask deployment) | 2026-05-01 |
+| [innernet](https://innernet.live/) | Hosted memory layer for AI tools. One MCP+REST door, capture-then-fold, budgeted context package, disclosure classes. Public docs only. | 2026-11-05 |
+| [Living Brain](https://livingbrain.com/) | ChatAndBuild hosted compiler. Async capture onto versioned pages, contested disagreements, four unpublished scoring policies. Public docs only. | 2026-11-05 |
 
 ---
 
@@ -6502,3 +6504,331 @@ Quick gate unchanged: solution=0.993, pattern=1.000, project_context=1.000, conv
 | `bvh_dedup.py` | Find and remove exact-copy duplicates | 1s broad + instant narrow | After stop-hook changes; any suspected re-ingest |
 | `eval_suite.py --mcp` | End-to-end retrieval quality check | ~30s | After any retrieval change |
 | `eval_suite.py --quick` | Type-level P@1 smoke test | ~20s | After every major ingest |
+
+---
+
+# Research Source 13 — innernet (product audit)
+
+> https://innernet.live/ · https://x.com/yourinnernet
+> Docs read 2026-11-05: `/`, `/docs/how-it-works`, `/docs/concepts`, `/docs/retrieval`, `/docs/api`, `/docs/inbox-and-fold`, `/docs/branches`, `/docs/security`, `/docs/faq`, `/pricing`, `/developers`, `/company/team`.
+> Method: public pages only. No login, no source, no running account. X search was unavailable, so the account was not read. LinkedIn revenue figures from scrapers were discarded.
+
+## What innernet is
+
+A hosted memory product. One URL (`https://innernet.live/api/mcp`) and a REST API at full handler parity. `npx innernet` signs the person in through the browser (OAuth 2.1) and wires the AI apps already on the machine. After that, nothing runs locally. Their maintainer agent, Netti, runs on their servers.
+
+The loop has two speeds:
+
+1. **Capture** is dumb and immediate. A decision or preference appends to a commit log in milliseconds, before anything interprets it. A routing failure cannot lose it. Retries carry an `idempotency_key`.
+2. **Fold** is later. Netti rewrites the captures into living markdown pages ("dimensions": vision, pricing, technical, and so on) and typed nodes (`person`, `artifact`, `concept`, `decision`, `project`, `stakeholder`). The replaced line goes under `## history`. Each fold is a commit. The dashboard inbox shows was → now.
+
+A project is a Context Map: dimensions + nodes + commits + branches. A branch snapshots the whole map, work happens on an overlay, and merge is a three-way diff against the fork point. Pages both sides changed stay on trunk and come back as conflicts. A branch can be parked.
+
+Asking is a different door from search. `innernet_context` takes the question in the person's words (`intent`) and returns one package, hard-capped around 1,600 tokens however large the map is:
+
+| Field | Role |
+|---|---|
+| `read_first` | One line. The answer, or an explicit "the memory holds nothing on this." |
+| `focus` | Sections that answer the ask, best first. Long ones are excerpted and marked `partial`. |
+| `periphery` | A few near-misses, summary only. |
+| `spine` | What the project is, open tasks, what moved, `as_of`. |
+| `map` | Every dimension by name, so the rest stays reachable. |
+| `retrieval_advice` | What to open next. |
+| `personal_context` | Shareable facts about the person that bear on this ask. |
+| `sent` | Receipt: which selector, token count, facts shared, facts withheld. |
+| `meta` | `holds_answer`, `asks_about_past`, `to_confirm` (stale or superseded sections in focus). |
+
+`## history` is left out of focus. An ask about the past flips `meta.asks_about_past` and the history rides along. Captures that have not folded yet are spliced in as `pending_captures`, so a sentence from a minute ago is already answerable. `holds_answer: false` is a real answer: the client is told to say the memory has nothing, and the periphery still lists what was close.
+
+Personal facts live in a separate Self Map, one per account. Each fact has a disclosure class (`private · self · trusted · work · public`) and a voice (`said · reported · inferred`). The person's own words are stored as `user_words`, copied exactly; the model's note is a different field. `self` and `private` leave only to an app the person cleared, and every such read is logged (which app, which categories, how many — never the words). Optional: up to three abstract guidance lines (pacing, format, tone) may be shaped from facts the app is not cleared for. Each line is checked in code and dropped if it shares a name, number, date, condition, rare word, or any three-word run with the source fact. The fact is logged as `abstracted`.
+
+Memory ages by kind. Age orders what was already admitted. It never hides a row. Relevance decides admission. On a past-ask, every age weight is 1.
+
+| Kind | Half-life | Floor |
+|---|---|---|
+| law | never | 1.00 |
+| decision | 365 days | 0.75 |
+| reference | 180 days | 0.70 |
+| note | 90 days | 0.80 |
+| plan | 60 days | 0.50 |
+| status | 14 days | 0.35 |
+| count | 10 days | 0.30 |
+
+State labels: `standing`, `current` (inside one half-life), `aging` (one to three), `stale` (past three: confirm before stating it as present), `superseded`, `undated`. A newer reading supersedes an older one on the same subject. Laws and decisions are replaced by rewriting them, and `## history` keeps the old text. A section with numbers dated a month or more ago is marked `snapshot`.
+
+Search, as documented, is ranked full-text across dimensions, nodes, captures, projects, and memories. Agent recall ranks by the words of the query, recency, and importance, with an optional meaning rerank. They do not publish an embedding model.
+
+Price: reading is free forever, from any client. A fold (one Netti consolidation pass) is the meter. 200 folds/month free; past that, the memory stays readable and new writes wait until the 1st. Plus is $14/month, unlimited folds, card held by Razorpay. Team page names four people: Sahil Verma (CEO), Nischay Chib (CFO/CSO), Kanav Taneja (COO), Shaurya Dhand (CMO). Contact `connect@innernet.live`. Rooms are "open to the innernet team for now." The pricing page says memory for agents you build opens 9 Nov 2026 with "innernet 2.0"; the API reference already documents that surface (`/v1/agents/...`, per-end-user `user_id`, secrets stripped before store).
+
+Security claims, from their own page: Postgres row-level security, bearer tokens stored as SHA-256, refresh-token rotation, optional per-project passphrase encryption they say they cannot read, export and immediate delete, backups purged within 30 days, audit log the operator cannot edit. They also say, plainly: commits are not signed, the service is one region, and once a connected model reads a page the content is in that provider's process. They do not claim end-to-end encryption through the model's context window.
+
+## Honest assessment
+
+Innernet is a reduced, shippable cut of the same product idea as BRAIN: one person's working context, kept current, handed to every chat. BRAIN is the long-horizon store (typed memories, knowledge corpus, hybrid rank, entity graph, eval harness, local database). Innernet stopped at the layer that makes today's chat better, and finished it as a product: one command, one price, one read contract.
+
+The part worth taking is the read contract and the write split. The part to leave is Netti becoming the canonical text.
+
+Two of their claims pull against each other. A fold requires the server to read the page. Optional passphrase encryption says the server cannot read the page. They disclose encryption as optional. Which one wins on an encrypted project was not observed.
+
+## What transfers
+
+**I1 — Compiled context package, not a ranked list. [High]**
+
+Innernet never hands the client the map. One call, one budget, one explicit empty.
+
+**BRAIN gap:** `Brain::search` returns ranked hits. The host model assembles them. Nearest neighbors come back even when the corpus has nothing on the question. There is no spine, no withheld-history rule, no receipt.
+
+**BRAIN application:** a read endpoint in front of the ranker that already exists. Input is the question. Output is a bounded package: `read_first`, `focus`, `periphery`, `spine`, `holds_answer`, and a receipt (what was sent, what was excluded as superseded or history). `holds_answer: false` when the top of the rank is below a measured floor, with the near-misses still listed. History and `superseded_by` rows stay out unless the question is about the past. Budget is a token ceiling, not a result count. This does not add a rewriter and does not change the rank formula.
+
+**I2 — Immutable capture, fold is a derived view. [High]**
+
+Capture lands first. Consolidation happens after. Retrieval includes the raw note until the fold finishes.
+
+**BRAIN gap:** hooks write a finished memory immediately. Session-end cleanup hard-deletes near-duplicates above cosine 0.97. A bad consolidation can destroy the sentence it was consolidating.
+
+**BRAIN application:** an append-only capture log the ranker can see immediately, and any later summary or fact points at the capture it came from. The capture is the record. The summary is an index. Matches the existing quarantine preference (keep the source, mark the derived row) and the groundedness rule (an extraction must be traceable to transcript text).
+
+**I3 — Age by kind. Order, never hide. [High]**
+
+A law does not fade. A count is stale in days. The weight only sorts rows that relevance already admitted.
+
+**BRAIN gap:** recency is one curve for every type (`0.85 + 0.15 · 2^(−age_days/730)`). G8 (layer confidence at query time) is still open. G0 already separated a manual pin from LLM salience. The owner's temporal-layer model is the long-term version of this table; innernet shipped a coarser one.
+
+**BRAIN application:** map existing types onto curves and use them only as a sort key inside the set the ranker already admitted. Candidate mapping, to be measured before it touches the live score: `knowledge` and pinned decisions as law (floor 1.0 until replaced), `decision` slow, `fact` medium, `project_context` / `status`-like rows fast, counts inside a fact faster than the fact. Superseded rows stay excluded by the existing `exclude_superseded` default. Do not adopt their half-life numbers as live weights without an A/B on the mined gold set. Age must not become another uncalibrated multiplier on top of salience.
+
+**I4 — Voice, and a gate on who may read a fact. [Medium]**
+
+`said` / `reported` / `inferred`. The person's sentence and the model's sentence are different fields. A private fact does not ride into a work tool. Every crossing is a receipt.
+
+**BRAIN gap:** a hook save, an extracted fact, and a model summary can all land as the same kind of row. There is one reader: whoever can reach `:8787`. Claude Code, Cursor, and Hermes are different clients of that one store.
+
+**BRAIN application:** store `user_words` apart from the agent note on new saves, and stamp voice. A disclosure class is worth adding only at the read surface the second client uses: work tools get `work` and below; a private fact returns a withheld count. The receipt is a row (client, project, category, count), not a copy of the text. This is the same groundedness rule already required of session extract, made visible.
+
+**I5 — One signed-in door on the host that already exists. [Medium, product]**
+
+Their cloud is the thing that makes it feel like a product: one address, OAuth, a setup command, reads unmetered, thinking metered. The database is theirs.
+
+**BRAIN gap:** the Studio already is the host and the other machines are already clients. What is still an operations project is the front door: hand-edited MCP config, a LAN address that drifts, browser auth disabled so the viewer can load.
+
+**BRAIN application:** one HTTPS name on the Studio, sign-in, and a setup command that writes the client config. The SQLite file stays the store. Their Postgres and their model reading every page in order to rewrite it are a different product. If a plan is ever priced, meter the consolidation pass. Reading stays free.
+
+Smaller things worth a note, not a project: a per-project capture protocol ("what this project wants kept"), a handoff note from the last session, and two-step delete (preview, then confirm with the code the preview returned).
+
+## What innernet does that BRAIN should not copy
+
+| innernet concept | Why it stays out |
+|---|---|
+| Netti's fold replaces the page, and the replacement is the present | The source sentence has to remain the record. A fold we cannot check against that sentence is the failure mode the groundedness work already closed. A derived page is allowed. A derived page that overwrites the capture is not. |
+| No local copy | The operational store is `brain/rust/brain.db` on this checkout. A hosted-only corpus is their outage, their region, and their model. |
+| Branch / merge of the whole world model | Page-level three-way merge is a second product. `superseded_by` plus a history line covers two truths. Instances under `~/.brain/instances/` already hard-separate stores. |
+| ~43 MCP tools: tasks, rooms, community skills, per-end-user agent memory | BRAIN retrieves and ranks. The host model acts. Tasks and rooms are a platform. |
+| Server-side model as the only writer of canonical prose | Same objection as the fold. Also collides with their own passphrase encryption: a page the server cannot read cannot be folded by the server. |
+| Their half-life constants as live rank weights | The table is the right shape. The numbers are unmeasured on this corpus. |
+| Disclosure implemented as a second database | One store, a gate on the read. |
+
+## What innernet does that BRAIN already covers
+
+| innernet concept | Already covered |
+|---|---|
+| Hybrid-ish recall (words + recency + importance, optional meaning rerank) | Live rank: cosine + BM25 rank, recency, salience only when pinned, knowledge proximity |
+| Supersede rather than stack, history kept | `superseded_by`, `exclude_superseded` default true. Startup index skips superseded rows. `mark_superseded` does not evict the in-memory index until restart — still true |
+| Typed entities with a stable id | `entities` + `edges`, relation `mentions`. `graph_expand` default off after it hurt hit@10 |
+| Secrets stripped before store | `looks_like_secret` in the extractor and in Rust `link_memory_entities` (running binary lags source until the next release) |
+| Idempotent writes | content-addressed saves and hook dedup exist; innernet's capture `idempotency_key` is cleaner than a cosine delete |
+| Separate corpus vs working memory | `knowledge` is authored and is not written by session hooks. Their dimensions are the opposite: the model maintains them |
+| Multi-machine clients, one brain | Mac Studio `brain_api` on `:8787`; other machines are API clients. Their version adds accounts and RLS because the database is shared |
+
+## Priority
+
+| ID | Change | Effort | Do it when |
+|---|---|---|---|
+| I1 | `context` compile on top of current search: budget, spine, explicit empty, history withheld unless the ask is about the past | Medium. New read shape. No schema, no rank change | Next product surface. This is the one that makes every client share one memory |
+| I2 | Append-only capture log visible to retrieval before any consolidation. Derived rows point at the capture | Medium. New table, hook writes the log first | With I1, or the package will keep citing rows that cleanup can delete |
+| I3 | Kind-based age as an order key inside the admitted set. Measure on the mined gold set before it touches live score | Low to medium. Blocked on a real A/B, same discipline as G0 | After I1 has a package to put the order in. Does not close G8; it is the cheap slice |
+| I4 | `user_words` vs agent note, voice stamp, withheld count + receipt at the read | Medium. New fields on new writes. Old rows stay unstamped | When a second client can read the same store and life facts must not follow work |
+| I5 | Signed-in door and a setup command on the Studio. Database stays this checkout | Medium, mostly ops. Separate from I1–I4 | When the LAN-IP and hand-edited MCP config is the thing that hurts |
+
+I1 and I2 are the adoption. I3 is a measured experiment. I4 and I5 are the product shell, and they wait until the read is truthful.
+
+---
+
+# Research Source 14 — Living Brain (product audit)
+
+> https://livingbrain.com/ · https://docs.livingbrain.com/ · https://x.com/livingbrain
+> Docs read 2026-11-05: `/`, `/pricing`, `docs/concepts.md`, `docs/design-policies.md`, `docs/search.md`, `docs/search-ranking.md`, `docs/brain-health.md`, `docs/capturing.md`, `docs/authentication.md`, `docs/benchmarks.md`, plus the docs index `llms.txt`. GitHub `ChatAndBuild/livingbrain` is a README, not the engine.
+> Method: public pages only. No login, no source, no running account. X search was unavailable, so the account was not read. Press coverage names Christel Buchanan (ChatAndBuild) as the person who announced it on 4 Nov 2026; that post was not opened.
+
+## What Living Brain is
+
+A hosted compiler in front of a page store, from ChatAndBuild. It also powers ChatChat. Early access. The API is `api.livingbrain.com`. Coding-agent MCP is a separate host, `livingbrain.fernmcp.dev`, and the published Cursor snippet puts an API key and a subject id in the client config. ChatGPT and Claude have a sign-in path that does not use that key.
+
+You send notes, URLs, files, transcripts, chat turns, or integration payloads. The request returns an ingest source at `pending`. A worker does the rest. The source moves `pending` → `compiling` → `completed`, or `failed`. A failed source can be retried without sending the text again, and a retry does not count the storage twice. `originRef` is the capture's identity, so a timeout retry does not create a second capture. Inline content is capped at 50,000 characters. Deleting a source leaves pages already derived from it in place.
+
+The worker, in their words:
+
+1. Extract facts from the capture.
+2. Route each fact against the existing pages closest to it in meaning.
+3. Patch rewrites the chosen page in full and keeps what it already says. No fit creates a page.
+4. Record saves a new page version with a link back to the source.
+5. Embed and link refreshes vectors and checks new pages against neighbours for connections.
+
+Each step can fail on its own. A page can be saved even if embedding fails afterwards. The source then shows `failed`.
+
+A brain is an isolated store belonging to one subject. Most products they describe create one brain per end user. Some give a user several, one per project. A page has `title`, `summary`, `body`, a `pageType` (`source`, `topic`, `entity`, `project`, `decision`, `brief`), and a status:
+
+| Status | Meaning |
+|---|---|
+| `active` | Current |
+| `stale` | Not referenced or refreshed recently |
+| `contested` | New material contradicts the page. Both claims stay until a person `resolve`s them |
+| `deprecated` | Superseded. Hidden from listings by default |
+| `archived` | Retired by the user |
+
+Buckets (`inbox`, `notes`, `ideas`, `projects`) are a single folder per page. `bucketSource` is `auto` or `user`, so a later compile does not move a page a person placed.
+
+A connection links two pages worth reading together. Strength is `strong` (reading one changes how you read the other), `medium`, or `weak`, each with a one-line reason. `source` is `auto` or `manual`. A person can dismiss a connection without deleting it. The graph endpoint returns pages and connections for drawing. It is not the search ranker. In ChatGPT or Claude, `living_brain_show_graph` draws the same data.
+
+Search runs cosine and keyword, then merges. `matchedOn` is `semantic`, `keyword`, or `both`. `minSimilarity` defaults to 0.35 and drops semantic matches below it. Keyword matches are kept below the floor, so a name or an id still returns. The returned `similarity` is the vector score only. The combined rank is not returned, so a keyword hit can outrank a higher cosine. What gets embedded is the title, the summary, and the start of the body. Text further into a long page is reached by opening the page. Keyword search still looks at the body. Default `topK` is 5.
+
+A second read door, the prompt index, is a short digest of the important pages, pinned pages first, loaded at session start. Search is for a specific question. They say a similarity of 0.82 is not an 82% chance the page answers the question.
+
+A brain profile holds standing directives that apply to later captures, not to pages already compiled: `surfaceConnections`, `challengeAssumptions`, `preferVaultContext` (stored knowledge outweighs the model's priors), `flagContradictions`, plus free-form `custom` text.
+
+### The four policies
+
+A brain makes four decisions. Each is a design policy: checks run first, then signals raise a score and penalties lower it. An item that fails a check is excluded no matter the score, so a page the caller cannot see never becomes eligible because it is relevant. The API does not return the scores. The weights are not published. A score orders a decision inside the brain. It is not the probability a fact is true. The four scores are not on the same scale and are not combined. The homepage also names a Markdown Quality Score. The design-policies page does not define it.
+
+| Policy | Decides | What the docs actually say |
+|---|---|---|
+| Memory Worthiness (MWS) | Maintain this fact on a page? | Raised by durability, impact, recurrence, novelty, expected future use, extraction confidence, relevance to the person or a project. A low score deletes nothing. The fact stays findable in its source. Provisional facts are kept and looked at again. They name the mistake to avoid: a false exclusion, where a rare fact is skipped today and a question needs it next month. |
+| Placement Fit (PFS) | Which page? | Meaning, words, shared people and things, a relationship judgement, time compatibility, graph proximity, routing history. Then the gap between the best page and the second best. A clear gap places it. A tiny gap holds it for review rather than forcing a merge. No fit starts a new page. Their example: "Acme moved its launch to 15 June" and "Apex moved its launch to 15 July" embed almost identically and share no customer, so shared-entity signals keep them apart. A page that merges two customers reads smoothly and answers both wrong. |
+| Connection Resonance (CRS) | Which pages to link? | Permission and provenance are checked before scoring. Raised by proximity, relational meaning, evidence, time, graph evidence, observed usefulness, complementarity. Lowered by duplication and staleness. The API today returns the categorical rubric (`strong` / `medium` / `weak`) plus a written reason, not the numeric score. |
+| Re-entry Priority (RPS) | When to bring a page back unasked? | Scored against the current task and the current time. Raised by task fit, connection strength, urgency, open commitments, recurrence, impact, affinity, new information. Lowered by fatigue (shown and ignored). They say action-affecting means the page may shape what an agent does next. It does not give the agent permission to act. The benchmarks page says LoCoMo does not measure this. |
+
+Chat turns are a different gate. The capture guide says most turns are not worth remembering, says to send every turn and let their classifier decide, and says a turn you discard is gone for good. That is not MWS. MWS keeps a low-scoring fact inside a source that was accepted. The classifier can refuse the turn before a source exists.
+
+### Auth, price, retention
+
+Every request sends `x-api-key` (organization, inherits the member's role) and `x-subject-id` (the end user, a UUID the caller supplies). A brain owned by another subject returns 404. They warn the key is a bearer credential for the whole organization and must stay server-side, never in a browser. The MCP guide for Cursor, Claude Code, Codex, and VS Code puts that key in the client config.
+
+| Plan | Price | History | Notes |
+|---|---|---|---|
+| API | $8 / 1M input tokens + $0.50 / 1M output tokens, prepaid from $5, no monthly minimum | 30 days | Embeddings billed as input. File extraction that does not call a model is not token-billed. 1 project, 1 GB, 100,000 requests/month, 3 keys, 300 req/min API, 120 req/min MCP |
+| Workspace | $99 / month, included with ChatChat Pro+ | 90 days | 3 seats, 10 GB, 500,000 requests/month. Shared credits $80/month for 3 cycles, then $50. Model processing included inside the allowance |
+| Business | Custom | Agreed | Dedicated, customer-cloud, on-prem, and air-gapped are an architecture assessment, not a switch |
+
+Support address on the pricing page: `support@livingbrain.com`.
+
+### Benchmarks, as published
+
+The methodology page and the homepage do not report the same run.
+
+Methodology page, one run: LoCoMo v1.2.0, 1,540 questions, batch `4fd3f746`, 26 Oct 2026, answering model GPT-5, every question judged correct or incorrect against a reference answer. Memory-context tokens exclude the instructions, the question, and the model's output.
+
+| Slice | Result |
+|---|---|
+| Overall | 90.5% (1,393 / 1,540) |
+| Temporal (321) | 92.2% |
+| Single-hop (841) | 91.7% |
+| Multi-hop (282) | 91.5% |
+| Open-domain (96) | 70.8% |
+| Memory context | ~6.8K tokens vs ~26K for the full history |
+| Median retrieval | 467 ms (search plus page reads) |
+| Median answer | 9.8 s (retrieval plus generation) |
+
+They say the full-history figure is a size reference only. No accuracy is reported for it. They say the benchmark does not measure unsolicited resurfacing (RPS) or whether a person finds the pages useful. One run.
+
+Homepage, stated as internal: 92.2% judged accuracy across all 1,540 questions, ~9.4K context tokens vs ~26K (2.8×), 464 ms median retrieval, 3.7 s median total answer time. 92.2% is the temporal slice of the published run, not that run's overall. The token count and the answer time also differ. Either a later run was not written into the methodology page, or the headline reused the temporal figure. Not distinguishable from the outside.
+
+LongMemEval-S, homepage and README only, not on the methodology page: ~5.1K tokens per question vs a 116K full-context baseline (22.6×), 95% lower cost per task, and "0% observed hallucinations" under their scoring criteria. The README says the comparison set, the public result links, and the configuration are still needed before anyone else can assess the ranking. Beating "paste the entire history" is what retrieval is for. It is not a comparison with another memory system. BrainBench, the suite they say you can run yourself, is marked coming soon.
+
+Health scores are a separate claim, and they label it. Freshness, Readiness, and Strain are 0–100 summaries of activity and backlog (failed sources, compile backlog, contested and deprecated pages, unacknowledged changes). Higher is better for the first two. Lower is better for Strain. They say a brain can score 95 on Readiness and still be missing the page a question needs.
+
+## Honest assessment
+
+Living Brain is the same reduced product as innernet (Source 13): one person's working context, compiled for them, handed to every chat. The compiler is the product. The part that is actually stricter than innernet is disagreement. innernet rewrites the page and hides the old line unless the question is about the past. Living Brain marks the page `contested` and keeps both claims until a person resolves them. Placement Fit refusing a close merge is the same instinct.
+
+The part to leave is the same part: the current page is still model prose. Versions and source links make that safer than a fold with a history heading. The API plan then expires page history at 30 days, and Workspace at 90. A concept example on the docs says the old date stays in history. The price table puts an end date on that history. After the window, the mechanism they use as the safety proof is gone.
+
+The headline accuracy is not a reason to adopt the compiler. The published run is 90.5% on one LoCoMo batch, against a full-history size they did not score, with no published comparison set. Open-domain on that run is 70.8%.
+
+Two of their own rules pull apart. MWS says a low score must not delete a fact, because a false exclusion hurts later. The chat-turn guide says a discarded turn is gone for good. The second rule is the wrong default for a long-horizon store.
+
+## What transfers
+
+**L1 — Contested, both claims stay, a person resolves. [High]**
+
+**BRAIN gap:** `superseded_by` hides the old row from default search. A later save can also be a near-duplicate that cleanup deletes. Nothing in the live model says "these two texts disagree, keep both visible, do not pick."
+
+**BRAIN application:** a `contested` state that points at the other memory, both still readable, excluded from the default "current" slice until a person resolves. This is a label on the quarantine work, not a rewriter. It is the piece to take from this product over innernet's hidden `## history`.
+
+**L2 — Placement gap before any merge. [High]**
+
+**BRAIN gap:** the fact curator merges and dedups on similarity. Two facts about different entities can sit close in embedding space. The Acme/Apex example is that failure.
+
+**BRAIN application:** before an automatic merge, require a gap between the best destination and the second best, plus a shared-entity check. A small gap holds both rows for review. No fit creates a new row. Do not adopt their unpublished weights. The gate is the gap and the entity check. Measure it on a canary before it touches the curator.
+
+**L3 — A low score keeps the source. [High]**
+
+Same requirement as innernet I2, stated as a failure mode. Worthiness decides whether a fact is maintained on a page. It does not decide whether the sentence exists. A source-only fact stays searchable.
+
+**BRAIN application:** the append-only capture log from I2. Promotion to a fact, a page, or a summary is a derived row that points at the capture. A classifier may refuse promotion. It may not refuse storage. Their chat-turn guide ("gone for good") is the version not to copy.
+
+**L4 — A compiled version points at the sources that made it. [Medium]**
+
+**BRAIN gap:** extracted facts and summaries can land without a durable pointer back to the sentence they came from. Session extract already has a groundedness gate. The compiled page does not exist yet, and if it does, this link is the minimum.
+
+**BRAIN application:** any derived page stores the capture ids it was built from, and a new compile is a new version rather than an overwrite. History does not expire. Their 30/90-day cap is the part to refuse.
+
+**L5 — Two read doors, and why the hit matched. [Medium]**
+
+**BRAIN gap:** `search_brain` returns a ranked list. `get_context_tool` is another ranked list. A hit does not say whether it came from cosine, from keywords, or from both. There is no pinned digest loaded at session start separate from "top hits for this query."
+
+**BRAIN application:** on the context package from I1, add `matchedOn`. Add a small pinned digest (the manual salience pin already exists) for session start, and keep search for a specific question. State in the payload that similarity is not the probability the row answers the question. No rank-formula change.
+
+**L6 — Health as backlog, not as accuracy. [Low]**
+
+**BRAIN gap:** retrieval quality is measured offline with a gold set. Nothing in the viewer shows failed ingests, contested rows, or a compile backlog as an operational number that is explicitly not a quality score.
+
+**BRAIN application:** three counts on the existing stats surface: freshness of writes, unresolved contested rows, failed jobs. Label them as workload. Do not feed them into rank.
+
+The product shell is the same recommendation as I5. The compiler, if it exists, runs on the Studio over this checkout's database. Their cloud is a multi-tenant API whose page history expires. Their browser sign-in is the better door than a key in `mcp.json`. Their token meter is an honest price for a hosted rewriter and the wrong meter here: reading stays cheap, and the text stays local.
+
+## What Living Brain does that BRAIN should not copy
+
+| Living Brain concept | Why it stays out |
+|---|---|
+| Patch rewrites the chosen page in full, and that page is the present | The source sentence stays the record. A version chain that points at sources is allowed. An overwrite, or a history that expires at 30 or 90 days, is not. |
+| Chat-turn classifier that discards the turn | A refused promotion is allowed. A refused store is not. Their own MWS page says a false exclusion is the mistake to avoid. The capture guide then makes that mistake permanent for turns. |
+| Connection score inside retrieval | They already keep the graph beside search. `graph_expand` default off stands: 1-hop expansion hurt hit@10. A judged link with a reason is something to open, not a rank boost. |
+| Unpublished policy weights as live rank multipliers | The gap-and-entity gate is the idea. The weights were not published and are not measured on this corpus. |
+| 30/90-day page history | A long-horizon store does not expire the previous claim. |
+| Org API key plus caller-supplied `x-subject-id` as the personal install | Correct for a company embedding memory in its own app. A key in `mcp.json` is the whole organization, and the subject id is whatever the client sends. Sign-in through the browser, as in Source 13, is the door. |
+| $8 / 1M input, embeddings billed as input | Honest for their compiler. Wrong meter for this store. |
+| The 92.2% and 22.6× figures as evidence | Published run is 90.5% overall on one LoCoMo batch. 92.2% on that page is the temporal slice. 22.6× is against an unscored 116K full-context baseline, comparison set unpublished. |
+| ~60 MCP tools, Slack, Telegram, daily briefs, per-end-user brains | BRAIN retrieves and ranks. The host acts. Multi-tenant subject isolation is a different product. |
+
+## What Living Brain does that BRAIN already covers
+
+| Living Brain concept | Already covered |
+|---|---|
+| Cosine plus keyword, with a floor that does not hide keyword hits | Live rank blends cosine with BM25 rank. Keyword-only survival below a cosine floor is the part not labeled on the way out (see L5) |
+| Deprecated hidden from default listings | `exclude_superseded` defaults true. Startup index skips superseded rows. In-memory index keeps them until restart |
+| Pin a page so it stays in context | `salience_pinned`. The pin is a rank weight, not a session digest |
+| Idempotent capture | content-addressed saves. Their `originRef` is cleaner than a later cosine delete. The Stop hook has already saved the same session many times |
+| Secrets and org boundaries | single-user local store. Their subject split is for a shared hosted database |
+| Prefer stored knowledge over the model's priors | retrieval-only contract: the host writes the reply from what was retrieved. Their `preferVaultContext` is that rule as a compile directive |
+| Graph you can open | `entities` + `edges`, Linked tab is browse-only. Their edges are model-judged page-to-page with a reason. Ours are `mentions` |
+
+## Priority
+
+| ID | Change | Effort | Do it when |
+|---|---|---|---|
+| L1 | `contested` link between two memories. Both stay readable. Default "current" slice waits for a person to resolve | Medium. A state and a pointer. No rank change | Before any compiler that would otherwise pick a winner |
+| L2 | Merge gate: gap between best and second-best destination, plus a shared-entity check. Small gap holds for review | Medium. Curator only. Canary first | Before the curator merges on similarity alone |
+| L3 | Same store as I2. State the rule next to it: refusal to promote is not refusal to store | None beyond I2 | With I2 |
+| L4 | Derived pages store capture ids. A recompile is a new version. No expiry | Medium. Depends on I2 existing | Only if a compiled page is built. Not before |
+| L5 | `matchedOn` on the I1 package, plus a pinned session digest separate from query search | Low, once I1 exists | With I1 |
+| L6 | Viewer counts for failed jobs, contested rows, write freshness. Labeled as workload | Low | Whenever the viewer next touches stats |
+
+L1 and L2 are the adoption from this source. L3 is I2 with the failure mode written down. L4 waits on a compiler that does not exist yet. L5 rides along with I1. The benchmark numbers do not move any of this.

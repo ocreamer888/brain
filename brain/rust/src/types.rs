@@ -306,6 +306,26 @@ pub struct FeedbackEventRecord {
     pub idempotency_key: Option<String>,
 }
 
+/// One row from `decision_events` (G3, store.rs's `ensure_decision_events_schema`
+/// doc comment has the full gate context). `recommended_route`/`selected_route`
+/// are plain `String`, not an enum -- see `record_decision_event`'s doc
+/// comment for why a route taxonomy isn't being invented here yet.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecisionEventRecord {
+    pub id: String,
+    pub ts: String,
+    pub session_id: Option<String>,
+    pub request_id: Option<String>,
+    pub query: Option<String>,
+    pub recommended_route: String,
+    pub selected_route: Option<String>,
+    pub confidence: Option<f64>,
+    pub retrieved_memory_ids: Vec<String>,
+    pub user_correction: bool,
+    pub result_quality: Option<String>,
+    pub payload: serde_json::Value,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrainStats {
     pub total_memories: usize,

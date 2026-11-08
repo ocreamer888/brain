@@ -734,6 +734,16 @@ impl Brain {
         query_embedding: &[f32],
     ) -> Result<(), BrainError> {
         let exclude_superseded = filter.map(|f| f.exclude_superseded).unwrap_or(true);
+        let include_superseded_with_lineage = filter
+            .map(|f| f.include_superseded_with_lineage)
+            .unwrap_or(false);
+        // Same gate as rank_candidates' main path (spec §8.8): a superseded
+        // neighbor may only surface if it resolves to a real successor, in
+        // which case it carries MemoryLineage, never bare. When that gate is
+        // active, don't let the SQL-level exclusion in neighbor_memory_ids
+        // drop candidates before this function gets a chance to resolve
+        // them -- fetch unfiltered, then apply the same per-row gate below.
+        let sql_exclude_superseded = exclude_superseded && !include_superseded_with_lineage;
         let memory_type = filter.and_then(|f| f.memory_type.as_ref());
         let project = filter.and_then(|f| f.project.as_deref());
         let seeds: Vec<(String, f32)> = scored
@@ -756,7 +766,7 @@ impl Brain {
                 .store
                 .neighbor_memory_ids(
                     std::slice::from_ref(seed_id),
-                    exclude_superseded,
+                    sql_exclude_superseded,
                     memory_type,
                     project,
                 )?;
@@ -801,7 +811,35 @@ impl Brain {
         let ids: Vec<&str> = neighbors.iter().map(|(id, _)| id.as_str()).collect();
         let memories = self.store.get_memories_by_ids(&ids)?;
 
+        let conn = self.store.conn();
         for memory in memories {
+            // Spec §8.8 gate, same as rank_candidates' main path: only
+            // relevant when the SQL fetch above was NOT already filtering
+            // superseded rows out (i.e. include_superseded_with_lineage put
+            // them back in scope). A dangling/sentinel superseded_by still
+            // has nothing to trace, so it's dropped here, not surfaced bare.
+            let mut lineage = None;
+            if exclude_superseded && memory.metadata.superseded_by.is_some() {
+                if !include_superseded_with_lineage {
+                    continue;
+                }
+                let Some(successor_id) =
+                    crate::store::resolved_supersedes(conn, memory.metadata.superseded_by.as_deref())?
+                else {
+                    continue;
+                };
+                let snippet: String = crate::store::get_memory_conn(conn, &successor_id)?
+                    .map(|m| m.content.chars().take(180).collect())
+                    .unwrap_or_default();
+                let depth = layer::depth(conn, &memory.id, memory.metadata.superseded_by.as_deref())?;
+                lineage = Some(MemoryLineage {
+                    superseded_by_id: successor_id,
+                    superseded_by_snippet: snippet,
+                    depth: depth as f32,
+                    layer_w: layer::layer_w(depth, layer::DEFAULT_FLOOR, layer::DEFAULT_LAMBDA) as f32,
+                });
+            }
+
             let score = *score_of.get(memory.id.as_str()).unwrap_or(&0.0);
             // Reported distance only — it never feeds back into `score`, so the
             // expansion ranking (and P@1) is unchanged.
@@ -819,11 +857,7 @@ impl Brain {
                     distance,
                     score,
                     source_quality,
-                    // Graph-expand neighbors never go through the
-                    // exclude_superseded/lineage gate above -- out of
-                    // scope for this path, same as source_quality's
-                    // apply_source_quality flag is for ranking.
-                    lineage: None,
+                    lineage,
                 },
                 score,
             ));
@@ -914,6 +948,17 @@ impl Brain {
 
     pub fn memories_for_file(&self, path: &str, limit: usize) -> Result<FileReport, BrainError> {
         crate::lookups::memories_for_file(self.store.conn(), path, limit)
+    }
+
+    /// G7 (cognitive-architecture-spec.md §7.3): read-only `similar_to`
+    /// browsing. No ranking effect -- same non-goal as every other
+    /// `lookups` delegate on this impl.
+    pub fn related_memories(
+        &self,
+        memory_id: &str,
+        limit: usize,
+    ) -> Result<Vec<crate::lookups::RelatedMemory>, BrainError> {
+        crate::lookups::related_memories(self.store.conn(), memory_id, limit)
     }
 
     pub fn memories_for_entity(&self, name: &str, limit: usize) -> Result<EntityReport, BrainError> {
@@ -1524,6 +1569,113 @@ mod tests {
             expanded_ids,
             vec![seed_id.as_str(), neighbor_id.as_str()],
             "graph_expand should surface the linked neighbor above the decoy"
+        );
+    }
+
+    #[test]
+    fn graph_expand_neighbor_superseded_row_surfaces_with_lineage_when_resolvable() {
+        let brain = test_brain();
+        let probe = MockEmbedder::new(16);
+        let query = "widgetalpha graphseed uniquequery ztoken";
+
+        fn cos_sim(a: &[f32], b: &[f32]) -> f32 {
+            a.iter().zip(b).map(|(x, y)| x * y).sum()
+        }
+        let q_emb = probe.embed(query).unwrap();
+
+        // Same weak-similarity construction as
+        // graph_expand_surfaces_linked_neighbor_above_decoy: 25 fillers, the
+        // globally weakest becomes the entity-linked neighbor so it only
+        // reaches results via graph expansion, never on similarity alone.
+        let pool: Vec<String> = (0..25)
+            .map(|i| format!("fillertopic{i} unrelated block content"))
+            .collect();
+        let mut ranked: Vec<(String, f32)> = pool
+            .into_iter()
+            .map(|t| {
+                let sim = cos_sim(&q_emb, &probe.embed(&t).unwrap());
+                (t, sim)
+            })
+            .collect();
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let (neighbor_text, _) = ranked.pop().unwrap();
+        let fillers: Vec<String> = ranked.into_iter().map(|(t, _)| t).collect();
+
+        let seed_id = save(&brain, query, MemoryType::Fact, "p");
+        let neighbor_old_id = save(&brain, &neighbor_text, MemoryType::Fact, "p");
+        let neighbor_new_id = save(&brain, "distractor content entirely unrelated", MemoryType::Fact, "p");
+        for filler in &fillers {
+            save(&brain, filler, MemoryType::Fact, "p");
+        }
+        brain.store.mark_superseded(&neighbor_old_id, &neighbor_new_id).unwrap();
+
+        brain.link_entities(&seed_id, &["SharedTopic".into()]).unwrap();
+        brain.link_entities(&neighbor_old_id, &["SharedTopic".into()]).unwrap();
+
+        let filter = SearchFilter {
+            memory_type: Some(MemoryType::Fact),
+            graph_expand: true,
+            include_superseded_with_lineage: true,
+            ..SearchFilter::default()
+        };
+        let results = brain.search(query, 2, Some(filter)).unwrap();
+        let surfaced = results
+            .iter()
+            .find(|r| r.id == neighbor_old_id)
+            .expect("superseded neighbor with a resolvable successor must surface via graph expand");
+        let lineage = surfaced
+            .lineage
+            .as_ref()
+            .expect("must carry real lineage, not surface bare");
+        assert_eq!(lineage.superseded_by_id, neighbor_new_id);
+        assert!(lineage.superseded_by_snippet.contains("distractor content"));
+    }
+
+    #[test]
+    fn graph_expand_neighbor_dangling_superseded_stays_excluded() {
+        let brain = test_brain();
+        let probe = MockEmbedder::new(16);
+        let query = "widgetalpha graphseed uniquequery ztoken";
+
+        fn cos_sim(a: &[f32], b: &[f32]) -> f32 {
+            a.iter().zip(b).map(|(x, y)| x * y).sum()
+        }
+        let q_emb = probe.embed(query).unwrap();
+        let pool: Vec<String> = (0..25)
+            .map(|i| format!("fillertopic{i} unrelated block content"))
+            .collect();
+        let mut ranked: Vec<(String, f32)> = pool
+            .into_iter()
+            .map(|t| {
+                let sim = cos_sim(&q_emb, &probe.embed(&t).unwrap());
+                (t, sim)
+            })
+            .collect();
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let (neighbor_text, _) = ranked.pop().unwrap();
+        let fillers: Vec<String> = ranked.into_iter().map(|(t, _)| t).collect();
+
+        let seed_id = save(&brain, query, MemoryType::Fact, "p");
+        let neighbor_old_id = save(&brain, &neighbor_text, MemoryType::Fact, "p");
+        for filler in &fillers {
+            save(&brain, filler, MemoryType::Fact, "p");
+        }
+        // Dangling pointer -- no row with this id exists.
+        brain.store.mark_superseded(&neighbor_old_id, "this-id-does-not-exist").unwrap();
+
+        brain.link_entities(&seed_id, &["SharedTopic".into()]).unwrap();
+        brain.link_entities(&neighbor_old_id, &["SharedTopic".into()]).unwrap();
+
+        let filter = SearchFilter {
+            memory_type: Some(MemoryType::Fact),
+            graph_expand: true,
+            include_superseded_with_lineage: true,
+            ..SearchFilter::default()
+        };
+        let results = brain.search(query, 2, Some(filter)).unwrap();
+        assert!(
+            results.iter().all(|r| r.id != neighbor_old_id),
+            "a dangling superseded_by must stay excluded even via graph expand"
         );
     }
 

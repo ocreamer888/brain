@@ -5,13 +5,21 @@ export function apiKey() {
   return 'local-dev-key'
 }
 
-/** EventSource cannot set headers — key goes on the query string. */
-export function streamUrl() {
+/**
+ * EventSource cannot set headers, so the real API key never goes on this
+ * URL (security audit 2026-11-05, finding #6). Fetches a short-lived,
+ * single-use token via the normal header-authenticated POST
+ * /v1/stream/token first, then builds a URL carrying that token instead.
+ * Call this again for every (re)connect attempt — each token is good for
+ * one connection only.
+ */
+export async function streamUrl() {
   const origin =
     typeof window !== 'undefined' && window.location?.origin
       ? window.location.origin
       : ''
-  return `${origin}/v1/stream?key=${encodeURIComponent(apiKey())}`
+  const { token } = await api('/v1/stream/token', { method: 'POST' })
+  return `${origin}/v1/stream?token=${encodeURIComponent(token)}`
 }
 
 export async function api(path, options = {}) {

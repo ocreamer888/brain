@@ -371,6 +371,57 @@ pub fn memories_for_entity(
     })
 }
 
+/// A `similar_to` neighbor for read-only "related memories" browsing
+/// (cognitive-architecture-spec.md §7.3 item 3, G7). No effect on search
+/// ranking -- this is a lookup, same non-goal as every other function in
+/// this module.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RelatedMemory {
+    pub memory: CalendarMemory,
+    pub weight: f64,
+}
+
+/// `memory_links` rows are directed (`src_memory_id` -> `dst_memory_id`,
+/// written from the `src` side's own nearest-neighbor query, see
+/// `similar::find_similar`), but a k-NN relation is not guaranteed
+/// symmetric -- A's nearest neighbor is not always B when B's nearest
+/// neighbor is A. Reads both directions rather than assuming one.
+pub fn related_memories(
+    conn: &Connection,
+    memory_id: &str,
+    limit: usize,
+) -> Result<Vec<RelatedMemory>, BrainError> {
+    let sql = format!(
+        "SELECT m.id, m.timestamp, COALESCE(m.event_time, ''), TRIM(m.type, '\"'), m.project, \
+            {SNIPPET}, {ACTIVE}, ml.weight \
+         FROM memory_links ml \
+         JOIN memories m ON m.id = (CASE WHEN ml.src_memory_id = ?1 THEN ml.dst_memory_id ELSE ml.src_memory_id END) \
+         WHERE ml.relation_type = 'similar_to' AND (ml.src_memory_id = ?1 OR ml.dst_memory_id = ?1) \
+         ORDER BY ml.weight DESC LIMIT ?2"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(db)?;
+    let rows = stmt
+        .query_map(params![memory_id, limit as i64], |row| {
+            Ok(RelatedMemory {
+                memory: CalendarMemory {
+                    id: row.get(0)?,
+                    timestamp: row.get(1)?,
+                    event_time: {
+                        let raw: String = row.get(2)?;
+                        if raw.is_empty() { None } else { Some(raw) }
+                    },
+                    memory_type: row.get(3)?,
+                    project: row.get(4)?,
+                    snippet: row.get(5)?,
+                    active: row.get::<_, i64>(6)? == 1,
+                },
+                weight: row.get(7)?,
+            })
+        })
+        .map_err(db)?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(db)
+}
+
 fn parse_calendar_start(raw: &str) -> Result<NaiveDate, String> {
     let text = if raw.len() == 7 {
         format!("{raw}-01")
@@ -1176,5 +1227,43 @@ mod tests {
         assert_eq!(follow_memory(store.conn(), "missing").unwrap().status, "missing");
         store.conn().execute("UPDATE memories SET superseded_by = 'gone' WHERE id = 'newer'", []).unwrap();
         assert_eq!(follow_memory(store.conn(), "newer").unwrap().status, "dangling");
+    }
+
+    #[test]
+    fn related_memories_reads_real_rows_from_either_direction() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        save(&store, "a", "memory a", meta(MemoryType::Fact, "p", "2026-01-01T00:00:00+00:00", None));
+        save(&store, "b", "memory b", meta(MemoryType::Fact, "p", "2026-01-02T00:00:00+00:00", None));
+        save(&store, "c", "memory c", meta(MemoryType::Fact, "p", "2026-01-03T00:00:00+00:00", None));
+
+        // a -> b (a's own KNN query found b). c -> a (c's query found a) --
+        // the opposite direction, still must surface when querying "a".
+        crate::similar::insert_similar_link(store.conn(), "s1", "a", "b", 0.9).unwrap();
+        crate::similar::insert_similar_link(store.conn(), "s2", "c", "a", 0.7).unwrap();
+
+        let related = related_memories(store.conn(), "a", 10).unwrap();
+        let ids: Vec<&str> = related.iter().map(|r| r.memory.id.as_str()).collect();
+        assert_eq!(ids, vec!["b", "c"], "ordered by weight desc, both directions included");
+        assert_eq!(related[0].memory.snippet, "memory b");
+        assert!((related[0].weight - 0.9).abs() < 1e-9);
+    }
+
+    #[test]
+    fn related_memories_is_empty_with_no_similar_to_rows() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        save(&store, "a", "memory a", meta(MemoryType::Fact, "p", "2026-01-01T00:00:00+00:00", None));
+        assert!(related_memories(store.conn(), "a", 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn related_memories_ignores_other_relation_types() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        save(&store, "a", "memory a", meta(MemoryType::Fact, "p", "2026-01-01T00:00:00+00:00", None));
+        save(&store, "b", "memory b", meta(MemoryType::Fact, "p", "2026-01-02T00:00:00+00:00", None));
+        crate::layer::insert_layer_link(store.conn(), "l1", "b", "a", 0.9).unwrap();
+        assert!(
+            related_memories(store.conn(), "a", 10).unwrap().is_empty(),
+            "a layers_on row must not be mistaken for similar_to"
+        );
     }
 }

@@ -5,8 +5,8 @@ use rusqlite::{params, Connection};
 use uuid::Uuid;
 
 use crate::{
-    BrainError, FeedbackEventRecord, FeedbackEventType, FeedbackSource, Memory, MemoryMetadata,
-    MemorySource, MemoryType,
+    BrainError, DecisionEventRecord, FeedbackEventRecord, FeedbackEventType, FeedbackSource, Memory,
+    MemoryMetadata, MemorySource, MemoryType,
 };
 
 /// RFC 4122 OID namespace (same as Python `uuid.NAMESPACE_OID`).
@@ -323,6 +323,169 @@ impl MetadataStore {
             CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status);",
             )
             .map_err(|e| BrainError::Database(e.to_string()))
+    }
+
+    /// G3 (cognitive-architecture-spec.md gate table; design doc
+    /// docs/superpowers/specs/2026-10-16-trustworthy-memory-and-advisory-routing-design.md
+    /// Stage 2): the decision-event schema a future advisory router (G4's
+    /// `f_π`) would log to. Deliberately NOT called from `create_tables()` --
+    /// every other table in this file auto-applies to the live `brain.db` on
+    /// the next `open()`, which is exactly backwards for this one: the spec's
+    /// own gate table says "Approve Stage 2 decision-event schema before
+    /// router code," meaning the schema itself needs a human to look at it
+    /// before it's live, not just the router that would eventually write to
+    /// it. Fully built and tested here; wire this call into `create_tables()`
+    /// only once that approval happens. Until then it does not exist on the
+    /// live DB at all -- calling `record_decision_event`/`recent_decision_events`
+    /// without first calling this will fail with "no such table", which is
+    /// the correct failure mode for an unapproved schema.
+    pub fn ensure_decision_events_schema(&self) -> Result<(), BrainError> {
+        self.conn
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS decision_events (
+                id TEXT PRIMARY KEY,
+                ts TEXT NOT NULL,
+                session_id TEXT,
+                request_id TEXT,
+                query TEXT,
+                recommended_route TEXT NOT NULL,
+                selected_route TEXT,
+                confidence REAL,
+                retrieved_memory_ids TEXT NOT NULL DEFAULT '[]',
+                user_correction INTEGER NOT NULL DEFAULT 0,
+                result_quality TEXT,
+                payload TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE INDEX IF NOT EXISTS idx_decision_events_ts ON decision_events(ts);
+            CREATE INDEX IF NOT EXISTS idx_decision_events_session ON decision_events(session_id) WHERE session_id IS NOT NULL;",
+            )
+            .map_err(|e| BrainError::Database(e.to_string()))
+    }
+
+    /// Record one decision event. `recommended_route` and `selected_route`
+    /// are plain strings, not a Rust enum -- the design doc's route taxonomy
+    /// (clarify/verify/search/act/answer) is proposed, not implemented or
+    /// validated anywhere yet, and Stage 1's own rule 4 says not to invent
+    /// enums before the write path and retrieval effects are specified.
+    /// `retrieved_memory_ids` is stored as a JSON array (matches the Stage 2
+    /// example payload shape exactly); `payload` is a catch-all JSON object
+    /// for `tool_calls` and anything else, same convention as
+    /// `append_feedback`'s `payload` column.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_decision_event(
+        &self,
+        session_id: Option<&str>,
+        request_id: Option<&str>,
+        query: Option<&str>,
+        recommended_route: &str,
+        selected_route: Option<&str>,
+        confidence: Option<f64>,
+        retrieved_memory_ids: &[String],
+        user_correction: bool,
+        result_quality: Option<&str>,
+        payload: serde_json::Value,
+    ) -> Result<String, BrainError> {
+        let id = Uuid::new_v4().to_string();
+        let ts = chrono::Utc::now().to_rfc3339();
+        let retrieved_json = serde_json::to_string(retrieved_memory_ids)
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        let payload_str =
+            serde_json::to_string(&payload).map_err(|e| BrainError::Database(e.to_string()))?;
+        self.conn
+            .execute(
+                "INSERT INTO decision_events
+                 (id, ts, session_id, request_id, query, recommended_route, selected_route,
+                  confidence, retrieved_memory_ids, user_correction, result_quality, payload)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                params![
+                    id,
+                    ts,
+                    session_id,
+                    request_id,
+                    query,
+                    recommended_route,
+                    selected_route,
+                    confidence,
+                    retrieved_json,
+                    user_correction as i64,
+                    result_quality,
+                    payload_str,
+                ],
+            )
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        Ok(id)
+    }
+
+    /// Decision events with `ts >= since` (RFC3339 string comparison, same
+    /// convention as `list_feedback_since`), newest last.
+    pub fn recent_decision_events(
+        &self,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<DecisionEventRecord>, BrainError> {
+        let since_str = since.to_rfc3339();
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, ts, session_id, request_id, query, recommended_route, selected_route,
+                        confidence, retrieved_memory_ids, user_correction, result_quality, payload
+                 FROM decision_events WHERE ts >= ?1 ORDER BY ts ASC",
+            )
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+        let rows = stmt
+            .query_map(params![since_str], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Option<f64>>(7)?,
+                    row.get::<_, String>(8)?,
+                    row.get::<_, i64>(9)?,
+                    row.get::<_, Option<String>>(10)?,
+                    row.get::<_, String>(11)?,
+                ))
+            })
+            .map_err(|e| BrainError::Database(e.to_string()))?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            let (
+                id,
+                ts,
+                session_id,
+                request_id,
+                query,
+                recommended_route,
+                selected_route,
+                confidence,
+                retrieved_json,
+                user_correction,
+                result_quality,
+                payload_str,
+            ) = row.map_err(|e| BrainError::Database(e.to_string()))?;
+            let retrieved_memory_ids: Vec<String> = serde_json::from_str(&retrieved_json)
+                .map_err(|e| BrainError::Database(e.to_string()))?;
+            let payload: serde_json::Value =
+                serde_json::from_str(&payload_str).map_err(|e| BrainError::Database(e.to_string()))?;
+            out.push(DecisionEventRecord {
+                id,
+                ts,
+                session_id,
+                request_id,
+                query,
+                recommended_route,
+                selected_route,
+                confidence,
+                retrieved_memory_ids,
+                user_correction: user_correction != 0,
+                result_quality,
+                payload,
+            });
+        }
+        Ok(out)
     }
 
     pub fn enqueue_job(&self, kind: &str, payload: &str) -> Result<String, BrainError> {
@@ -2319,5 +2482,85 @@ mod queue_tests {
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].attempts, 4);
         assert_eq!(store.job_status(&id).unwrap(), "pending");
+    }
+
+    #[test]
+    fn decision_events_table_does_not_exist_until_explicitly_approved() {
+        // G3's gate: unlike every other table in this file, decision_events
+        // must NOT come into existence just because the store opened --
+        // create_tables() must never call ensure_decision_events_schema().
+        let store = MetadataStore::open_in_memory().unwrap();
+        let err = store.record_decision_event(
+            None, None, None, "search", None, None, &[], false, None, serde_json::json!({}),
+        );
+        assert!(
+            err.is_err(),
+            "decision_events must not exist before ensure_decision_events_schema() is called explicitly"
+        );
+    }
+
+    #[test]
+    fn decision_event_round_trips_after_explicit_schema_setup() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        store.ensure_decision_events_schema().unwrap();
+
+        let retrieved = vec!["mem-1".to_string(), "mem-2".to_string()];
+        let id = store
+            .record_decision_event(
+                Some("sess-1"),
+                Some("req-1"),
+                Some("what is the current state of X?"),
+                "search",
+                Some("answer_from_context"),
+                Some(0.86),
+                &retrieved,
+                true,
+                None,
+                serde_json::json!({"tool_calls": []}),
+            )
+            .unwrap();
+        assert_eq!(id.len(), 36);
+
+        let events = store
+            .recent_decision_events(Utc::now() - chrono::Duration::hours(1))
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        let e = &events[0];
+        assert_eq!(e.session_id.as_deref(), Some("sess-1"));
+        assert_eq!(e.request_id.as_deref(), Some("req-1"));
+        assert_eq!(e.recommended_route, "search");
+        assert_eq!(e.selected_route.as_deref(), Some("answer_from_context"));
+        assert_eq!(e.confidence, Some(0.86));
+        assert_eq!(e.retrieved_memory_ids, retrieved);
+        assert!(e.user_correction, "router/host disagreement flag must round-trip");
+        assert_eq!(e.result_quality, None);
+        assert_eq!(e.payload["tool_calls"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn recent_decision_events_filters_by_since() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        store.ensure_decision_events_schema().unwrap();
+        store
+            .record_decision_event(
+                None, None, None, "answer", None, None, &[], false, None, serde_json::json!({}),
+            )
+            .unwrap();
+        let future_cutoff = Utc::now() + chrono::Duration::hours(1);
+        assert!(store.recent_decision_events(future_cutoff).unwrap().is_empty());
+        let past_cutoff = Utc::now() - chrono::Duration::hours(1);
+        assert_eq!(store.recent_decision_events(past_cutoff).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn ensure_decision_events_schema_is_idempotent() {
+        let store = MetadataStore::open_in_memory().unwrap();
+        store.ensure_decision_events_schema().unwrap();
+        store.ensure_decision_events_schema().unwrap(); // must not error on re-run
+        store
+            .record_decision_event(
+                None, None, None, "clarify", None, None, &[], false, None, serde_json::json!({}),
+            )
+            .unwrap();
     }
 }

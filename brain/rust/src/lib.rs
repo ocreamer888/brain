@@ -13,6 +13,7 @@ pub mod memory_atlas;
 pub mod migrate;
 pub mod privacy;
 pub mod read_pool;
+pub mod similar;
 pub mod store;
 pub mod symbols;
 pub mod summarizer;
