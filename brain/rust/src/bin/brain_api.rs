@@ -7,9 +7,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use axum::body::Body;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query, Request, State};
 use axum::http::header::{self, HeaderValue};
-use axum::http::{HeaderMap, Response, StatusCode};
+use axum::http::{HeaderMap, Method, Response, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Redirect};
 use axum::routing::{get, patch, post};
@@ -694,7 +695,90 @@ fn build_router(state: AppState) -> Router {
         .route("/eval_dashboard.json", get(eval_dashboard_handler))
         // Catch-all (`*path`) must be the final segment of the path (matchit).
         .route("/static/*path", get(static_handler))
+        // Security audit 2026-11-05, finding #6: explicit CORS allowlist.
+        // Global so it covers every route (including the static/*path
+        // catch-all and any future one) without having to remember it on
+        // each new .route() call.
+        .layer(middleware::from_fn(cors_middleware))
         .with_state(state)
+}
+
+/// Security audit 2026-11-05, finding #6: "No CORS headers in API" / "Never
+/// use `*` wildcard for a personal API." The embedded dashboard is served
+/// same-origin (no CORS needed for that path at all), so this only matters
+/// for a second client calling cross-origin -- and it's an allowlist check,
+/// never an echo of whatever Origin showed up.
+///
+/// Exact matches cover the loopback host (`127.0.0.1`/`localhost`) on the
+/// dashboard's own port. The plist (docs/deploy/com.brain.api.plist) binds
+/// `0.0.0.0:8787` by deliberate design so other machines on the LAN can
+/// reach it, so this also accepts `http://<private-use IPv4>:8787` --
+/// RFC 1918 space only (10/8, 172.16/12, 192.168/16), still on port 8787,
+/// still not `*`.
+fn is_allowed_origin(origin: &str) -> bool {
+    const ALLOWED_EXACT: [&str; 2] = ["http://127.0.0.1:8787", "http://localhost:8787"];
+    if ALLOWED_EXACT.contains(&origin) {
+        return true;
+    }
+    let Some(rest) = origin.strip_prefix("http://") else {
+        return false;
+    };
+    let Some((host, "8787")) = rest.rsplit_once(':') else {
+        return false;
+    };
+    host.parse::<std::net::Ipv4Addr>()
+        .map(|ip| ip.is_private())
+        .unwrap_or(false)
+}
+
+/// Adds `Access-Control-Allow-*` headers only when the request's `Origin`
+/// matches `is_allowed_origin`, and answers CORS preflight (`OPTIONS`)
+/// requests directly with 204 -- no route in this API otherwise handles
+/// `OPTIONS`, so without this every cross-origin PATCH/POST/DELETE (the
+/// dashboard's own write calls, if ever made cross-origin) would fail the
+/// browser's preflight before the real request is even sent.
+async fn cors_middleware(req: Request, next: Next) -> Response<Body> {
+    let origin = req
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|h| h.to_str().ok())
+        .filter(|o| is_allowed_origin(o))
+        .map(str::to_string);
+
+    if req.method() == Method::OPTIONS {
+        let mut res = Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .body(Body::empty())
+            .expect("static response build");
+        if let Some(origin) = origin {
+            let headers = res.headers_mut();
+            headers.insert(
+                header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                HeaderValue::from_str(&origin).expect("origin already ascii-validated"),
+            );
+            headers.insert(
+                header::ACCESS_CONTROL_ALLOW_METHODS,
+                HeaderValue::from_static("GET, POST, PATCH, DELETE, OPTIONS"),
+            );
+            headers.insert(
+                header::ACCESS_CONTROL_ALLOW_HEADERS,
+                HeaderValue::from_static("content-type, x-api-key"),
+            );
+            headers.insert(header::VARY, HeaderValue::from_static("Origin"));
+        }
+        return res;
+    }
+
+    let mut res = next.run(req).await;
+    if let Some(origin) = origin {
+        let headers = res.headers_mut();
+        headers.insert(
+            header::ACCESS_CONTROL_ALLOW_ORIGIN,
+            HeaderValue::from_str(&origin).expect("origin already ascii-validated"),
+        );
+        headers.insert(header::VARY, HeaderValue::from_static("Origin"));
+    }
+    res
 }
 
 /// Stream tokens live this long after issuance if never used. Short enough
@@ -2845,6 +2929,139 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    // Security audit 2026-11-05, finding #6: CORS allowlist.
+    #[test]
+    fn is_allowed_origin_accepts_the_dashboard_exact_origins() {
+        assert!(is_allowed_origin("http://127.0.0.1:8787"));
+        assert!(is_allowed_origin("http://localhost:8787"));
+    }
+
+    #[test]
+    fn is_allowed_origin_accepts_lan_private_ipv4_on_8787_only() {
+        assert!(is_allowed_origin("http://192.168.1.6:8787"));
+        assert!(is_allowed_origin("http://10.0.0.5:8787"));
+        assert!(is_allowed_origin("http://172.16.0.5:8787"));
+        // Right IP family, wrong port -> rejected.
+        assert!(!is_allowed_origin("http://192.168.1.6:9999"));
+        // Public IPv4 is never allowed, even on the right port.
+        assert!(!is_allowed_origin("http://8.8.8.8:8787"));
+    }
+
+    #[test]
+    fn is_allowed_origin_rejects_random_and_malformed_origins() {
+        assert!(!is_allowed_origin("https://evil.example.com"));
+        assert!(!is_allowed_origin("http://evil.example.com:8787"));
+        assert!(!is_allowed_origin("null"));
+        assert!(!is_allowed_origin("*"));
+        assert!(!is_allowed_origin(""));
+    }
+
+    #[tokio::test]
+    async fn cors_allowed_origin_gets_the_header_back() {
+        let (state, _guard) = test_state();
+        let app = build_router(state);
+        let res = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/health")
+                    .header(header::ORIGIN, "http://127.0.0.1:8787")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            res.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+            "http://127.0.0.1:8787"
+        );
+    }
+
+    #[tokio::test]
+    async fn cors_disallowed_origin_gets_no_header() {
+        let (state, _guard) = test_state();
+        let app = build_router(state);
+        let res = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/health")
+                    .header(header::ORIGIN, "https://evil.example.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert!(res.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).is_none());
+    }
+
+    #[tokio::test]
+    async fn cors_response_never_contains_a_wildcard_origin() {
+        let (state, _guard) = test_state();
+        let app = build_router(state);
+        for origin in ["http://127.0.0.1:8787", "https://evil.example.com", "*"] {
+            let res = app
+                .clone()
+                .oneshot(
+                    axum::http::Request::builder()
+                        .uri("/health")
+                        .header(header::ORIGIN, origin)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            if let Some(value) = res.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN) {
+                assert_ne!(value, "*", "wildcard origin leaked for Origin: {origin}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cors_preflight_options_returns_no_content_with_headers_for_allowed_origin() {
+        let (state, _guard) = test_state();
+        let app = build_router(state);
+        let res = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("OPTIONS")
+                    .uri("/memories/abc")
+                    .header(header::ORIGIN, "http://localhost:8787")
+                    .header(header::ACCESS_CONTROL_REQUEST_METHOD, "PATCH")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            res.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+            "http://localhost:8787"
+        );
+        assert!(res.headers().get(header::ACCESS_CONTROL_ALLOW_METHODS).is_some());
+        assert!(res.headers().get(header::ACCESS_CONTROL_ALLOW_HEADERS).is_some());
+    }
+
+    #[tokio::test]
+    async fn cors_preflight_options_for_disallowed_origin_has_no_cors_headers() {
+        let (state, _guard) = test_state();
+        let app = build_router(state);
+        let res = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("OPTIONS")
+                    .uri("/memories/abc")
+                    .header(header::ORIGIN, "https://evil.example.com")
+                    .header(header::ACCESS_CONTROL_REQUEST_METHOD, "PATCH")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NO_CONTENT);
+        assert!(res.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).is_none());
     }
 
     // G6: /stats' save_count_this_session comes from an in-process
