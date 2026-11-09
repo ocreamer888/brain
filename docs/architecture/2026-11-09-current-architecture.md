@@ -130,7 +130,122 @@ flowchart TB
 
 ---
 
-## 5. Security and auth
+## 5. Memory architecture — the `Memory` entity and its relations
+
+§4 showed the *conceptual* tree+links model. This is the literal schema underneath it — every table a `Memory` actually touches, read straight from `store.rs`'s `CREATE TABLE` statements, not inferred.
+
+```mermaid
+erDiagram
+    MEMORIES {
+        text id PK
+        text content
+        text type "9 values, see taxonomy below"
+        text project
+        text tags "comma-separated"
+        text timestamp "ingest time"
+        text event_time "nullable, Phase 7, when it actually happened"
+        text source
+        text session_id
+        real importance
+        text file_path "nullable, 2.6 pct coverage, G10"
+        text thread_id
+        text title
+        real salience "0.5 default, LLM one-time guess"
+        bool salience_pinned "G0, true only on a deliberate human Promote"
+        text superseded_by "nullable FK to MEMORIES.id, or a quarantine/hidden sentinel string"
+        text extracted_by "G1, canonical provenance field"
+        text derived_from "legacy, unused going forward, kept not dropped"
+        blob embedding "768-dim, ONNX all-mpnet-base-v2"
+    }
+    ENTITIES {
+        text id PK
+        text name
+        text name_normalized UK
+    }
+    EDGES {
+        text id PK
+        text src_memory_id FK
+        text dst_entity_id FK
+        text relation_type "mentions, always, today"
+        real weight
+    }
+    MEMORY_LINKS {
+        text id PK
+        text src_memory_id FK
+        text dst_memory_id FK
+        text relation_type "similar_to G7 or layers_on G8"
+        real weight
+    }
+    MEMORIES_FTS {
+        text id "UNINDEXED, mirrors MEMORIES.id"
+        text content
+        text title
+    }
+    PROJECT_PINS {
+        text project PK
+        text memory_id FK
+        text pinned_at
+    }
+    FEEDBACK_EVENTS {
+        text id PK
+        text memory_id "nullable, no FK constraint"
+        text event_type
+        text query
+    }
+
+    MEMORIES ||--o{ EDGES : "src mentions an entity"
+    ENTITIES ||--o{ EDGES : "dst mentioned by"
+    MEMORIES ||--o{ MEMORY_LINKS : "src newer or one side of similar_to"
+    MEMORIES ||--o{ MEMORY_LINKS : "dst older or other side of similar_to"
+    MEMORIES ||--o| MEMORIES : "superseded_by self reference nullable"
+    MEMORIES ||--|| MEMORIES_FTS : "mirrored 1 to 1 for BM25"
+    MEMORIES ||--o| PROJECT_PINS : "pinned as a project brief"
+    MEMORIES ||--o{ FEEDBACK_EVENTS : "accepted rejected or edited"
+```
+
+**Deliberately not folded together, on purpose:** `edges` (memory to **entity**) and `memory_links` (memory to **memory**) look similar but were kept as two tables specifically so neither target type's column gets overloaded the way `superseded_by` already was once (it carries both a real predecessor id *and* `quarantine:*`/`hidden:*` sentinel strings — a known, accepted overload, not a new one to repeat). `memory_links.relation_type` already carries two unrelated shapes (`similar_to` is symmetric/undirected in practice, `layers_on` is directed newer→older) in the same table by design, per spec §7.2's note that a third relation type can join later without conflating either existing shape.
+
+**Operational/audit tables that reference memories loosely (by id string, no FK, often nullable) but aren't part of the entity graph itself:** `curation_events` (`fact_id`, every curator ADD/MERGE/IGNORE/UPDATE decision), `backfill_batches` (`p1_before`/`p1_after` — the regression gate, G5), `decision_events` (`retrieved_memory_ids` as a JSON array — G3, currently written by nothing), `memory_atlas_positions` (cached 3D layout coordinates per `(run_id, point_kind, point_id)`, rebuilt from live data on demand, never a source of truth).
+
+### Memory type taxonomy
+
+Nine `type` values exist; the brand book (§5.6) groups them into seven "signal" roles so two types can share a feel when the icon/word still tell them apart:
+
+| Signal | Types | What it's for |
+|---|---|---|
+| **Rely** | `fact`, `knowledge` | "You can stand on this" — verified data, or deliberately ingested reference material (`ingest_knowledge.py`, the only sanctioned writer besides explicit saves) |
+| **Use** | `decision`, `solution` | A choice or a fix you'd apply again |
+| **Notice** | `pattern` | A recurrence worth flagging |
+| **Lesson** | `error_lesson` | Something failed and was kept, deliberately, not hidden |
+| **Spoken** | `conversation` | Talk — not a status, kept quiet |
+| **Frame** | `project_context` | The shelf a memory sits on |
+| **Raw** | `episode` | Source tape — a raw tool-call trace, excluded from untyped search by default (`exclude_episodes_by_default`) so it never crowds out curated memory |
+
+### Lifecycle: save → (optional) structure → query-time resolution
+
+```mermaid
+flowchart LR
+    Save["POST /save or /save-batch<br/>(hook, MCP, CLI, or UI)"] --> Embed["ONNX embed<br/>(768-dim)"]
+    Embed --> Write["INSERT INTO memories<br/>+ memories_fts mirror"]
+    Write --> MaybeEntities{"auto_entities?"}
+    MaybeEntities -->|yes| Extract["entity_extractor.py<br/>-&gt; edges (mentions)"]
+    MaybeEntities -->|no, default for bulk| Skip1["skipped — backfill_entities.py<br/>can run later"]
+
+    Write -.->|"offline, scheduled —<br/>NOT part of the save path"| Backfill1["backfill_similar_links.py (G7)<br/>top-k cosine neighbors<br/>-&gt; memory_links(similar_to)"]
+    Write -.->|"offline, scheduled"| Backfill2["backfill_layer_links.py (G8)<br/>layer_judgment.py same-subject call<br/>-&gt; memory_links(layers_on)<br/>+ sets superseded_by on the older side"]
+
+    Backfill2 --> Query["A later /search"]
+    Extract --> Query
+    Skip1 --> Query
+    Backfill1 --> Query
+    Query --> Rank["rank_candidates()<br/>— §3's formula, reads<br/>layers_on via layer::depth()"]
+```
+
+No part of this lifecycle deletes a row. `superseded_by` is the only thing that changes an existing memory after it's written, and only ever to point forward at what replaced it — never to remove content, never to rewrite it.
+
+---
+
+## 6. Security and auth
 
 ```mermaid
 flowchart LR
@@ -153,7 +268,7 @@ Closed findings (verified against live state, not a commit message, on 2026-11-0
 
 ---
 
-## 6. Frontend
+## 7. Frontend
 
 ```mermaid
 flowchart TD
@@ -174,7 +289,7 @@ Six views exist (`Dock.jsx`'s `VIEWS`); no new destinations added by this week's
 
 ---
 
-## 7. Deployment and ops
+## 8. Deployment and ops
 
 ```mermaid
 flowchart LR
