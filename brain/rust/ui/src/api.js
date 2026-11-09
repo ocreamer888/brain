@@ -26,17 +26,27 @@ export function hasStoredApiKey() {
 /**
  * Checks a candidate key before it's stored, so the Login screen can show an
  * inline error instead of committing a bad key. Never throws.
+ *
+ * 10s timeout: without one, a hung server (not an error response -- a
+ * connection that never resolves) leaves AuthGate's `checking` state true
+ * forever, rendering nothing with no way out. Found in a 2026-11-09
+ * forensic pass.
  */
 export async function validateApiKey(key) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
-    const res = await fetch('/stats', { headers: { 'x-api-key': key } })
+    const res = await fetch('/stats', { headers: { 'x-api-key': key }, signal: controller.signal })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       return { ok: false, error: `${res.status}${text ? `: ${text}` : ''}` }
     }
     return { ok: true }
   } catch (e) {
+    if (e.name === 'AbortError') return { ok: false, error: 'The server did not respond in time.' }
     return { ok: false, error: e.message || String(e) }
+  } finally {
+    clearTimeout(timeout)
   }
 }
 

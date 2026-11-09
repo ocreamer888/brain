@@ -10,9 +10,19 @@ import styles from './LinkedAtlas.module.css'
 const fmt = new Intl.NumberFormat('en-US')
 const LEGEND = 8
 
+// Mirrors api.js's api(): dispatches brain:unauthorized on a 401 so AuthGate
+// re-locks. Fetches directly rather than through api() because this view
+// needs binary (arrayBuffer) geometry payloads, not just JSON. Found missing
+// in a 2026-11-09 forensic pass -- same class of gap already fixed once in
+// apiFetch.js.
 async function get(path, as = 'json') {
   const r = await fetch(path, { headers: { 'x-api-key': apiKey() } })
-  if (!r.ok) throw new Error(`${r.status}`)
+  if (!r.ok) {
+    if (r.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('brain:unauthorized'))
+    }
+    throw new Error(`${r.status}`)
+  }
   return as === 'json' ? r.json() : r.arrayBuffer()
 }
 

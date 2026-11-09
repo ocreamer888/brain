@@ -22,7 +22,18 @@ const MODES = [
   { value: 'type', label: 'Type' },
 ]
 
-const authed = (path, init = {}) => fetch(path, { ...init, headers: { 'x-api-key': apiKey(), ...init.headers } })
+// Mirrors api.js's api(): dispatches brain:unauthorized on a 401 so AuthGate
+// re-locks. This file fetches directly (atlas binary payloads, not JSON),
+// so it can't go through api() itself, but every real auth failure still
+// needs to reach the same re-lock path -- found missing in a 2026-11-09
+// forensic pass (the same class of gap already fixed once in apiFetch.js).
+const authed = async (path, init = {}) => {
+  const res = await fetch(path, { ...init, headers: { 'x-api-key': apiKey(), ...init.headers } })
+  if (res.status === 401 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('brain:unauthorized'))
+  }
+  return res
+}
 
 /** A brain's memory atlas, served live (stored layout + current memories). Null = never built. */
 async function loadAtlas(brainId) {
@@ -72,7 +83,7 @@ export default function LinkedAtlas({ initialEntity = 'all' }) {
  */
 function useStoredDataset(brainId) {
   const found = useLoad(async () => {
-    const r = await fetch(`/v1/atlas/${brainId}`, { headers: { 'x-api-key': apiKey() } })
+    const r = await authed(`/v1/atlas/${brainId}`)
     const meta = r.ok ? await r.json() : null
     return meta?.points ? { title: meta.config?.title || 'Stored atlas' } : null
   }, brainId)
