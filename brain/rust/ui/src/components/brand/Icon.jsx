@@ -123,6 +123,12 @@ const ICONS = {
       {dot(18, 12)}
     </>
   ),
+  lock: () => (
+    <>
+      <rect x="6" y="11" width="12" height="9" rx="2.5" />
+      <path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" />
+    </>
+  ),
 }
 
 export const ICON_NAMES = Object.keys(ICONS)

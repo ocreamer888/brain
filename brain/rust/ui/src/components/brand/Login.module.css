@@ -1,0 +1,89 @@
+/*
+ * Lock screen (brand book §6.4, §6.5 Split mesh). GlowHero supplies the mesh,
+ * grain, and rim; this file is only the bits it doesn't cover: the key field
+ * and the error/wait text in its `actions` slot.
+ */
+
+.page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: var(--space-6);
+}
+
+.shell {
+  width: 100%;
+  max-width: 28rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The foot sits in the lamp and sets color-scheme: light (GlowHero.module.css),
+ * so these roles resolve to their light values in both appearances. */
+.input {
+  flex: 1 1 12rem;
+  height: 2.75rem;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-inner);
+  background: var(--bg-sunken);
+  font-size: 0.875rem;
+  color: var(--fg-primary);
+}
+.input::placeholder {
+  color: var(--fg-tertiary);
+}
+.input:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.input[aria-invalid='true'] {
+  border-color: var(--sig-fail-fg);
+}
+.input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.error {
+  color: var(--sig-fail-fg);
+}
+
+/* Wait point (§11): one dusk point, loops only while the request is open. */
+.wait {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--on-glow-soft);
+}
+.waitDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  animation: breathe 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waitDot {
+    animation: none;
+  }
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.35;
+  }
+}

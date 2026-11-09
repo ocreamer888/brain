@@ -1,3 +1,4 @@
+import { clearApiKey } from '../../api'
 import Icon from './Icon'
 import styles from './Dock.module.css'
 
@@ -30,6 +31,21 @@ export default function Dock({ active, onSelect }) {
           </button>
         )
       })}
+      <button
+        type="button"
+        title="Lock"
+        aria-label="Lock"
+        onClick={lock}
+        className={`pressable ${styles.item}`}
+      >
+        <Icon name="lock" size={22} />
+      </button>
     </nav>
   )
+}
+
+/** Clears the stored key and re-locks through the same path a 401 uses (see api.js). */
+function lock() {
+  clearApiKey()
+  window.dispatchEvent(new CustomEvent('brain:unauthorized'))
 }

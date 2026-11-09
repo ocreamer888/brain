@@ -1,8 +1,43 @@
+const STORAGE_KEY = 'brain_api_key'
+
 export function apiKey() {
-  if (typeof window !== 'undefined' && window.__BRAIN_API_KEY__) {
-    return window.__BRAIN_API_KEY__
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage?.getItem(STORAGE_KEY)
+    if (stored) return stored
+    if (window.__BRAIN_API_KEY__) return window.__BRAIN_API_KEY__
   }
   return 'local-dev-key'
+}
+
+/** Persists the key a user typed into the Login screen. */
+export function setApiKey(key) {
+  if (typeof window !== 'undefined') window.localStorage?.setItem(STORAGE_KEY, key)
+}
+
+/** Drops a stored key -- used on sign-out and when a 401 invalidates it. */
+export function clearApiKey() {
+  if (typeof window !== 'undefined') window.localStorage?.removeItem(STORAGE_KEY)
+}
+
+export function hasStoredApiKey() {
+  return typeof window !== 'undefined' && !!window.localStorage?.getItem(STORAGE_KEY)
+}
+
+/**
+ * Checks a candidate key before it's stored, so the Login screen can show an
+ * inline error instead of committing a bad key. Never throws.
+ */
+export async function validateApiKey(key) {
+  try {
+    const res = await fetch('/stats', { headers: { 'x-api-key': key } })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      return { ok: false, error: `${res.status}${text ? `: ${text}` : ''}` }
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) }
+  }
 }
 
 /**
@@ -33,6 +68,9 @@ export async function api(path, options = {}) {
   const res = await fetch(path, { ...options, headers })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    if (res.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('brain:unauthorized'))
+    }
     throw new Error(`${res.status}${text ? `: ${text}` : ''}`)
   }
   if (res.status === 204) return null

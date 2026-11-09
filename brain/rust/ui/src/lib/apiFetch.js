@@ -1,20 +1,14 @@
-// Production: key injected by Rust server into window.__BRAIN_API_KEY__.
-// Dev (Vite): falls back to VITE_BRAIN_API_KEY from .env.local.
-function apiKey() {
-  return (typeof window !== 'undefined' && window.__BRAIN_API_KEY__)
-    || import.meta.env.VITE_BRAIN_API_KEY
-    || 'local-dev-key'
-}
+// Shares api.js's apiKey() (checks the stored login key before anything else)
+// so StatsContext/EvalContext stay in sync with AuthGate instead of running a
+// second, independent auth path that never sees a key the user just entered.
+import { apiKey } from '../api'
 
 export function apiFetch(url, opts = {}) {
-  const headers = { ...opts.headers }
-  const key = apiKey()
-  if (key) headers['x-api-key'] = key
-  return fetch(url, { ...opts, headers })
-}
-
-// Returns a URL with ?key= appended for use with EventSource (can't send headers).
-export function sseUrl(path) {
-  const key = apiKey()
-  return key ? `${path}?key=${encodeURIComponent(key)}` : path
+  const headers = { ...opts.headers, 'x-api-key': apiKey() }
+  return fetch(url, { ...opts, headers }).then((res) => {
+    if (res.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('brain:unauthorized'))
+    }
+    return res
+  })
 }

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
+import AuthGate from './components/AuthGate'
 import Dock, { VIEWS } from './components/brand/Dock'
 import { LiveDot, SearchPill } from './components/brand/primitives'
 import { EvalProvider } from './context/EvalContext'
@@ -143,12 +144,14 @@ function ViewBody({ view, onNavigate, onOpenMemory, onOpenEntity, entitySeed, fo
 
 export default function App() {
   return (
-    <StatsProvider>
-      <EvalProvider>
-        <FeedProvider>
-          <Shell />
-        </FeedProvider>
-      </EvalProvider>
-    </StatsProvider>
+    <AuthGate>
+      <StatsProvider>
+        <EvalProvider>
+          <FeedProvider>
+            <Shell />
+          </FeedProvider>
+        </EvalProvider>
+      </StatsProvider>
+    </AuthGate>
   )
 }
