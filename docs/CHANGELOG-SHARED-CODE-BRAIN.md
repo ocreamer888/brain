@@ -500,6 +500,99 @@ cfb55c6  2026-07-27  docs: add brain instances multi-DB workspace design
 
 ---
 
+### 3.28 `206c7d6` — Surface G7 `similar_to` links in the UI; fix a dedupe bug and a crash (2026-11-08)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` |
+| **Before** | `/v1/related` (G7, spec §7.3) and the G7 `similar_to` backfill existed server-side (landed the prior session, §4.6-era work) but nothing in the UI ever called it — no "related memories" surfaced anywhere, in the reading pane or the atlas graph. |
+| **After** | `MemoryReading.jsx` gained a `Related` section (new `api.js::getRelated`) beside the existing entity-based `Linked` section. `memory_atlas.rs`'s `build_forest` now also reads `similar_to` out of `memory_links` and draws it as a third, dimmer ribbon tier in `AtlasCanvas.jsx`, alongside the forest/entity-mention tiers — decorative only, not fed into `layout()`'s spring simulation, same treatment as the existing "extra" tier. Ran the G7 backfill live: 121,873 raw pairs → 86,099 deduped `similar_to` rows across 14,663 memories. |
+| **Bugs found and fixed in the same pass** | (1) `related_memories()` (`lookups.rs`) returned the same neighbor twice for any mutual top-k pair, since `memory_links` stores both directions and the query matched both without deduping by resolved neighbor id — fixed with `GROUP BY` + `MAX(weight)`, regression test added. (2) Switching to a brain instance with only a stored reference dataset (no memory atlas) blanked the whole UI: `AtlasCanvas` is shared by both atlas types, and `ReferenceAtlas` decodes its edges as a `Uint32Array` (`atlasRef.ts`), which has no `.concat` — the first pass at the three-tier ribbon list called `.concat` unconditionally. Extracted `concatPairs()` (`linkRibbons.js`), which only builds a new array when there's something to add and uses spread (safe on both plain and typed arrays) when it does; `linkRibbons.test.ts` pins the `Uint32Array` case so this can't silently regress. |
+| **How** | `brain/rust/src/lookups.rs`, `brain/rust/src/memory_atlas.rs`, `brain/rust/ui/src/api.js`, `brain/rust/ui/src/components/brand/MemoryReading.jsx`, `brain/rust/ui/src/lib/atlas.ts`, `brain/rust/ui/src/views/linked/AtlasCanvas.jsx`, `LinkedAtlas.jsx`, `linkRibbons.js` (+ new `linkRibbons.test.ts`). |
+| **Why** | A real, already-built capability (G7) was sitting completely unused; found while auditing whether `views/linked` needed updates after the prior session's ranking work. |
+| **Verification** | `cargo test`: 213 passed, 0 failed (up from 211). `npm test`: 63 passed (up from 59). Rebuilt and redeployed; re-checked both atlas types live (main's memory atlas with 86,099 `similar_edges`, and the separate `ATLAS` instance's stored reference dataset) after each fix, not just in theory. |
+
+### 3.29 `c5601c6` — Correct the spec/diagram to match what G8 actually shipped (2026-11-08)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` |
+| **Before** | `cognitive-architecture-spec.md` §8.8 still said superseded memories "stay hidden" and `use_layer_confidence` was "opt-in, not the default" — true the morning of 2026-11-06, stale by that afternoon once `808988c`/`f5d2e49`/`c13ccb6`/`4e1135a` (prior session) flipped both flags to default-on and resolved §8.8 open question 1. This exact drift led to incorrect status being reported in this session's own conversation before being caught and re-verified directly against the live API and commit history — not a hypothetical risk, an observed one. |
+| **After** | Both docs corrected with a dated 2026-11-08 revision note: `use_layer_confidence` and `include_superseded_with_lineage` both default `true`; §8.8 Q1 marked resolved; §10's G8 row updated to `shipped`. Also struck through **G1** in the spec's gate table: `extracted_by` has been the live field (`derived_from` a legacy deserialization alias only, proven by a test) since before this spec existed, but the row was never marked done — flagged once already (§3.24-era G2 revision) and still not fixed until now. |
+| **How** | `docs/architecture/cognitive-architecture-spec.md`, `docs/architecture/cognitive-architecture-diagram.md`. |
+| **Why** | Keeping the living spec honest is the whole point of this document's own discipline (§9's maintenance rule) — and this specific drift caused a real, observed mistake in-session before being corrected. |
+
+### 3.30 `090b1e9` — Remove `MAX_FIX_DISTANCE`, dead since the V-36 fix (2026-11-08)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` |
+| **Before** | `action_state.py`'s `pop_matching_error()` no longer did proximity-based fallback matching (a prior-session security-audit fix replaced it with a strict "edited path appears in the error text" check), but `MAX_FIX_DISTANCE` stayed behind, unused by any logic path, referenced only in test comments explaining the old buggy behavior the regression tests guard against. |
+| **After** | Constant removed. |
+| **How** | `brain/hooks/action_state.py`. |
+| **Why** | Found while re-verifying which architecture gates were actually open — this session initially mis-reported G5/G6/V-36 as still-open based on an incomplete grep, then re-verified properly and found V-36 (and the dead constant left behind by its fix) along the way. |
+| **Verification** | `pytest brain/tests/test_smart_capture.py`: 21 passed. Full suite: 529 passed (unchanged baseline failures). |
+
+### 3.31 `be00e62` — API-routed existence-check/supersede for `ingest_knowledge.py` (2026-11-08)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` |
+| **Before** | `ingest_knowledge.py`'s existence-check and supersede were direct-SQLite (`_db_path()` against `BRAIN_DB_PATH`) — silently wrong on any client machine that isn't co-located with `brain.db`, exactly the MacBook/iMac-as-API-client topology AGENTS.md documents. This work existed, complete and tested, but sat uncommitted in an abandoned agent-dispatch worktree (`.claude/worktrees/agent-afd05a6fd45f5762b`) since the knowledge-type feature shipped (`e40bd67`) — found while investigating 3 leftover worktrees flagged earlier in this session as "probably safe to clean up." |
+| **After** | Both existence-check and supersede now go through `brain.api_client`: new `GET /knowledge/existing` (`brain_api.rs`) + `Brain::knowledge_chunks_for_file` + `MetadataStore::get_active_knowledge_by_file_path`, reading the live `extracted_by` column — fixed from the original patch's stale `derived_from` reference, since G1 (§3.29 above, and originally §3.15) retired that column from new reads before this work was written. `PATCH /memories/:id` gains `superseded_by` alongside the existing `salience`/`salience_pinned` fields (merged, not replaced — G0's `salience_pinned` work had touched the same `PatchMemoryRequest`/`patch_memory` code in the meantime, so the old patch's 4 rejected hunks were reconciled by hand, not force-applied). `MetadataStore::mark_superseded` now returns `bool` (was `()`) so callers can tell whether `old_id` actually matched. `ingest_knowledge.py` gains a `--on-db-host` guard refusing a non-loopback `BRAIN_API_URL` by default — this is a bulk corpus job, and running it against a remote `brain_api` from a stale env var is the exact footgun the guard exists for. |
+| **How** | `brain/api_client.py`, `brain/rust/src/bin/brain_api.rs`, `brain/rust/src/brain.rs`, `brain/rust/src/store.rs`, `brain/tests/test_ingest_knowledge.py`, `brain/tools/ingest_knowledge.py`. |
+| **Why** | Real, tested, valuable work was about to be lost to an abandoned worktree. Verified safe before porting, not assumed: the work's own tests passed at its original base commit once isolated from an unrelated pre-existing startup panic at that same old commit (reproduced the identical panic on a clean checkout of `e40bd67` with none of this diff applied, confirming it was never this work's fault). |
+| **Verification** | `cargo test`: 234 passed, 0 failed. `pytest`: 537 passed, the same 13 pre-existing/unrelated failures unchanged. |
+
+### 3.32 `8101d58` — Save the knowledge-type release runbook, marked historical (2026-11-08)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` (docs only) |
+| **Before** | A second abandoned worktree (`agent-a455f2d6a1b2614ea`) held an uncommitted, never-saved runbook for merging/deploying the knowledge-type feature — plus a 3-line `test_deploy_parity.py` metadata-message addition. |
+| **After** | Runbook saved to `docs/deploy/knowledge-type-release-runbook.md` with a header marking it historical (the merge and Studio deploy it describes are both already done, re-done many times over by this session's own repeated rebuild/redeploy cycles) — kept as a record and a template for the next similar ship, not an outstanding TODO. The `test_deploy_parity.py` metadata change was deliberately **not** ported — it only mattered for the `~/Documents/AI` live hook tree, which the owner said this session to leave alone. |
+| **How** | New `docs/deploy/knowledge-type-release-runbook.md`. |
+| **Why** | Same "don't lose real work to an abandoned worktree" motivation as §3.31, applied to documentation instead of code. Incidentally, the runbook's own pre-merge checklist independently documented and explained a Tokio runtime panic (`reqwest::blocking` + `#[tokio::main]`, debug-build-only) this session had separately spent time isolating — good independent confirmation of that diagnosis. |
+
+### 3.33 `b9a0916` — Recover `bench_knowledge.py`, the knowledge-type calibration harness (2026-11-08)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` |
+| **Before** | A third abandoned worktree (`agent-ad057e5a597904337`) held `bench_knowledge.py` (quality/latency/freshness/distance-band metrics for the knowledge memory type, with the Rust↔Python `KNOWLEDGE_TAU_CLOSE`/`_FAR` mirror asserted at runtime, not assumed) plus a 42-row gold eval set — both untracked, never committed. |
+| **After** | Both files copied in unchanged — unlike §3.31, this one applied with zero code changes needed: every piece of current-`main` surface area it depends on (`brain.rs`'s tau constants, `mcp/server.py::_grounding_hint`, `/search`'s request/response shape, `/save`) was unchanged since this was written. |
+| **How** | New `brain/tools/bench_knowledge.py`, `brain/eval/gold_bench_nonknowledge.jsonl`. |
+| **Why** | Third and last of the abandoned-worktree recoveries this session. |
+| **Verification** | Not just read — actually run: built a disposable `brain_api` instance (copied `brain.db`, mock embedder, port 8790, since the script's own docstring says "never the live :8787 service") and ran all four subcommands (`gold`, `quality`, `latency`, `freshness`) plus `distances` with missing optional query files, confirming each executes cleanly against today's API and produces well-formed output. Instance and DB copy torn down after. |
+
+### 3.34 `0d0841a` — Add an explicit CORS allowlist to `brain_api` (2026-11-08)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` |
+| **Before** | `docs/SECURITY_AUDIT_2026-11-05.md` finding #6 (MEDIUM): no CORS headers configured at all. |
+| **After** | Hand-rolled CORS middleware in `brain_api.rs` — `tower-http` was not a dependency and wasn't added just for this (the project's own conventions favor the smallest footprint over a new crate for one feature). Explicit allowlist: the dashboard's own origins (`127.0.0.1`/`localhost:8787`) plus any RFC1918-private IPv4 on `:8787` (`std::net::Ipv4Addr::is_private()`, no new dependency), since `BRAIN_API_BIND=0.0.0.0` is deliberate — other machines on the LAN are meant to reach this API. Never echoes an arbitrary `Origin`, never emits `"*"`. Handles `OPTIONS` preflight. |
+| **How** | `brain/rust/src/bin/brain_api.rs` only. |
+| **Why** | One of 9 actionable findings from a dedicated 2026-11-05 security audit (`docs/SECURITY_AUDIT_2026-11-05.md`) that this session discovered were still open — a **different**, more specific document than the `brain/rust/SECURITY_AUDIT_REPORT.md`-derived findings §4.10 already describes as "7 of 8 closed"; the two reports don't share a numbering scheme and shouldn't be conflated (see the note after §4.11 below). |
+| **Verification** | 8 new tests (allow/deny/wildcard-never/preflight, both allowed and disallowed). Full suite: 257 passed, 0 failed (was 249). Verified live against a disposable instance: allowed origins get the header back, disallowed origins and requests with no `Origin` at all get nothing. |
+
+### 3.35 `5e27710` — Remove placeholder keys and a leaked LAN IP, enable auth by default (2026-11-08)
+
+| | |
+| --- | --- |
+| **Status** | `shipped` (code/docs/config); **one step still open, owner action required** — see below |
+| **Before** | Re-auditing `docs/SECURITY_AUDIT_2026-11-05.md` finding-by-finding against live state (not the commit message's claim) found 8 of 9 actionable findings still open, including both the CRITICAL ones: the live, installed plist actually had `BRAIN_API_BIND=0.0.0.0`, `BRAIN_API_KEY=local-dev-key`, `BRAIN_API_AUTH_REQUIRED=0` — exactly the audited vulnerable state, deployed and running, the whole time this session had been rebuilding and restarting it. The repo is **public** (`ocreamer888/brain`, confirmed via `gh repo view`), raising the real stakes of a committed placeholder key and an exposed LAN IP well past "best-practice nit." |
+| **After**, finding by finding (`docs/SECURITY_AUDIT_2026-11-05.md` numbering): **#1/#5** — `local-dev-key` removed from every committed file where it could be mistaken for a real value (`README.md`, `.mcp.json(.example)`, `brain/.env.example`, several docs, two `merge_macbook_brain.py` copies, one `.scratch` script now reading `BRAIN_API_KEY` from env with that string only as a last-resort fallback). One dated historical deploy-log entry in `docs/deploy/README.md` and the audit report itself deliberately left as-is — rewriting a historical record or the evidence a finding cites isn't "fixing" it. **#2** — confirmed with the owner this is deliberate (multi-machine LAN access per AGENTS.md); left at `0.0.0.0`, documented inline as intentional, auth is the real boundary. **#3** — `docs/deploy/com.brain.api.plist` (committed template) now defaults `BRAIN_API_AUTH_REQUIRED=1` and `BRAIN_API_KEY=REPLACE_ME`. **#7** — OpenRouter example-key pattern fixed in 5 files (closed by a parallel subagent). **#8** — AGENTS.md's literal LAN IP replaced with `<studio-lan-ip>`, pointing at the gitignored `brain/.env` as the real source; scoped narrowly to just the IP, not AGENTS.md's other operational detail (closed by a parallel subagent). **#9** — `.claude/settings.local.json` overly-broad `Read` grants narrowed (gitignored file — local hygiene, not a public leak; closed by a parallel subagent). `docs/RUN_BRAIN_API_WITH_KEY.md`'s viewer note was found actively wrong while fixing its key examples (claimed auth works fine in the browser) and corrected to match real, already-shipped behavior (key only injected when auth is off, by design, since the static-`index.html`-leak fix). |
+| **How** | `brain/rust/src/bin/brain_api.rs` (CORS, §3.34), `.mcp.json(.example)`, `README.md`, `AGENTS.md`, `brain/.env.example`, `docs/deploy/com.brain.api.plist`, `docs/{BUILD-AND-CUTOVER,ENTITY_EDGE_GRAPH,PHASE4_API,RUN_BRAIN_API_WITH_KEY}.md`, `docs/deploy/README.md`, two `merge_macbook_brain.py`, one `.scratch` script, two bootstrap scripts, `CLAUDE_CODE_SESSIONS.md`. Four of these findings (#6 CORS, #7, #8, #9) were closed by parallel subagents dispatched for the self-contained, lower-risk pieces while the key/auth/bind work (real blast radius, needed holistic testing) was done directly. |
+| **Why** | Explicit instruction: "run agents to close each of these findings maximizing excellence." Found the live/template plist discrepancy, the two-separate-audit-documents conflation, and the public-repo status by direct verification rather than trusting an earlier summary — each of which changed what "closing" a finding actually required. |
+| **Known, accepted gap** | Confirmed with the owner: once auth is required, the dashboard's own fetches `401` until a real login/session flow exists — not built here, a deliberate scope boundary, not silently glossed over. |
+| **Owner action still required** | The live, installed plist (`~/Library/LaunchAgents/com.brain.api.plist`) and `brain/.env` (gitignored, holds the real key) are **not** touched by this entry — generating and placing the actual secret value is a manual step for the owner, not something this assistant could do: the sandbox explicitly blocked both writing a generated key to a file and reading one back, twice, by design (credential materialization). Exact commands to finish this were handed to the owner directly in-session, not recorded here since they embed no secret themselves. |
+| **Verification** | `cargo test`: 257 passed, 0 failed. `pytest`: 537 passed, 13 pre-existing failures unchanged. `plutil -lint` clean on the edited template plist. |
+
+**Note on §4.10 below:** that entry's "7 of 8" refers to `brain/rust/SECURITY_AUDIT_REPORT.md`'s own finding list (key leak via `/static`, rate-limiter header trust, secret-file patterns, transcript-path safety, reflection delete cap, stream query-string key, redact dry-run backup, export-clean flag) — a **different** document from `docs/SECURITY_AUDIT_2026-11-05.md` (bind address, hardcoded key, auth-disabled default, rate-limit spoofing, placeholder keys in docs, CORS, example-key format, AGENTS.md detail, broad local permissions), which §3.34-§3.35 above close. The two reports don't share a numbering scheme; conflating "finding #1" between them was a real mistake caught and corrected in-session before this entry was written, not a hypothetical risk.
+
+---
+
 ## 4. Uncommitted working-tree changes (as of 2026-07-28)
 
 Verified with `git status` / `git diff` at documentation time.
@@ -732,4 +825,4 @@ When landing further work:
 3. Move items from §5 → §3 when implementation merges.
 4. Do not delete old entries — append corrections with a dated note if a decision reverses.
 
-**Last verified against git:** 2026-07-28 (HEAD `6e75315` + WIP listed in §4) for §§1–3.8; 2026-11-05 (HEAD `7db2915` + WIP listed in §4's final entry) for §3.9 onward; 2026-11-06 (HEAD `be88698` + WIP listed in §4.6–§4.11, `git status --porcelain` cross-checked against every file named above) for §3.26 onward.
+**Last verified against git:** 2026-07-28 (HEAD `6e75315` + WIP listed in §4) for §§1–3.8; 2026-11-05 (HEAD `7db2915` + WIP listed in §4's final entry) for §3.9 onward; 2026-11-06 (HEAD `be88698` + WIP listed in §4.6–§4.11, `git status --porcelain` cross-checked against every file named above) for §3.26 onward; 2026-11-08 (HEAD `5e27710`, every commit from `206c7d6` onward verified by this session's own `cargo test`/`pytest` runs, not restated from memory) for §3.28–§3.35. §4.6–§4.11 are now fully committed (see §3.28–§3.35's mapping) but left in place rather than moved, per rule 4 above; new work should treat them as historical, superseded by §3.28 onward where they overlap.
