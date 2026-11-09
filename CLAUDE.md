@@ -141,12 +141,13 @@ You have a persistent brain on the `brain` MCP server, the same one Cursor uses.
 
 
 
-### Memory Types (8)
+### Memory Types (9)
 
 
 | Type                | Purpose                                  |
 | ------------------- | ---------------------------------------- |
 | **fact**            | Verified data, metrics, timestamps       |
+| **knowledge**       | Deliberately ingested reference corpus (books/docs/manuals) -- never written by automatic hooks, only explicit ingest or an agent told to in the moment |
 | **solution**        | Bug fixes, implementations               |
 | **error_lesson**    | Error→fix pairs with cause and context   |
 | **pattern**         | Behaviors, best practices, decisions     |
